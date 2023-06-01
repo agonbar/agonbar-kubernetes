@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: vscode
+  name: vscode
+  namespace: lamg
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vscode
+  template:
+    metadata:
+      labels:
+        app: vscode
+    spec:
+      containers:
+        - image: ghcr.io/linuxserver/code-server
+          name: vscode
+          env:
+            - name: PUID
+              value: '1000'
+            - name: PGID
+              value: '1000'
+            - name: TZ
+              value: 'Europe/Madrid'
+            - name: SUDO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: lamg
+                  key: sudoPassword
+            - name: DEFAULT_WORKSPACE
+              value: '/config/workspace'
+          ports:
+            - containerPort: 8443
+              name: vscode
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: workspace
+              mountPath: /config/workspace
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+        - name: config
+          nfs:
+              server: 192.168.0.24
+              path: /mnt/RAID/docker/vscode
+        - name: workspace
+          nfs:
+              server: 192.168.0.24
+              path: /mnt/RAID/docker/homeassistant/config
+      nodeSelector:
+        kubernetes.io/hostname: "nas00"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vscode
+  namespace: lamg
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: lamg
+spec:
+  type: LoadBalancer
+  ports:
+    - name: vscode
+      protocol: TCP
+      port: 8443
+      targetPort: 8443
+  selector:
+    app: vscode

@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: zigbee2mqttassistant
+  name: zigbee2mqttassistant
+  namespace: lamg
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zigbee2mqttassistant
+  template:
+    metadata:
+      labels:
+        app: zigbee2mqttassistant
+    spec:
+      containers:
+        - image: carldebilly/zigbee2mqttassistant
+          name: zigbee2mqttassistant
+          ports:
+            - containerPort: 80
+              name: z2massistant
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: zigbee2mqttassistant
+  namespace: lamg
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: lamg
+spec:
+  type: LoadBalancer
+
+  selector:
+    app: zigbee2mqttassistant
+
+  ports:
+    - protocol: TCP
+      port: 8884
+      targetPort: 80
+      name: z2massistant

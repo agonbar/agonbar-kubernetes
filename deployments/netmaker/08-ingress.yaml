@@ -1,0 +1,116 @@
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: secheaders
+  namespace: netmaker
+spec:
+  headers:
+    #HSTS
+    stsIncludeSubdomains: true
+    stsPreload: true
+    stsSeconds: 31536000
+    forceSTSHeader: true
+    sslRedirect: true
+    referrerPolicy: "same-origin"
+    frameDeny: true
+    contentTypeNosniff: true
+    browserXssFilter: true
+    accessControlAllowOriginList:
+      - "https://api.netmaker.adriangonzalezbarbosa.eu"
+      - "https://dashboard.netmaker.adriangonzalezbarbosa.eu"
+    accessControlAllowMethods: ["GET", "OPTIONS", "PUT"]
+    accessControlAllowHeaders: ["*"]
+    addVaryHeader: true
+    accessControlMaxAge: 100
+    customFrameOptionsValue: SAMEORIGIN
+    contentSecurityPolicy: frame-ancestors 'self'
+    permissionsPolicy: geolocation=(), microphone=()
+    referrerPolicy: no-referrer
+
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: nm-api-ingress-nginx-tls
+  namespace: netmaker
+spec:
+  entryPoints:
+    - websecure
+  routes:
+  - match: Host(`api.netmaker.adriangonzalezbarbosa.eu`)
+    kind: Rule
+    services:
+    - name: netmaker-api
+      port: 8081
+    middlewares:
+    - name: secheaders
+  tls:
+    secretName: api.netmaker.adriangonzalezbarbosa.eu
+
+# letsencrypt-cert.yaml
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: api.netmaker.adriangonzalezbarbosa.eu
+  namespace: netmaker
+spec:
+  dnsNames:
+    - api.netmaker.adriangonzalezbarbosa.eu
+  secretName: api.netmaker.adriangonzalezbarbosa.eu
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: nm-ui-ingress-nginx-tls
+  namespace: netmaker
+spec:
+  entryPoints:
+    - websecure
+  routes:
+  - match: Host(`dashboard.netmaker.adriangonzalezbarbosa.eu`)
+    kind: Rule
+    services:
+    - name: netmaker-ui
+      port: 80
+    middlewares:
+    - name: secheaders
+  tls:
+    secretName: dashboard.netmaker.adriangonzalezbarbosa.eu
+
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: dashboard.netmaker.adriangonzalezbarbosa.eu
+  namespace: netmaker
+spec:
+  dnsNames:
+    - dashboard.netmaker.adriangonzalezbarbosa.eu
+  secretName: dashboard.netmaker.adriangonzalezbarbosa.eu
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRouteTCP
+metadata:
+  namespace: netmaker
+  name: nm-mq-ingress-nginx-tls
+spec:
+  entryPoints:
+    - websecure
+  routes:
+  - match: HostSNI(`broker.netmaker.adriangonzalezbarbosa.eu`)
+    services:
+      - name: netmaker-mq
+        port: 8083
+  tls:
+    passthrough: true

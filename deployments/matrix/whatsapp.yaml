@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: whatsapp
+  name: whatsapp
+  namespace: matrix
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: whatsapp
+  template:
+    metadata:
+      labels:
+        app: whatsapp
+    spec:
+      containers:
+        - image: dock.mau.dev/mautrix/whatsapp:latest
+          name: whatsapp
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+      - name: data
+        hostPath:
+          path: /docker/matrix/whatsapp
+          type: Directory
+      nodeSelector:
+        kubernetes.io/hostname: "ovh02"
+      imagePullSecrets:
+        - name: dockerhub-secret

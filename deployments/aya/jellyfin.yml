@@ -1,0 +1,136 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+    name: aya
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: jellyfin-deployment # <--- change this
+    namespace: aya
+    labels:
+        app: jellyfin # <--- change this to match label on the pod
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            app: jellyfin # <--- change this to match label on the pod
+    template:
+        metadata:
+            labels:
+                app: jellyfin
+        spec:
+            dnsPolicy: "None"
+            dnsConfig:
+                nameservers:
+                    - 1.1.1.1
+            containers:
+                - name: jellyfin
+                  image: lscr.io/linuxserver/jellyfin:latest
+                  imagePullPolicy: IfNotPresent
+                  env:
+                      - name: JELLYFIN_PublishedServerUrl
+                        value: 192.168.1.8 # The IP number for your jellyfin server (see service config)
+                      - name: PGID
+                        value: "\x31\x30\x30\x30" # < ASCII code for '65541'
+                      - name: PUID
+                        value: "\x31\x30\x30\x30" #< ACII code for '1044'
+                      - name: TZ
+                        value: Europe/Madrid
+                  ports:
+                      - containerPort: 8096
+                        protocol: TCP
+                      - containerPort: 8920
+                        protocol: TCP
+                      - containerPort: 1900
+                        protocol: UDP
+                      - containerPort: 7359
+                        protocol: UDP
+                  volumeMounts:
+                      - name: config
+                        mountPath: /config
+#                      - name: data
+#                        mountPath: /data
+                      - name: local
+                        mountPath: /local
+                      # Below are the path to mount devices for hardware acceleration
+                      # The settings below have been marked out and can be used when removing the "#"
+                      - name: device-vcsm
+                        mountPath: /dev/vcsm
+                      - name: device-vchiq
+                        mountPath: /dev/vchiq
+                      - name: device-video10
+                        mountPath: /dev/video10
+                      - name: device-video11
+                        mountPath: /dev/video11
+                      - name: device-video12
+                        mountPath: /dev/video12
+                  resources:
+                      requests:
+                          memory: 128Mi
+                          cpu: 100m
+                      limits:
+                          memory: 2Gi
+                          cpu: 1000m
+            volumes:
+                - name: config
+                  hostPath:
+                      path: /docker/jellyfin/config
+                      type: Directory
+#                - name: data
+#                  nfs:
+#                      server: nas01
+#                      path: /mnt/RAID
+                - name: local
+                  hostPath:
+                      path: /docker/jellyfin/data
+                      type: Directory
+                # The settings below have been marked out and can be used when removing the "#"
+                - name: device-vcsm # Only needed if you want to use your Raspberry Pi MMAL video decoding (Enabled as OpenMax H264 decode in gui settings).
+                  hostPath:
+                      path: /dev/vcsm
+                - name: device-vchiq #Only needed if you want to use your Raspberry Pi OpenMax video encoding.
+                  hostPath:
+                      path: /dev/vchiq
+                - name: device-video10 #Only needed if you want to use your Raspberry Pi V4L2 video encoding.
+                  hostPath:
+                      path: /dev/video10
+                - name: device-video11 #Only needed if you want to use your Raspberry Pi V4L2 video encoding.
+                  hostPath:
+                      path: /dev/video11
+                - name: device-video12 #Only needed if you want to use your Raspberry Pi V4L2 video encoding.
+                  hostPath:
+                      path: /dev/video12
+            nodeSelector:
+                kubernetes.io/hostname: "rpi-aya"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jellyfin-http
+  namespace: aya
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: aya
+spec:
+  type: LoadBalancer
+  ports:
+    - name: jellyfin-http
+      protocol: TCP
+      port: 8096
+      targetPort: 8096
+    - name: jellyfin-2
+      protocol: TCP
+      port: 8920
+      targetPort: 8920
+    - name: jellyfin-3
+      protocol: UDP
+      port: 1900
+      targetPort: 1900
+    - name: jellyfin-4
+      protocol: UDP
+      port: 7359
+      targetPort: 7359
+  selector:
+    app: jellyfin

@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: uptime
+  name: uptime
+  namespace: agonbar
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: uptime
+  template:
+    metadata:
+      labels:
+        app: uptime
+    spec:
+      containers:
+        - image: louislam/uptime-kuma:1
+          name: uptime
+          ports:
+            - containerPort: 3001
+              name: uptime
+              protocol: TCP
+          volumeMounts:
+            - name: uptime
+              mountPath: /app/data
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+      - name: uptime
+        hostPath:
+          path: /docker/uptime
+          type: Directory
+      nodeSelector:
+        kubernetes.io/hostname: "ovh02"
+      imagePullSecrets:
+        - name: dockerhub-secret
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: uptime
+  namespace: agonbar
+spec:
+  type: NodePort
+
+  selector:
+    app: uptime
+
+  ports:
+    - protocol: TCP
+      port: 3001
+      targetPort: 3001
+      name: uptime
+
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: uptime
+  namespace: agonbar
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`uptime.adriangonzalezbarbosa.eu`)
+      services:
+        - name: uptime 
+          port: 3001
+  tls:
+      secretName: uptime.adriangonzalezbarbosa.eu
+
+# letsencrypt-cert.yaml
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: uptime.adriangonzalezbarbosa.eu
+  namespace: agonbar
+spec:
+  dnsNames:
+    - uptime.adriangonzalezbarbosa.eu
+  secretName: uptime.adriangonzalezbarbosa.eu
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer

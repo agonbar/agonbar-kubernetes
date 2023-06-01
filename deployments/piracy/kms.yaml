@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: kms
+  name: kms
+  namespace: piracy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kms
+  template:
+    metadata:
+      labels:
+        app: kms
+    spec:
+      containers:
+        - image: mikolatero/vlmcsd:latest
+          name: kms
+          ports:
+            - containerPort: 1688
+              name: kms-1
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kms
+  namespace: piracy
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: aya
+spec:
+  type: LoadBalancer
+  ports:
+    - name: kms-1
+      protocol: TCP
+      port: 1688
+      targetPort: 1688
+  selector:
+    app: kms

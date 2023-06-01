@@ -1,0 +1,14 @@
+# install using 
+#               kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -    
+#               kubectl apply -k system/argocd
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - https://raw.githubusercontent.com/argoproj/argo-cd/v2.5.5/manifests/install.yaml
+
+## changes to config maps
+patchesStrategicMerge:
+  - argocd-cmd-params-cm-patch.yml
+
+namespace: argocd

@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: web-adrian
+  name: web-adrian
+  namespace: agonbar
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web-adrian
+  template:
+    metadata:
+      labels:
+        app: web-adrian
+    spec:
+      containers:
+        - image: nginx:mainline-alpine
+          name: web-adrian
+          ports:
+            - containerPort: 80
+              name: web-adrian
+              protocol: TCP
+          volumeMounts:
+            - name: web-adrian
+              mountPath: /usr/share/nginx/html
+              readOnly: true
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+      - name: web-adrian
+        hostPath:
+          path: /var/www/adriangonzalezbarbosa.eu/html/
+          type: Directory
+      nodeSelector:
+        kubernetes.io/hostname: "ovh02"
+      imagePullSecrets:
+        - name: dockerhub-secret
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: web-adrian
+  namespace: agonbar
+spec:
+  type: NodePort
+
+  selector:
+    app: web-adrian
+
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+      name: web-adrian
+
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: web-adrian
+  namespace: agonbar
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`adriangonzalezbarbosa.eu`)
+      services:
+        - name: web-adrian
+          port: 80
+  tls:
+      secretName: adriangonzalezbarbosa.eu
+
+# letsencrypt-cert.yaml
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: adriangonzalezbarbosa.eu
+  namespace: agonbar
+spec:
+  dnsNames:
+    - adriangonzalezbarbosa.eu
+  secretName: adriangonzalezbarbosa.eu
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer

@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: plex
+  name: plex
+  namespace: lamg
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: plex
+  template:
+    metadata:
+      labels:
+        app: plex
+    spec:
+      containers:
+        - image: linuxserver/plex:latest
+          name: plex
+          env:
+            - name: PUID
+              value: '1000'
+            - name: PGID
+              value: '1000'
+            - name: PLEX_CLAIM
+              valueFrom:
+                secretKeyRef:
+                  name: lamg
+                  key: plexClaim
+            - name: TZ
+              value: Europe/Madrid
+            - name: VERSION
+              value: 'latest'
+            - name: ADVERTISE_IP
+              value: 'https://plex.adriangonzalezbarbosa.eu:443'
+          ports:
+            - containerPort: 32400
+              name: plex-1
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+        - name: config
+          nfs:
+              server: 192.168.0.24
+              path: /mnt/RAID/docker/plex/
+        - name: data
+          nfs:
+              server: 192.168.0.24
+              path: /mnt/RAID/Public
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: plex
+  namespace: lamg
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: lamg
+spec:
+  type: LoadBalancer
+  ports:
+    - name: plex-1
+      protocol: TCP
+      port: 32400
+      targetPort: 32400
+  selector:
+    app: plex

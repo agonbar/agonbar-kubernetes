@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: slack
+  name: slack
+  namespace: matrix
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: slack
+  template:
+    metadata:
+      labels:
+        app: slack
+    spec:
+      containers:
+        - image: sorunome/mx-puppet-slack:latest
+          name: slack
+          ports:
+            - containerPort: 8432
+              name: slack
+              protocol: TCP
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+      - name: data
+        hostPath:
+          path: /docker/matrix/slack
+          type: Directory
+      nodeSelector:
+        kubernetes.io/hostname: "ovh02"
+      imagePullSecrets:
+        - name: dockerhub-secret
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: slack
+  namespace: matrix
+spec:
+  type: NodePort
+
+  selector:
+    app: slack
+
+  ports:
+    - protocol: TCP
+      port: 8432
+      targetPort: 8432
+      name: slack
+
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: slack
+  namespace: matrix
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`slackmatrix.adriangonzalezbarbosa.eu`)
+      services:
+        - name: slack
+          port: 8432
+  tls:
+      secretName: slackmatrix.adriangonzalezbarbosa.eu
+
+# letsencrypt-cert.yaml
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: slackmatrix.adriangonzalezbarbosa.eu
+  namespace: matrix
+spec:
+  dnsNames:
+    - slackmatrix.adriangonzalezbarbosa.eu
+  secretName: slackmatrix.adriangonzalezbarbosa.eu
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer

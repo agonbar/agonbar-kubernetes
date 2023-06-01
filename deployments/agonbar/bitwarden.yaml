@@ -1,0 +1,128 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: bitwarden
+  name: bitwarden
+  namespace: agonbar
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bitwarden
+  template:
+    metadata:
+      labels:
+        app: bitwarden
+    spec:
+      containers:
+        - image: vaultwarden/server:1.28.0-alpine
+          name: bitwarden
+          env:
+            - name: DOMAIN
+              value: 'https://bitwarden.adriangonzalezbarbosa.eu'
+            - name: SMTP_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: agonbar
+                  key: bitwardenSmtpHost
+            - name: SMTP_FROM
+              valueFrom:
+                secretKeyRef:
+                  name: agonbar
+                  key: bitwardenSmtpFrom
+            - name: SMTP_PORT
+              value: '587'
+            - name: SMTP_SSL
+              value: 'true'
+            - name: SMTP_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: agonbar
+                  key: bitwardenSmtpFrom
+            - name: SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: agonbar
+                  key: bitwardenSmtpPassword
+            - name: WEBSOCKET_ENABLED
+              value: 'true'
+            - name: SIGNUPS_ALLOWED
+              value: 'false'
+            - name: ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: agonbar
+                  key: bitwardenAdminToken
+          ports:
+            - containerPort: 80
+              name: bitwarden
+              protocol: TCP
+          volumeMounts:
+            - name: bitwarden
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+      - name: bitwarden
+        hostPath:
+          path: /docker/bitwarden
+          type: Directory
+      nodeSelector:
+        kubernetes.io/hostname: "ovh02"
+      imagePullSecrets:
+        - name: dockerhub-secret
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: bitwarden
+  namespace: agonbar
+spec:
+  type: NodePort
+
+  selector:
+    app: bitwarden
+
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+      name: bitwarden
+
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: bitwarden
+  namespace: agonbar
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`bitwarden.adriangonzalezbarbosa.eu`)
+      services:
+        - name: bitwarden
+          port: 80
+  tls:
+      secretName: bitwarden.adriangonzalezbarbosa.eu
+
+# letsencrypt-cert.yaml
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: bitwarden.adriangonzalezbarbosa.eu
+  namespace: agonbar
+spec:
+  dnsNames:
+    - bitwarden.adriangonzalezbarbosa.eu
+  secretName: bitwarden.adriangonzalezbarbosa.eu
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer

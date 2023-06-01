@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: prowlarr-deployment # <--- change this
+    namespace: piracy
+    labels:
+        app: prowlarr # <--- change this to match label on the pod
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            app: prowlarr # <--- change this to match label on the pod
+    template:
+        metadata:
+            labels:
+                app: prowlarr
+        spec:
+            dnsPolicy: "None"
+            dnsConfig:
+                nameservers:
+                    - 1.1.1.1
+            containers:
+                - name: prowlarr
+                  image: linuxserver/prowlarr:nightly
+                  imagePullPolicy: IfNotPresent
+                  env:
+                      - name: PGID
+                        value: "\x31\x30\x30\x30" # < ASCII code for '65541'
+                      - name: PUID
+                        value: "\x31\x30\x30\x30" #< ACII code for '1000
+                      - name: TZ
+                        value: Europe/Madrid
+                  ports:
+                      - containerPort: 9696
+                        protocol: TCP
+                  volumeMounts:
+                      - name: config
+                        mountPath: /config
+                  resources:
+                      requests:
+                          memory: 128Mi
+                          cpu: 100m
+                      limits:
+                          memory: 1Gi
+                          cpu: 100m
+            volumes:
+                - name: config
+                  nfs:
+                      server: 192.168.0.29
+                      path: /mnt/SSD/docker/prowlarr/config
+            nodeSelector:
+                svccontroller.k3s.cattle.io/lbpool: lamg

@@ -1,0 +1,105 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+    name: zero-prometheus-https
+    namespace: monitoring
+spec:
+    entryPoints:
+        - websecure
+    routes:
+        - match: Host(`prometheus.prd.senseizero.es`)
+          kind: Rule
+          services:
+              - name: prom-operator-01-kube-prom-prometheus
+                port: 9090
+          middlewares:
+              - name: basic-auth
+                namespace: monitoring
+    tls:
+        secretName: prometheus.prd.senseizero.es
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+    name: zero-prometheus-http
+    namespace: monitoring
+spec:
+    entryPoints:
+        - web
+    routes:
+        - match: Host(`prometheus.prd.senseizero.es`)
+          kind: Rule
+          services:
+              - name: prom-operator-01-kube-prom-prometheus
+                port: 9090
+          middlewares:
+              - name: redirect-https
+                namespace: prd
+
+# letsencrypt-cert.yaml
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+    name: prometheus.prd.senseizero.es
+    namespace: monitoring
+spec:
+    dnsNames:
+        - prometheus.prd.senseizero.es
+    secretName: prometheus.prd.senseizero.es
+    issuerRef:
+        name: letsencrypt-prod
+        kind: ClusterIssuer
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+    name: zero-grafana-https
+    namespace: monitoring
+spec:
+    entryPoints:
+        - websecure
+    routes:
+        - match: Host(`grafana.prd.senseizero.es`)
+          kind: Rule
+          services:
+              - name: prom-operator-01-grafana
+                port: 80
+    tls:
+        secretName: grafana.prd.senseizero.es
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+    name: zero-grafana-http
+    namespace: monitoring
+spec:
+    entryPoints:
+        - web
+    routes:
+        - match: Host(`grafana.prd.senseizero.es`)
+          kind: Rule
+          services:
+              - name: prom-operator-01-grafana
+                port: 80
+          middlewares:
+              - name: redirect-https
+                namespace: prd
+
+# letsencrypt-cert.yaml
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+    name: grafana.prd.senseizero.es
+    namespace: monitoring
+spec:
+    dnsNames:
+        - grafana.prd.senseizero.es
+    secretName: grafana.prd.senseizero.es
+    issuerRef:
+        name: letsencrypt-prod
+        kind: ClusterIssuer

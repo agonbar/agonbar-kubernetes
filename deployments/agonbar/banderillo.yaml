@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: banderillo
+  name: banderillo
+  namespace: agonbar
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: banderillo
+  template:
+    metadata:
+      labels:
+        app: banderillo
+    spec:
+      containers:
+        - image: docker.amodosoluciones.com/adrian.barbosa/banderillo:master
+          name: banderillo
+          ports:
+            - containerPort: 3000
+              name: banderillo
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      nodeSelector:
+        kubernetes.io/hostname: "ovh02"
+      imagePullSecrets:
+        - name: registry-secret
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: banderillo
+  namespace: agonbar
+spec:
+  type: NodePort
+
+  selector:
+    app: banderillo
+
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
+      name: banderillo
+
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: banderillo
+  namespace: agonbar
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`banderillo.adriangonzalezbarbosa.eu`)
+      services:
+        - name: banderillo
+          port: 3000
+  tls:
+      secretName: banderillo.adriangonzalezbarbosa.eu
+
+# letsencrypt-cert.yaml
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: banderillo.adriangonzalezbarbosa.eu
+  namespace: agonbar
+spec:
+  dnsNames:
+    - banderillo.adriangonzalezbarbosa.eu
+  secretName: banderillo.adriangonzalezbarbosa.eu
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer

@@ -1,0 +1,62 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: immich-https
+  namespace: immich
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`immich.adriangonzalezbarbosa.eu`)
+      kind: Rule
+      services:
+        - name: proxy
+          port: 8080
+  tls:
+    secretName: immich.adriangonzalezbarbosa.eu
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: immich-http
+  namespace: immich
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`immich.adriangonzalezbarbosa.eu`)
+      kind: Rule
+      services:
+        - name: proxy
+          port: 8080
+      middlewares:
+        - name: redirect-https
+          namespace: immich
+
+# letsencrypt-cert.yaml
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: immich.adriangonzalezbarbosa.eu
+  namespace: immich
+spec:
+  dnsNames:
+    - immich.adriangonzalezbarbosa.eu
+  secretName: immich.adriangonzalezbarbosa.eu
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+
+---
+# http to https
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-https
+  namespace: immich
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true

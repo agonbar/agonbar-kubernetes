@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: traefik
+  name: traefik
+  namespace: yavoo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: traefik
+  template:
+    metadata:
+      labels:
+        app: traefik
+    spec:
+      containers:
+        - image: traefik:2.8
+          name: traefik
+          ports:
+            - containerPort: 28968
+              name: traefik-1
+              protocol: UDP
+            - containerPort: 28968
+              name: traefik-2
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: toml
+              mountPath: /etc/traefik/traefik.toml
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      nodeSelector:
+        kubernetes.io/hostname: "ovh02"
+      imagePullSecrets:
+        - name: dockerhub-secret
+      volumes:
+        - name: config
+          hostPath:
+            path: /docker/traefik/config
+            type: Directory
+        - name: toml
+          hostPath:
+            path: /docker/traefik/traefik.toml
+            type: File
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: traefik
+  namespace: yavoo
+spec:
+  type: LoadBalancer
+  selector:
+    app: traefik
+  ports:
+    - protocol: UDP
+      port: 28968
+      targetPort: 28968
+      name: traefik-1
+    - protocol: TCP
+      port: 28968
+      targetPort: 28968
+      name: traefik-2

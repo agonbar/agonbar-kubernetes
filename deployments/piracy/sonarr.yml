@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: sonarr-deployment # <--- change this
+    namespace: piracy
+    labels:
+        app: sonarr # <--- change this to match label on the pod
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            app: sonarr # <--- change this to match label on the pod
+    template:
+        metadata:
+            labels:
+                app: sonarr
+        spec:
+            dnsPolicy: "None"
+            dnsConfig:
+                nameservers:
+                    - 1.1.1.1
+            containers:
+                - name: sonarr
+                  image: linuxserver/sonarr:latest
+                  imagePullPolicy: IfNotPresent
+                  env:
+                      - name: PGID
+                        value: "\x31\x30\x30\x30" # < ASCII code for '65541'
+                      - name: PUID
+                        value: "\x31\x30\x30\x30" #< ACII code for '1000
+                      - name: TZ
+                        value: Europe/Madrid
+                  ports:
+                      - containerPort: 8989
+                        protocol: TCP
+                  volumeMounts:
+                      - name: config
+                        mountPath: /config
+                      - name: downloads
+                        mountPath: /downloads
+                      - name: tv
+                        mountPath: /tv
+                  resources:
+                      requests:
+                          memory: 128Mi
+                          cpu: 100m
+                      limits:
+                          memory: 1Gi
+                          cpu: 100m
+            volumes:
+                - name: config
+                  nfs:
+                      server: 192.168.0.29
+                      path: /mnt/SSD/docker/sonarr/config
+                - name: tv
+                  nfs:
+                      server: 192.168.0.29
+                      path: /mnt/RAID/docker/media/tv
+                - name: downloads
+                  nfs:
+                      server: 192.168.0.29
+                      path: /mnt/SSD/docker/transmission/downloads
+            nodeSelector:
+              svccontroller.k3s.cattle.io/lbpool: lamg

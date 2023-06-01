@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: web-amanda
+  name: web-amanda
+  namespace: agonbar
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web-amanda
+  template:
+    metadata:
+      labels:
+        app: web-amanda
+    spec:
+      containers:
+        - image: nginx:mainline-alpine
+          name: web-amanda
+          ports:
+            - containerPort: 80
+              name: web-amanda
+              protocol: TCP
+          volumeMounts:
+            - name: web-amanda
+              mountPath: /usr/share/nginx/html
+              readOnly: true
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+      - name: web-amanda
+        hostPath:
+          path: /var/www/amandapv.com/html/
+          type: Directory
+      nodeSelector:
+        kubernetes.io/hostname: "ovh02"
+      imagePullSecrets:
+        - name: dockerhub-secret
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: web-amanda
+  namespace: agonbar
+spec:
+  type: NodePort
+
+  selector:
+    app: web-amanda
+
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+      name: web-amanda
+
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: web-amanda
+  namespace: agonbar
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`amandapv.com`)
+      services:
+        - name: web-amanda
+          port: 80
+  tls:
+      secretName: amandapv.com
+
+# letsencrypt-cert.yaml
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: amandapv.com
+  namespace: agonbar
+spec:
+  dnsNames:
+    - amandapv.com
+  secretName: amandapv.com
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer

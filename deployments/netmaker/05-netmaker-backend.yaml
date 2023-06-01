@@ -1,0 +1,149 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: netmaker-backend
+  namespace: netmaker
+  labels:
+    app: netmaker-backend
+spec:
+  selector:
+    matchLabels:
+      app: netmaker-backend
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: netmaker-backend
+        networking/allow-internet-access: "true"
+    spec:
+      containers:
+
+      - name: netmaker-backend
+        image: gravitl/netmaker:v0.19.0
+        imagePullPolicy: Always
+        ports:
+          - containerPort: 8081
+        securityContext:
+          privileged: true
+          capabilities:
+            add:
+            - NET_ADMIN
+        env:
+        - name: SERVER_NAME
+          value: "broker.netmaker.adriangonzalezbarbosa.eu"
+        - name: DISPLAY_KEYS
+          value: "on"
+        - name: MANAGE_IPTABLES
+          value: "off"
+        - name: RCE
+          value: "on"
+        - name: NODE_ID
+          value: "netmaker-server-1"
+        - name: DATABASE
+          value: "sqlite"
+        - name: BROKER_TYPE
+          value: "emqx"
+        - name: EMQX_REST_ENDPOINT
+          value: "http://netmaker-mq:18083"
+        - name: BROKER_ENDPOINT
+          value: "wss://broker.netmaker.adriangonzalezbarbosa.eu/mqtt"
+        - name: SERVER_BROKER_ENDPOINT
+          value: "ws://rpi-aya:8083/mqtt"
+        - name: MQ_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: netmaker
+              key: mqttPassword
+        - name: MQ_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: netmaker
+              key: mqttUser
+        - name: SERVER_API_CONN_STRING
+          value: "api.netmaker.adriangonzalezbarbosa.eu:443"
+        - name: COREDNS_ADDR
+          value: "127.0.0.1"
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: SERVER_HTTP_HOST
+          value: "api.netmaker.adriangonzalezbarbosa.eu"
+        - name: API_PORT
+          value: "8081"
+        - name: CLIENT_MODE
+          value: "on"
+        - name: MASTER_KEY
+          value: "Unkn0wn!"
+        - name: PLATFORM
+          value: "Kubernetes"
+        - name: CORS_ALLOWED_ORIGIN
+          value: "*"
+        volumeMounts:
+        - name: nm-pvc-dnsconfig-backend
+          mountPath: /root/config/dnsconfig
+        - name: nm-pvc-sqldata
+          mountPath: /root/data
+        - name: nm-pvc-mq-certs-nm
+          mountPath: /etc/netmaker
+
+
+      - name: netmaker-dns
+        imagePullPolicy: Always
+        image: coredns/coredns
+        args:
+        - -conf
+        - /root/dnsconfig/Corefile
+        ports:
+        - containerPort: 53
+          name: dns
+          protocol: UDP
+        - containerPort: 53
+          name: dns-tcp
+          protocol: TCP
+        volumeMounts:
+        - mountPath: /root/dnsconfig
+          name: nm-pvc-dnsconfig-coredns
+          readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            add:
+            - NET_BIND_SERVICE
+            drop:
+            - all
+
+      volumes:
+      - name: nm-pvc-dnsconfig-backend
+        persistentVolumeClaim:
+          claimName: nm-pvc-dnsconfig-backend
+      - name: nm-pvc-sqldata
+        persistentVolumeClaim:
+          claimName: nm-pvc-sqldata
+      - name: nm-pvc-mq-certs-nm
+        persistentVolumeClaim:
+          claimName: nm-pvc-mq-certs-nm
+      - name: nm-pvc-dnsconfig-coredns
+        persistentVolumeClaim:
+          claimName: nm-pvc-dnsconfig-coredns
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: netmaker
+  labels:
+    app: netmaker-backend
+  name: netmaker-api
+spec:
+  ports:
+  - port: 8081
+    protocol: TCP
+    targetPort: 8081
+  selector:
+    app: netmaker-backend
+  sessionAffinity: None
+  type: ClusterIP

@@ -1,0 +1,43 @@
+## create a namespace called dhcp
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: dhcp-deployment # <--- change this
+    namespace: aya
+    labels:
+        app: dhcp # <--- change this to match label on the pod
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            app: dhcp # <--- change this to match label on the pod
+    template: # => from here down copy and paste the pods metadata: and spec: sections
+        metadata:
+            labels:
+                app: dhcp
+        spec:
+            hostNetwork: true
+            containers:
+                - name: dhcp
+                  image: networkboot/dhcpd
+                  imagePullPolicy: IfNotPresent
+                  ports:
+                      - containerPort: 67
+                        protocol: UDP
+                  volumeMounts:
+                      - name: data
+                        mountPath: /data/
+                  resources:
+                      requests:
+                          memory: 128Mi
+                          cpu: 100m
+                      limits:
+                          memory: 256Mi
+                          cpu: 100m
+            volumes:
+                - name: data
+                  nfs:
+                      server: ovh02
+                      path: /docker/dhcpd-aya/
+            nodeSelector:
+                svccontroller.k3s.cattle.io/lbpool: aya

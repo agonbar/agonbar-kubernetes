@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: yta
+  name: yta
+  namespace: agonbar
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: yta
+  template:
+    metadata:
+      labels:
+        app: yta
+    spec:
+      containers:
+        - image: docker.amodosoluciones.com/adrian.barbosa/youtube-audio-bot:master
+          name: yta
+          env:
+            - name: TELEGRAM_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: agonbar
+                  key: ytaTelegramToken
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      nodeSelector:
+          kubernetes.io/arch: amd64
+      imagePullSecrets:
+        - name: registry-secret

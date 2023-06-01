@@ -1,0 +1,149 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: factorio
+  name: factorio
+  namespace: agonbar
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: factorio
+  template:
+    metadata:
+      labels:
+        app: factorio
+    spec:
+      containers:
+        - image: ofsm/ofsm:latest
+          name: factorio
+          ports:
+            - containerPort: 80
+              name: factorio-1
+              protocol: TCP
+            - containerPort: 34197
+              name: factorio-2
+              protocol: UDP
+          env:
+            - name: FACTORIO_VERSION
+              value: stable
+            - name: RCON_PASS
+              value: ""
+            - name: ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: agonbar
+                  key: factorioUser
+            - name: ADMIN_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: agonbar
+                  key: factorioPassword
+          volumeMounts:
+            - name: data
+              mountPath: /opt/fsm-data
+            - name: saves
+              mountPath: /opt/factorio/saves
+            - name: mods
+              mountPath: /opt/factorio/mods
+            - name: config
+              mountPath: /opt/factorio/config
+            - name: packs
+              mountPath: /opt/fsm/mod_packs
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+        - name: data
+          hostPath:
+            type: Directory
+            path: /docker/factorio/fsm-data
+        - name: saves
+          hostPath:
+            type: Directory
+            path: /docker/factorio/saves
+        - name: mods
+          hostPath:
+            type: Directory
+            path: /docker/factorio/mods
+        - name: config
+          hostPath:
+            type: Directory
+            path: /docker/factorio/config
+        - name: packs
+          hostPath:
+            type: Directory
+            path: /docker/factorio/mod_packs
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      imagePullSecrets:
+        - name: registry-secret
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: factorio
+  namespace: agonbar
+spec:
+  type: NodePort
+
+  selector:
+    app: factorio
+
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+      name: factorio
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: factorio-server
+  namespace: agonbar
+spec:
+  type: LoadBalancer
+  ports:
+    - name: factorio
+      protocol: UDP
+      port: 34197
+      targetPort: 34197
+  selector:
+    app: factorio
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: factorio
+  namespace: agonbar
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`factorio.adriangonzalezbarbosa.eu`)
+      services:
+        - name: factorio
+          port: 80
+  tls:
+    secretName: factorio.adriangonzalezbarbosa.eu
+
+# letsencrypt-cert.yaml
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: factorio.adriangonzalezbarbosa.eu
+  namespace: agonbar
+spec:
+  dnsNames:
+    - factorio.adriangonzalezbarbosa.eu
+  secretName: factorio.adriangonzalezbarbosa.eu
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer

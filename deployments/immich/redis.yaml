@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: immich
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: redis
+  name: redis
+  namespace: immich
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - image: redis:6.2
+          name: redis
+          ports:
+            - containerPort: 6379
+              name: redis
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: redis
+  namespace: immich
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: immich
+spec:
+  type: LoadBalancer
+
+  selector:
+    app: redis
+
+  ports:
+    - protocol: TCP
+      port: 6379
+      targetPort: 6379
+      name: redis
+
+
+

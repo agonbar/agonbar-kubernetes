@@ -1,0 +1,57 @@
+## create a namespace called hyperion
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: hyperion-deployment # <--- change this
+    namespace: aya
+    labels:
+        app: hyperion # <--- change this to match label on the pod
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            app: hyperion # <--- change this to match label on the pod
+    template: # => from here down copy and paste the pods metadata: and spec: sections
+        metadata:
+            labels:
+                app: hyperion
+        spec:
+            dnsPolicy: "None"
+            dnsConfig:
+                nameservers:
+                    # upstream DNS used by hyperion.
+                    - 1.1.1.1
+            containers:
+                - name: hyperion
+                  # https://hub.docker.com/r/hyperion/hyperion/tags
+                  image: sirfragalot/hyperion.ng:2.0.0-alpha.9-aarch64
+                  imagePullPolicy: IfNotPresent
+                  env:
+                      - name: TZ
+                        value: "Europe/Madrid"
+                      - name: WEBPASSWORD
+                        value: zt8m*#r6E3!Q@b@nubnms$w@9
+                  ports:
+                    - containerPort: 19445
+                      protocol: TCP
+                    - containerPort: 19444
+                      protocol: TCP
+                    - containerPort: 8090
+                      protocol: TCP
+                  volumeMounts:
+                    - name: config
+                      mountPath: /root/.hyperion
+                  resources:
+                    requests:
+                      memory: 128Mi
+                      cpu: 100m
+                    limits:
+                      memory: 2Gi
+                      cpu: 100m
+            volumes:
+              - name: config
+                hostPath:
+                  path: /docker/hyperion
+                  type: Directory
+            nodeSelector:
+                svccontroller.k3s.cattle.io/lbpool: aya

@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: typesense
+  name: typesense
+  namespace: immich
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: typesense 
+  template:
+    metadata:
+      labels:
+        app: typesense 
+    spec:
+      containers:
+        - image: typesense/typesense:0.24.0
+          name: typesense 
+          env:
+            - name: TYPESENSE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: immich
+                  key: typesenseApiKey
+            - name: TYPESENSE_DATA_DIR
+              value: /data
+          ports:
+            - containerPort: 8108
+              name: typesense 
+              protocol: TCP
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+        - name: data
+          nfs:
+            server: nas00
+            path: /mnt/RAID/docker/immich/typesense
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: typesense 
+  namespace: immich
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: immich
+spec:
+  type: LoadBalancer
+
+  selector:
+    app: typesense 
+
+  ports:
+    - protocol: TCP
+      port: 8108
+      targetPort: 8108
+      name: typesense
+
+
+

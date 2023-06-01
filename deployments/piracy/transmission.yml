@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: transmission-deployment # <--- change this
+    namespace: piracy
+    labels:
+        app: transmission # <--- change this to match label on the pod
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            app: transmission # <--- change this to match label on the pod
+    template:
+        metadata:
+            labels:
+                app: transmission
+        spec:
+            dnsPolicy: "None"
+            dnsConfig:
+                nameservers:
+                    - 1.1.1.1
+            containers:
+                - name: transmission
+                  image: linuxserver/transmission:latest
+                  imagePullPolicy: IfNotPresent
+                  env:
+                      - name: PGID
+                        value: "\x31\x30\x30\x30" # < ASCII code for '65541'
+                      - name: PUID
+                        value: "\x31\x30\x30\x30" #< ACII code for '1000
+                      - name: TZ
+                        value: Europe/Madrid
+                      - name: TRANSMISSION_WEB_HOME
+                        value: "/combustion-release/"
+                  ports:
+                      - containerPort: 9091
+                        protocol: TCP
+                      - containerPort: 51413
+                        protocol: TCP
+                      - containerPort: 51413
+                        protocol: UDP
+                  volumeMounts:
+                      - name: config
+                        mountPath: /config
+                      - name: downloads
+                        mountPath: /downloads
+                  resources:
+                      requests:
+                          memory: 128Mi
+                          cpu: 100m
+                      limits:
+                          memory: 1Gi
+                          cpu: 100m
+            volumes:
+                - name: config
+                  nfs:
+                      server: 192.168.0.29
+                      path: /mnt/SSD/docker/transmission/config
+                - name: downloads
+                  nfs:
+                      server: 192.168.0.29
+                      path: /mnt/SSD/docker/transmission/downloads
+            nodeSelector:
+              svccontroller.k3s.cattle.io/lbpool: lamg

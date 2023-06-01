@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: web
+  name: web
+  namespace: immich
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web 
+  template:
+    metadata:
+      labels:
+        app: web 
+    spec:
+      containers:
+        - image: ghcr.io/immich-app/immich-web:release
+          name: web 
+          command: ["/bin/sh"]
+          args: ["./entrypoint.sh"]
+          env:
+            - name: IMMICH_WEB_URL
+              value: "http://web:3000"
+            - name: IMMICH_SERVER_URL
+              value: "http://server:3001"
+            - name: IMMICH_MACHINE_LEARNING_URL 
+              value: "http://machine-learning:3003"
+          ports:
+            - containerPort: 3000
+              name: web 
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: web 
+  namespace: immich
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: immich
+spec:
+  type: LoadBalancer
+
+  selector:
+    app: web 
+
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
+      name: web
+
+
+

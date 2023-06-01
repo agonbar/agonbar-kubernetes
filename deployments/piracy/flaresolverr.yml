@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: flaresolverr-deployment # <--- change this
+    namespace: piracy
+    labels:
+        app: flaresolverr # <--- change this to match label on the pod
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            app: flaresolverr # <--- change this to match label on the pod
+    template:
+        metadata:
+            labels:
+                app: flaresolverr
+        spec:
+            dnsPolicy: "None"
+            dnsConfig:
+                nameservers:
+                    - 1.1.1.1
+            containers:
+                - name: flaresolverr
+                  image: ghcr.io/flaresolverr/flaresolverr:latest
+                  imagePullPolicy: IfNotPresent
+                  env:
+                      - name: LOG_LEVEL
+                        value: info
+                      - name: LOG_HTML
+                        value: "false"
+                      - name: CAPTCHA_SOLVER
+                        value: none
+                      - name: TZ
+                        value: Europe/Madrid
+                  ports:
+                      - containerPort: 8191
+                        protocol: TCP
+                  resources:
+                      requests:
+                          memory: 128Mi
+                          cpu: 100m
+                      limits:
+                          memory: 1Gi
+                          cpu: 100m

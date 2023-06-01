@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: postgre
+  name: postgre
+  namespace: immich
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgre 
+  template:
+    metadata:
+      labels:
+        app: postgre 
+    spec:
+      containers:
+        - image: postgres:14
+          name: postgre 
+          env: 
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: immich
+                  key: dbPassword
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: immich
+                  key: dbUser
+            - name: POSTGRES_DB
+              value: immich
+            - name: PG_DATA
+              value: /var/lib/postgresql/data
+          ports:
+            - containerPort: 5432
+              name: postgre 
+              protocol: TCP
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+        - name: data
+          nfs:
+            server: nas00
+            path: /mnt/RAID/docker/immich/db
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: postgre 
+  namespace: immich
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: immich
+spec:
+  type: LoadBalancer
+
+  selector:
+    app: postgre 
+
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+      name: postgre
+
+
+

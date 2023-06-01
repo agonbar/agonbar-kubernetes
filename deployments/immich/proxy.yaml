@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: proxy
+  name: proxy
+  namespace: immich
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: proxy 
+  template:
+    metadata:
+      labels:
+        app: proxy 
+    spec:
+      containers:
+        - image: ghcr.io/immich-app/immich-proxy:release
+          name: proxy 
+          env:
+            - name: IMMICH_SERVER_URL
+              value: "http://server:3001"
+            - name: IMMICH_WEB_URL
+              value: "http://web:3000"
+          ports:
+            - containerPort: 8080
+              name: proxy 
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: proxy 
+  namespace: immich
+    #labels:
+    #svccontroller.k3s.cattle.io/lbpool: immich
+spec:
+  type: LoadBalancer
+
+  selector:
+    app: proxy 
+
+  ports:
+    - protocol: TCP
+      port: 8456
+      targetPort: 8080
+      name: proxy
+
+
+

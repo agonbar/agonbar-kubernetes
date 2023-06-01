@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: profit-bot
+  name: profit-bot
+  namespace: yavoo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: profit-bot
+  template:
+    metadata:
+      labels:
+        app: profit-bot
+    spec:
+      containers:
+        - image: agonbar/profit_bot
+          name: profit-bot
+          env:
+            - name: TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: yavoo
+                  key: botToken
+          volumeMounts:
+            - name: db
+              mountPath: /app/bot.db
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+        - name: db
+          hostPath:
+              type: File
+              path: /docker/profit_bot_yavoo/bot.db
+      nodeSelector:
+        kubernetes.io/hostname: "ovh02"

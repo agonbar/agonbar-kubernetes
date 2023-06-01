@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: ts3
+  name: ts3
+  namespace: agonbar
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ts3
+  template:
+    metadata:
+      labels:
+        app: ts3
+    spec:
+      containers:
+        - image: teamspeak
+          name: ts3
+          env:
+            - name: TS3SERVER_LICENSE
+              value: 'accept'
+          ports:
+            - containerPort: 9987
+              name: ts3-1
+              protocol: UDP
+            - containerPort: 10011
+              name: ts3-2
+              protocol: TCP
+            - containerPort: 30033
+              name: ts3-3
+              protocol: TCP
+          volumeMounts:
+            - name: ts3
+              mountPath: /var/ts3server
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+      - name: ts3
+        hostPath:
+          path: /docker/ts3
+          type: Directory
+      nodeSelector:
+        kubernetes.io/hostname: "ovh02"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ts3
+  namespace: agonbar
+spec:
+  type: LoadBalancer
+  ports:
+    - name: ts3-1
+      protocol: UDP
+      port: 8443
+      targetPort: 8443
+    - name: ts3-2
+      protocol: TCP
+      port: 10011
+      targetPort: 10011
+    - name: ts3-3
+      protocol: TCP
+      port: 30033
+      targetPort: 30033
+  selector:
+    app: ts3

@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: syncthing
+  name: syncthing
+  namespace: lamg
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: syncthing
+  template:
+    metadata:
+      labels:
+        app: syncthing
+    spec:
+      containers:
+        - image: linuxserver/syncthing:latest
+          name: syncthing
+          env:
+            - name: PUID
+              value: '1000'
+            - name: PGID
+              value: '1000'
+          ports:
+            - containerPort: 21025
+              name: syncthing-1
+              protocol: UDP
+            - containerPort: 22000
+              name: syncthing-2
+              protocol: TCP
+            - containerPort: 8384
+              name: syncthing-3
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+        - name: config
+          nfs:
+              server: 192.168.0.24
+              path: /mnt/RAID/docker/syncthing/config
+        - name: data
+          nfs:
+              server: 192.168.0.24
+              path: /mnt/RAID/docker/syncthing/data
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: syncthing
+  namespace: lamg
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: lamg
+spec:
+  type: LoadBalancer
+  ports:
+    - name: syncthing-1
+      protocol: UDP
+      port: 21025
+      targetPort: 21025
+    - name: syncthing-2
+      protocol: TCP
+      port: 22000
+      targetPort: 22000
+    - name: syncthing-3
+      protocol: TCP
+      port: 8384
+      targetPort: 8384
+  selector:
+    app: syncthing

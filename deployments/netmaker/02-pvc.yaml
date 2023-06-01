@@ -1,0 +1,278 @@
+
+#mkdir -p /docker/netmaker/nm-dnsconfig-pvc
+#mkdir -p /docker/netmaker/nm-sqldata-pvc
+#mkdir -p /docker/netmaker/nm-mq-certs
+#mkdir -p /docker/netmaker/nm-mq-log
+#mkdir -p /docker/netmaker/nm-mq-data
+#chmod 777 /docker/netmaker/*
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nm-pv-dnsconfig-backend
+  namespace: netmaker
+spec:
+  capacity:
+    storage: 128Mi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  local:
+    path: /docker/netmaker/nm-dnsconfig-pvc
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - ovh02
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: nm-pvc-dnsconfig-backend
+  namespace: netmaker
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 128Mi
+  volumeName: nm-pv-dnsconfig-backend
+
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nm-pv-dnsconfig-coredns
+  namespace: netmaker
+spec:
+  capacity:
+    storage: 128Mi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  local:
+    path: /docker/netmaker/nm-dnsconfig-pvc
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - ovh02 
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: nm-pvc-dnsconfig-coredns
+  namespace: netmaker
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 128Mi
+  volumeName: nm-pv-dnsconfig-coredns
+
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nm-pv-sqldata
+  namespace: netmaker
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  local:
+    path: /docker/netmaker/nm-sqldata-pvc
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - ovh02 
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: nm-pvc-sqldata
+  namespace: netmaker
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi
+  volumeName: nm-pv-sqldata
+
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nm-pv-mq-certs-mq
+  namespace: netmaker
+spec:
+  capacity:
+    storage: 128Mi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  local:
+    path: /docker/netmaker/nm-mq-certs
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - ovh02 
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: nm-pvc-mq-certs-mq
+  namespace: netmaker
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 128Mi
+  volumeName: nm-pv-mq-certs-mq
+
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nm-pv-mq-certs-nm
+  namespace: netmaker
+spec:
+  capacity:
+    storage: 128Mi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  local:
+    path: /docker/netmaker/nm-mq-certs
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - ovh02
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: nm-pvc-mq-certs-nm
+  namespace: netmaker
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 128Mi
+  volumeName: nm-pv-mq-certs-nm
+
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nm-pv-mq-log
+  namespace: netmaker
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  local:
+    path: /docker/netmaker/nm-mq-log
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - ovh02 
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: nm-pvc-mq-log
+  namespace: netmaker
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi
+  volumeName: nm-pv-mq-log
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nm-pv-mq-data
+  namespace: netmaker
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  local:
+    path: /docker/netmaker/nm-mq-data
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - ovh02 
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: nm-pvc-mq-data
+  namespace: netmaker
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi
+  volumeName: nm-pv-mq-data

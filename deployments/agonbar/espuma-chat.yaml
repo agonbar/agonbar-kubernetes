@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: espuma-chat
+  name: espuma-chat
+  namespace: agonbar
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: espuma-chat
+  template:
+    metadata:
+      labels:
+        app: espuma-chat
+    spec:
+      containers:
+        - image: agonbar/espuma-chat:latest
+          name: espuma-chat
+          ports:
+            - containerPort: 3000
+              name: espuma-chat
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      nodeSelector:
+        kubernetes.io/hostname: "ovh02"
+      imagePullSecrets:
+        - name: dockerhub-secret
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: espuma-chat
+  namespace: agonbar
+spec:
+  type: NodePort
+
+  selector:
+    app: espuma-chat
+
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
+      name: espuma-chat
+
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: espuma-chat
+  namespace: agonbar
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`espuma-chat.adriangonzalezbarbosa.eu`)
+      services:
+        - name: espuma-chat
+          port: 3000
+  tls:
+      secretName: espuma-chat.adriangonzalezbarbosa.eu
+
+# letsencrypt-cert.yaml
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: espuma-chat.adriangonzalezbarbosa.eu
+  namespace: agonbar
+spec:
+  dnsNames:
+    - espuma-chat.adriangonzalezbarbosa.eu
+  secretName: espuma-chat.adriangonzalezbarbosa.eu
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer

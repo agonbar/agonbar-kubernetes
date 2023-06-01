@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: mqtt
+  name: mqtt
+  namespace: lamg
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mqtt
+  template:
+    metadata:
+      labels:
+        app: mqtt
+    spec:
+      containers:
+        - image: emqx/emqx:4.4.4
+          name: mqtt
+          ports:
+            - containerPort: 1883
+              name: mqtt
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mqtt
+  namespace: lamg
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: lamg
+spec:
+  type: LoadBalancer
+  ports:
+    - name: mqtt
+      protocol: TCP
+      port: 1883
+      targetPort: 1883
+  selector:
+    app: mqtt

@@ -1,0 +1,84 @@
+## create a namespace called pihole
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: pihole-ha-deployment # <--- change this
+    namespace: aya
+    labels:
+        app: pihole-ha # <--- change this to match label on the pod
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            app: pihole-ha # <--- change this to match label on the pod
+    template: # => from here down copy and paste the pods metadata: and spec: sections
+        metadata:
+            labels:
+                app: pihole-ha
+        spec:
+            dnsPolicy: "None"
+            dnsConfig:
+                nameservers:
+                    # upstream DNS used by pihole.
+                    - 1.1.1.1
+            containers:
+                - name: pihole-ha
+                  # https://hub.docker.com/r/pihole/pihole/tags
+                  image: pihole/pihole:2023.03.0
+                  imagePullPolicy: IfNotPresent
+                  env:
+                      - name: TZ
+                        value: "Europe/Madrid"
+                      - name: WEBPASSWORD
+                        valueFrom:
+                          secretKeyRef:
+                            name: aya
+                            key: piholePassword
+                  ports:
+                      - containerPort: 53
+                        protocol: TCP
+                      - containerPort: 53
+                        protocol: UDP
+                      - containerPort: 80
+                        protocol: TCP
+                      - containerPort: 443
+                        protocol: TCP
+                  resources:
+                      requests:
+                          memory: 128Mi
+                          cpu: 100m
+                      limits:
+                          memory: 2Gi
+                          cpu: 1000m
+            nodeSelector:
+                svccontroller.k3s.cattle.io/lbpool: aya
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pihole-ha
+  namespace: aya
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: aya
+spec:
+  type: LoadBalancer
+  ports:
+    - name: pihole-1
+      protocol: TCP
+      port: 53
+      targetPort: 53
+    - name: pihole-2
+      protocol: UDP
+      port: 53
+      targetPort: 53
+    - name: pihole-3
+      protocol: TCP
+      port: 1080
+      targetPort: 80
+    - name: pihole-4
+      protocol: TCP
+      port: 1443
+      targetPort: 443
+  selector:
+    app: pihole-ha

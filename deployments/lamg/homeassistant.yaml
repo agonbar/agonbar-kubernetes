@@ -1,0 +1,129 @@
+## create a namespace called lamg
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lamg
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: homeassistant
+  name: homeassistant
+  namespace: lamg
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: homeassistant
+  template:
+    metadata:
+      labels:
+        app: homeassistant
+    spec:
+      containers:
+        - image: homeassistant/home-assistant:latest
+          name: homeassistant
+          ports:
+            - containerPort: 8123
+              name: homeassistant
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /config
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+        - name: config
+          nfs:
+            server: nas00
+            path: /mnt/RAID/docker/homeassistant/config
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: homeassistant
+  namespace: lamg
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: lamg
+spec:
+  type: LoadBalancer
+
+  selector:
+    app: homeassistant
+
+  ports:
+    - protocol: TCP
+      port: 8123
+      targetPort: 8123
+      name: homeassistant
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: homeassistant-https
+  namespace: lamg
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`home.adriangonzalezbarbosa.eu`)
+      kind: Rule
+      services:
+        - name: homeassistant
+          port: 8123
+  tls:
+    secretName: home.adriangonzalezbarbosa.eu
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: homeassistant-http
+  namespace: lamg
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`home.adriangonzalezbarbosa.eu`)
+      kind: Rule
+      services:
+        - name: homeassistant
+          port: 8123
+      middlewares:
+        - name: redirect-https
+          namespace: lamg
+
+# letsencrypt-cert.yaml
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: home.adriangonzalezbarbosa.eu
+  namespace: lamg
+spec:
+  dnsNames:
+    - home.adriangonzalezbarbosa.eu
+  secretName: home.adriangonzalezbarbosa.eu
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+
+---
+# http to https
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-https
+  namespace: lamg
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true

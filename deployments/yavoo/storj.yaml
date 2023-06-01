@@ -1,0 +1,84 @@
+## create a namespace called yavoo
+apiVersion: v1
+kind: Namespace
+metadata:
+    name: yavoo
+
+---
+# ingress-route.yaml https
+kind: Service
+apiVersion: v1
+metadata:
+  name: storj
+  namespace: yavoo
+spec:
+  type: ExternalName
+  ports:
+    - name: storj
+      port: 14103
+      targetPort: 14103
+  externalName: 10.72.0.11
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: storj-https
+  namespace: yavoo
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`storj.adriangonzalezbarbosa.eu`)
+      kind: Rule
+      services:
+        - name: storj
+          port: 14103
+  tls:
+    secretName: storj.adriangonzalezbarbosa.eu
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: storj-http
+  namespace: yavoo
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`storj.adriangonzalezbarbosa.eu`)
+      kind: Rule
+      services:
+        - name: storj
+          port: 14103
+      middlewares:
+        - name: redirect-https
+          namespace: yavoo
+
+# letsencrypt-cert.yaml
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: storj.adriangonzalezbarbosa.eu
+  namespace: yavoo
+spec:
+  dnsNames:
+    - storj.adriangonzalezbarbosa.eu
+  secretName: storj.adriangonzalezbarbosa.eu
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+
+---
+# http to https
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-https
+  namespace: yavoo
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true

@@ -1,0 +1,13 @@
+# install with: helm install traefik traefik/traefik --create-namespace --namespace=kube-system --values=helm/traefik-values.yaml
+# update with: helm upgrade traefik traefik/traefik --namespace=kube-system -f helm/traefik-values.yaml
+
+# values.yaml
+---
+globalArguments:
+  - "--api.insecure=true"
+# Enable HTTPS redirection on web entrypoint
+#additionalArguments:
+#  - "--entryPoints.web.http.redirections.entryPoint.to=websecure"
+#  - "--entryPoints.web.http.redirections.entryPoint.scheme=https"
+  - "--providers.kubernetescrd.allowExternalNameServices=true"
+  - "--providers.kubernetesingress.allowExternalNameServices=true"

@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: microservices
+  name: microservices
+  namespace: immich
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: microservices 
+  template:
+    metadata:
+      labels:
+        app: microservices 
+    spec:
+      containers:
+        - image: ghcr.io/immich-app/immich-server:release
+          name: microservices 
+          command: ["/bin/sh"]
+          args: ["./start-microservices.sh"]
+          env:
+            - name: DB_HOSTNAME
+              valueFrom:
+                secretKeyRef:
+                  name: immich
+                  key: dbHost
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: immich
+                  key: dbUser
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: immich
+                  key: dbPassword
+            - name: DB_DATABASE_NAME
+              value: "immich"
+            - name: REDIS_HOSTNAME
+              value: "redis"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: LOG_LEVEL
+              value: "simple"
+            - name: TYPESENSE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: immich
+                  key: typesenseApiKey
+            - name: REVERSE_GEOCODING_PRECISION
+              value: "1"
+            - name: PUBLIC_LOGIN_PAGE_MESSAGE
+              value: "Backup de fotos de LAMG"
+            - name: IMMICH_WEB_URL
+              value: "http://web:3000"
+            - name: IMMICH_SERVER_URL
+              value: "http://server:3001"
+            - name: IMMICH_MACHINE_LEARNING_URL 
+              value: "http://machine-learning:3003"
+            - name: MACHINE_LEARNING_PORT
+              value: "3003"
+            - name: SERVER_PORT
+              value: "3001"
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+          volumeMounts:
+            - name: upload
+              mountPath: /usr/src/app/upload
+      volumes:
+        - name: upload
+          nfs:
+            server: nas00
+            path: /mnt/RAID/docker/immich/upload
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+

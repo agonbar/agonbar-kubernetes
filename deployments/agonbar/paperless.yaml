@@ -1,0 +1,150 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: paperless
+  name: paperless
+  namespace: agonbar
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: paperless
+  template:
+    metadata:
+      labels:
+        app: paperless
+    spec:
+      containers:
+        - image: docker.io/library/redis:6.2-alpine
+          name: broker
+          ports:
+            - containerPort: 6379
+              name: broker
+              protocol: TCP
+          volumeMounts:
+            - name: redis
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+        - image: ghcr.io/paperless-ngx/paperless-ngx:latest
+          name: webserver
+          env:
+            - name: PAPERLESS_REDIS
+              value: broker:6379
+            - name: PAPERLESS_DBHOST
+              value: nas00
+            - name: PAPERLESS_OCR_LANGUAGE
+              value: spa+eng
+            - name: PAPERLESS_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: agonbar
+                  key: paperlessSecretKey
+            - name: PAPERLESS_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: agonbar
+                  key: paperlessUser
+            - name: PAPERLESS_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: agonbar
+                  key: paperlessPassword
+            - name: USERMAP_UID
+              value: "1000"
+            - name: USERMAP_GUID
+              value: "1000"
+          ports:
+            - containerPort: 8000
+              name: webserver
+              protocol: TCP
+          volumeMounts:
+            - name: data
+              mountPath: /usr/src/paperless/data
+            - name: media
+              mountPath: /usr/src/paperless/media
+            - name: export
+              mountPath: /usr/src/paperless/export
+            - name: consume
+              mountPath: /usr/src/paperless/consume
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+      - name: redis
+        nfs:
+          server: nas00
+          path: /mnt/RAID/docker/redis
+      - name: data
+        nfs:
+          server: nas00
+          path: /mnt/RAID/docker/paperless/data
+      - name: media
+        nfs:
+          server: nas00
+          path: /mnt/RAID/docker/paperless/media
+      - name: export
+        nfs:
+          server: nas00
+          path: /mnt/RAID/docker/paperless/export
+      - name: consume
+        nfs:
+          server: nas00
+          path: /mnt/RAID/docker/paperless/consume
+      imagePullSecrets:
+        - name: dockerhub-secret
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: paperless
+  namespace: agonbar
+spec:
+  type: NodePort
+
+  selector:
+    app: paperless
+
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+      name: paperless
+
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: paperless
+  namespace: agonbar
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: Host(`paperless.adriangonzalezbarbosa.eu`)
+      services:
+        - name: paperless 
+          port: 8000
+  tls:
+      secretName: paperless.adriangonzalezbarbosa.eu
+
+# letsencrypt-cert.yaml
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: paperless.adriangonzalezbarbosa.eu
+  namespace: agonbar
+spec:
+  dnsNames:
+    - paperless.adriangonzalezbarbosa.eu
+  secretName: paperless.adriangonzalezbarbosa.eu
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer

@@ -1,0 +1,104 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: netmaker-mq
+  namespace: netmaker
+  labels:
+    app: netmaker-mq
+spec:
+  selector:
+    matchLabels:
+      app: netmaker-mq
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: netmaker-mq
+    spec:
+      containers:
+
+      - name: netmaker-mq
+        image: emqx/emqx:5.0.9 
+        ports:
+        - containerPort: 1883
+          name: mqtt-local
+          protocol: TCP
+        - containerPort: 8883
+          name: mqtt-broker
+          protocol: TCP
+        - containerPort: 8083
+          name: mqtt-webocket
+          protocol: TCP
+        - containerPort: 18083
+          name: mqtt-dashabord
+          protocol: TCP
+        env:
+          - name: EMQX_NAME
+            value: "emqx"
+          - name: EMQX_DASHBOARD__DEFAULT_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: netmaker
+                key: mqttPassword
+          - name: EMQX_DASHBOARD__DEFAULT_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: netmaker
+                key: mqttUser
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: netmaker
+  labels:
+    app: netmaker-mq
+  name: netmaker-mq
+spec:
+  ports:
+  - port: 8883
+    name: mqtt-broker
+    protocol: TCP
+    targetPort: 8883
+  - port: 1883
+    name: mqtt-local
+    protocol: TCP
+    targetPort: 1883
+  - port: 8083
+    name: mqtt-ws
+    protocol: TCP
+    targetPort: 8083
+  - port: 18083
+    protocol: TCP
+    name: mqtt-dashabord
+  selector:
+    app: netmaker-mq
+  sessionAffinity: None
+  type: ClusterIP
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: netmaker-mq-lb
+  namespace: netmaker
+    #  labels:
+    #    svccontroller.k3s.cattle.io/lbpool: aya
+spec:
+  type: LoadBalancer
+  ports:
+    - name: mqtt-dashabord
+      protocol: TCP
+      port: 18083
+      targetPort: 18083
+    - name: mqtt-ws
+      protocol: TCP
+      port: 8083
+      targetPort: 8083
+  selector:
+    app: netmaker-mq
+  sessionAffinity: None
+

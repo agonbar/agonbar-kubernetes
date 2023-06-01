@@ -1,0 +1,45 @@
+# dashboard.yaml
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: traefik-dashboard
+  namespace: kube-system
+spec:
+  entryPoints:
+    - web
+    - websecure
+  routes:
+    - match: Host(`traefik.adriangonzalezbarbosa.eu`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))
+      kind: Rule
+      services:
+        - name: api@internal
+          kind: TraefikService
+      middlewares:
+        - name: basic-auth
+          namespace: kube-system
+  tls:
+    secretName: traefik.adriangonzalezbarbosa.eu
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: basic-auth
+  namespace: kube-system
+spec:
+  basicAuth:
+    secret: basic-auth-creds
+
+# letsencrypt-cert.yaml
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+    name: traefik.adriangonzalezbarbosa.eu
+    namespace: kube-system
+spec:
+    dnsNames:
+        - traefik.adriangonzalezbarbosa.eu
+    secretName: traefik.adriangonzalezbarbosa.eu
+    issuerRef:
+        name: letsencrypt-prod
+        kind: ClusterIssuer
