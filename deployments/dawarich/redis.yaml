@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: dawarich-redis
+  namespace: dawarich
+  labels:
+    app: dawarich-redis
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dawarich-redis
+  template:
+    metadata:
+      labels:
+        app: dawarich-redis
+    spec:
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+      containers:
+      - name: redis
+        image: redis:7.0-alpine
+        command: ["redis-server"]
+        securityContext:
+          runAsUser: 950
+        volumeMounts:
+        - name: dawarich-shared
+          mountPath: /data
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - --raw
+            - incr
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 10
+          failureThreshold: 5
+      volumes:
+      - name: dawarich-shared
+        nfs:
+          server: 192.168.0.29
+          path: /mnt/RAID/docker/dawarich/shared
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dawarich-redis
+  namespace: dawarich
+spec:
+  selector:
+    app: dawarich-redis
+  ports:
+  - protocol: TCP
+    port: 6379
+    targetPort: 6379

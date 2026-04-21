@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-repo-server
+spec:
+  template:
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: envsubst-plugin
+          image: ghcr.io/agonbar/argocd-cmp-envsubst:v1
+          command: [/var/run/argocd/argocd-cmp-server]
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 999
+          envFrom:
+            - secretRef:
+                name: argocd-cmp-values
+          volumeMounts:
+            - name: var-files
+              mountPath: /var/run/argocd
+            - name: plugins
+              mountPath: /home/argocd/cmp-server/plugins
+            - name: cmp-tmp
+              mountPath: /tmp
+            - name: envsubst-plugin-config
+              mountPath: /home/argocd/cmp-server/config/plugin.yaml
+              subPath: plugin.yaml
+      volumes:
+        - name: cmp-tmp
+          emptyDir: {}
+        - name: envsubst-plugin-config
+          configMap:
+            name: argocd-cmp-envsubst-plugin

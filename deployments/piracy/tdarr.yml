@@ -1,0 +1,256 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: tdarr-deployment
+    namespace: piracy
+    labels:
+        app: tdarr
+spec:
+    strategy:
+        type: Recreate
+    replicas: 1
+    selector:
+        matchLabels:
+            app: tdarr
+    template:
+        metadata:
+            labels:
+                app: tdarr
+        spec:
+            enableServiceLinks: false
+            initContainers:
+                - name: iscsi-fsck
+                  image: alpine:latest
+                  imagePullPolicy: IfNotPresent
+                  securityContext:
+                      privileged: true
+                  command:
+                      - /bin/sh
+                      - -c
+                      - |
+                        set -e
+                        MOUNTPOINT="/app/configs"
+                        echo "[iscsi-fsck] Checking filesystem at ${MOUNTPOINT}..."
+                        if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                          rm -f "${MOUNTPOINT}/.rw-test"
+                          echo "[iscsi-fsck] Filesystem is writable. Nothing to do."
+                          exit 0
+                        fi
+                        echo "[iscsi-fsck] Filesystem is READ-ONLY. Starting repair..."
+                        apk add --no-cache e2fsprogs util-linux 2>/dev/null
+                        DEVICE=$(grep " ${MOUNTPOINT} " /host-proc-mounts | awk '{print $1}' | head -1)
+                        if [ -z "${DEVICE}" ]; then
+                          echo "[iscsi-fsck] ERROR: Could not find block device for ${MOUNTPOINT}."
+                          exit 1
+                        fi
+                        echo "[iscsi-fsck] Found device: ${DEVICE}"
+                        if mount -o remount,rw "${MOUNTPOINT}" 2>/dev/null; then
+                          if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                            rm -f "${MOUNTPOINT}/.rw-test"
+                            echo "[iscsi-fsck] Remount rw succeeded."
+                            exit 0
+                          fi
+                        fi
+                        echo "[iscsi-fsck] Running e2fsck on ${DEVICE}..."
+                        GLOBAL_MOUNT=$(nsenter -t 1 -m -- sh -c "grep '^${DEVICE} ' /proc/mounts | awk '{print \$2}' | head -1")
+                        if [ -n "${GLOBAL_MOUNT}" ]; then
+                          umount -l "${GLOBAL_MOUNT}" || true
+                        fi
+                        e2fsck -y -f "${DEVICE}" || true
+                        if [ -n "${GLOBAL_MOUNT}" ]; then
+                          mount "${DEVICE}" "${GLOBAL_MOUNT}" || { echo "[iscsi-fsck] Mount failed."; exit 1; }
+                        fi
+                        if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                          rm -f "${MOUNTPOINT}/.rw-test"
+                          echo "[iscsi-fsck] SUCCESS: Filesystem repaired."
+                          exit 0
+                        fi
+                        echo "[iscsi-fsck] FAILED: Still read-only after repair."
+                        exit 1
+                  volumeMounts:
+                      - name: config
+                        mountPath: /app/configs
+                      - name: host-proc-mounts
+                        mountPath: /host-proc-mounts
+            containers:
+                - name: tdarr
+                  image: ghcr.io/haveagitgat/tdarr:latest
+                  imagePullPolicy: IfNotPresent
+                  securityContext:
+                      privileged: true
+                  env:
+                      - name: TZ
+                        value: Europe/Madrid
+                      - name: PUID
+                        value: '950'
+                      - name: PGID
+                        value: '950'
+                      - name: UMASK_SET
+                        value: '002'
+                      - name: serverIP
+                        value: 0.0.0.0
+                      - name: serverPort
+                        value: '8266'
+                      - name: webUIPort
+                        value: '8265'
+                      - name: internalNode
+                        value: 'true'
+                      - name: inContainer
+                        value: 'true'
+                      - name: auth
+                        value: 'true'
+                      - name: authSecretKey
+                        valueFrom:
+                            secretKeyRef:
+                                name: tdarr
+                                key: auth-secret-key
+                      - name: seededApiKey
+                        valueFrom:
+                            secretKeyRef:
+                                name: tdarr
+                                key: seeded-api-key
+                      - name: apiKey
+                        valueFrom:
+                            secretKeyRef:
+                                name: tdarr
+                                key: seeded-api-key
+                  ports:
+                      - containerPort: 8265
+                        protocol: TCP
+                      - containerPort: 8266
+                        protocol: TCP
+                  volumeMounts:
+                      - name: config
+                        mountPath: /app/configs
+                      - name: server
+                        mountPath: /app/server
+                      - name: media
+                        mountPath: /media
+                      - name: transcode-cache
+                        mountPath: /transcode_cache
+                      - name: dev-dri
+                        mountPath: /dev/dri
+                      - name: dev-dma-heap
+                        mountPath: /dev/dma_heap
+                      - name: dev-mali0
+                        mountPath: /dev/mali0
+                  livenessProbe:
+                      httpGet:
+                          path: /
+                          port: 8265
+                      initialDelaySeconds: 30
+                      periodSeconds: 15
+                      timeoutSeconds: 5
+                      failureThreshold: 3
+                  readinessProbe:
+                      httpGet:
+                          path: /
+                          port: 8265
+                      initialDelaySeconds: 15
+                      periodSeconds: 10
+                      timeoutSeconds: 5
+                      failureThreshold: 3
+                  resources:
+                      requests:
+                          memory: 256Mi
+                          cpu: 200m
+                      limits:
+                          memory: 4Gi
+                          cpu: 4000m
+            volumes:
+                - name: config
+                  persistentVolumeClaim:
+                      claimName: tdarr-config
+                - name: server
+                  persistentVolumeClaim:
+                      claimName: tdarr-server
+                - name: media
+                  nfs:
+                      server: 192.168.0.29
+                      path: /mnt/RAID/docker/media
+                - name: transcode-cache
+                  emptyDir: {}
+                - name: dev-dri
+                  hostPath:
+                      path: /dev/dri
+                - name: dev-dma-heap
+                  hostPath:
+                      path: /dev/dma_heap
+                - name: dev-mali0
+                  hostPath:
+                      path: /dev/mali0
+                - name: host-proc-mounts
+                  hostPath:
+                      path: /proc/1/mounts
+            nodeSelector:
+                kubernetes.io/hostname: orange-pi5
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: tdarr
+    namespace: piracy
+spec:
+    type: ClusterIP
+    ports:
+        - name: web
+          protocol: TCP
+          port: 8265
+          targetPort: 8265
+        - name: server
+          protocol: TCP
+          port: 8266
+          targetPort: 8266
+    selector:
+        app: tdarr
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+    name: tdarr-https
+    namespace: piracy
+    annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+    ingressClassName: traefik
+    rules:
+        - host: tdarr.${BASE_DOMAIN}
+          http:
+              paths:
+                  - pathType: Prefix
+                    path: /
+                    backend:
+                        service:
+                            name: tdarr
+                            port:
+                                number: 8265
+    tls:
+        - secretName: tdarr.${BASE_DOMAIN}
+          hosts:
+              - tdarr.${BASE_DOMAIN}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: tdarr-config
+    namespace: piracy
+spec:
+    accessModes:
+        - ReadWriteOnce
+    storageClassName: truenas-iscsi-ssd
+    resources:
+        requests:
+            storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: tdarr-server
+    namespace: piracy
+spec:
+    accessModes:
+        - ReadWriteOnce
+    storageClassName: truenas-iscsi-ssd
+    resources:
+        requests:
+            storage: 5Gi

@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kube-vip-aya
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: kube-vip
+    app.kubernetes.io/component: aya-vip
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kube-vip-aya
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kube-vip-aya
+    spec:
+      serviceAccountName: kube-vip
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: aya
+      hostNetwork: true
+      tolerations:
+        - effect: NoSchedule
+          operator: Exists
+        - effect: NoExecute
+          operator: Exists
+      containers:
+        - name: kube-vip
+          image: ghcr.io/kube-vip/kube-vip:v0.8.9
+          args: ["manager"]
+          env:
+            - name: vip_arp
+              value: "true"
+            - name: address
+              value: "192.168.1.26"
+            - name: vip_cidr
+              value: "32"
+            - name: cp_enable
+              value: "true"
+            - name: cp_namespace
+              value: "kube-system"
+            - name: svc_enable
+              value: "false"
+            - name: vip_leaderelection
+              value: "true"
+            - name: vip_leasename
+              value: "kube-vip-aya"
+            - name: vip_leaseduration
+              value: "5"
+            - name: vip_renewdeadline
+              value: "3"
+            - name: vip_retryperiod
+              value: "1"
+            - name: prometheus_server
+              value: ":2113"
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+                - NET_RAW
+          resources:
+            requests:
+              cpu: 5m
+              memory: 16Mi
+            limits:
+              memory: 32Mi

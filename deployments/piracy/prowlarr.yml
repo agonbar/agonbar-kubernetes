@@ -1,0 +1,175 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: prowlarr-deployment # <--- change this
+    namespace: piracy
+    labels:
+        app: prowlarr # <--- change this to match label on the pod
+spec:
+    strategy:
+        type: Recreate
+    replicas: 1
+    selector:
+        matchLabels:
+            app: prowlarr # <--- change this to match label on the pod
+    template:
+        metadata:
+            labels:
+                app: prowlarr
+        spec:
+            initContainers:
+                - name: iscsi-fsck
+                  image: alpine:latest
+                  imagePullPolicy: IfNotPresent
+                  securityContext:
+                      privileged: true
+                  command:
+                      - /bin/sh
+                      - -c
+                      - |
+                        set -e
+                        MOUNTPOINT="/config"
+                        echo "[iscsi-fsck] Checking filesystem at ${MOUNTPOINT}..."
+                        if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                          rm -f "${MOUNTPOINT}/.rw-test"
+                          echo "[iscsi-fsck] Filesystem is writable. Nothing to do."
+                          exit 0
+                        fi
+                        echo "[iscsi-fsck] Filesystem is READ-ONLY. Starting repair..."
+                        apk add --no-cache e2fsprogs util-linux 2>/dev/null
+                        DEVICE=$(grep " ${MOUNTPOINT} " /host-proc-mounts | awk '{print $1}' | head -1)
+                        if [ -z "${DEVICE}" ]; then
+                          echo "[iscsi-fsck] ERROR: Could not find block device for ${MOUNTPOINT}."
+                          exit 1
+                        fi
+                        echo "[iscsi-fsck] Found device: ${DEVICE}"
+                        if mount -o remount,rw "${MOUNTPOINT}" 2>/dev/null; then
+                          if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                            rm -f "${MOUNTPOINT}/.rw-test"
+                            echo "[iscsi-fsck] Remount rw succeeded."
+                            exit 0
+                          fi
+                        fi
+                        echo "[iscsi-fsck] Running e2fsck on ${DEVICE}..."
+                        GLOBAL_MOUNT=$(nsenter -t 1 -m -- sh -c "grep '^${DEVICE} ' /proc/mounts | awk '{print \$2}' | head -1")
+                        if [ -n "${GLOBAL_MOUNT}" ]; then
+                          umount -l "${GLOBAL_MOUNT}" || true
+                        fi
+                        e2fsck -y -f "${DEVICE}" || true
+                        if [ -n "${GLOBAL_MOUNT}" ]; then
+                          mount "${DEVICE}" "${GLOBAL_MOUNT}" || { echo "[iscsi-fsck] Mount failed."; exit 1; }
+                        fi
+                        if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                          rm -f "${MOUNTPOINT}/.rw-test"
+                          echo "[iscsi-fsck] SUCCESS: Filesystem repaired."
+                          exit 0
+                        fi
+                        echo "[iscsi-fsck] FAILED: Still read-only after repair."
+                        exit 1
+                  volumeMounts:
+                      - name: config
+                        mountPath: /config
+                      - name: host-proc-mounts
+                        mountPath: /host-proc-mounts
+            containers:
+                - name: prowlarr
+                  image: linuxserver/prowlarr:nightly
+                  imagePullPolicy: IfNotPresent
+                  env:
+                      - name: PGID
+                        value: "950"
+                      - name: PUID
+                        value: "950"
+                      - name: TZ
+                        value: Europe/Madrid
+                  ports:
+                      - containerPort: 9696
+                        protocol: TCP
+                  volumeMounts:
+                      - name: config
+                        mountPath: /config
+                  livenessProbe:
+                      httpGet:
+                          path: /ping
+                          port: 9696
+                      initialDelaySeconds: 30
+                      periodSeconds: 15
+                      timeoutSeconds: 5
+                      failureThreshold: 3
+                  readinessProbe:
+                      httpGet:
+                          path: /ping
+                          port: 9696
+                      initialDelaySeconds: 15
+                      periodSeconds: 10
+                      timeoutSeconds: 5
+                      failureThreshold: 3
+                  resources:
+                      requests:
+                          memory: 128Mi
+                          cpu: 100m
+                      limits:
+                          memory: 1Gi
+                          cpu: 1000m
+            volumes:
+                - name: config
+                  persistentVolumeClaim:
+                      claimName: prowlarr-config
+                - name: host-proc-mounts
+                  hostPath:
+                      path: /proc/1/mounts
+            nodeSelector:
+                svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prowlarr
+  namespace: piracy
+spec:
+  type: ClusterIP
+  ports:
+    - name: web
+      protocol: TCP
+      port: 9696
+      targetPort: 9696
+  selector:
+    app: prowlarr
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: prowlarr-https
+  namespace: piracy
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: prowlarr.${BASE_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: prowlarr
+                port:
+                  number: 9696
+  tls:
+    - secretName: prowlarr.${BASE_DOMAIN}
+      hosts:
+        - prowlarr.${BASE_DOMAIN}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prowlarr-config
+  namespace: piracy
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 5Gi

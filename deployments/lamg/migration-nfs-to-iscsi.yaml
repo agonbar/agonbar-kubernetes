@@ -1,0 +1,136 @@
+# Migration jobs para copiar datos de NFS a iSCSI
+# Uso:
+#   1. kubectl scale deployment -n lamg zigbee2mqtt homeassistant vscode --replicas=0
+#   2. kubectl apply -f migration-nfs-to-iscsi.yaml
+#   3. kubectl wait --for=condition=complete job -n lamg -l migration=nfs-to-iscsi --timeout=600s
+#   4. kubectl apply -f zigbee2mqtt.yaml -f homeassistant.yaml -f vscode.yaml
+#   5. kubectl delete -f migration-nfs-to-iscsi.yaml
+
+# ---
+# apiVersion: batch/v1
+# kind: Job
+# metadata:
+#   name: migrate-zigbee2mqtt-config
+#   namespace: lamg
+#   labels:
+#     migration: nfs-to-iscsi
+# spec:
+#   ttlSecondsAfterFinished: 300
+#   template:
+#     spec:
+#       restartPolicy: Never
+#       nodeSelector:
+#         svccontroller.k3s.cattle.io/lbpool: lamg
+#       containers:
+#         - name: migrate
+#           image: alpine:latest
+#           command:
+#             - sh
+#             - -c
+#             - |
+#               echo "Instalando rsync..."
+#               apk add --no-cache rsync
+#               echo "Copiando datos de zigbee2mqtt..."
+#               rsync -av --progress /source/ /destination/
+#               echo "Migración de zigbee2mqtt completada!"
+#               ls -la /destination/
+#           volumeMounts:
+#             - name: source
+#               mountPath: /source
+#               readOnly: true
+#             - name: destination
+#               mountPath: /destination
+#       volumes:
+#         - name: source
+#           nfs:
+#             server: 192.168.0.29
+#             path: /mnt/SSD/docker/zigbee/
+#         - name: destination
+#           persistentVolumeClaim:
+#             claimName: zigbee2mqtt-config
+
+# ---
+# apiVersion: batch/v1
+# kind: Job
+# metadata:
+#   name: migrate-homeassistant-config
+#   namespace: lamg
+#   labels:
+#     migration: nfs-to-iscsi
+# spec:
+#   ttlSecondsAfterFinished: 300
+#   template:
+#     spec:
+#       restartPolicy: Never
+#       nodeSelector:
+#         svccontroller.k3s.cattle.io/lbpool: lamg
+#       containers:
+#         - name: migrate
+#           image: alpine:latest
+#           command:
+#             - sh
+#             - -c
+#             - |
+#               echo "Instalando rsync..."
+#               apk add --no-cache rsync
+#               echo "Copiando datos de homeassistant..."
+#               rsync -av --progress /source/ /destination/
+#               echo "Migración de homeassistant completada!"
+#               ls -la /destination/
+#           volumeMounts:
+#             - name: source
+#               mountPath: /source
+#               readOnly: true
+#             - name: destination
+#               mountPath: /destination
+#       volumes:
+#         - name: source
+#           nfs:
+#             server: 192.168.0.29
+#             path: /mnt/SSD/docker/homeassistant/
+#         - name: destination
+#           persistentVolumeClaim:
+#             claimName: homeassistant-config
+
+# ---
+# apiVersion: batch/v1
+# kind: Job
+# metadata:
+#   name: migrate-vscode-config
+#   namespace: lamg
+#   labels:
+#     migration: nfs-to-iscsi
+# spec:
+#   ttlSecondsAfterFinished: 300
+#   template:
+#     spec:
+#       restartPolicy: Never
+#       nodeSelector:
+#         svccontroller.k3s.cattle.io/lbpool: lamg
+#       containers:
+#         - name: migrate
+#           image: alpine:latest
+#           command:
+#             - sh
+#             - -c
+#             - |
+#               echo "Instalando rsync..."
+#               apk add --no-cache rsync
+#               echo "Copiando datos de vscode..."
+#               rsync -av --progress /source/ /destination/
+#               echo "Migración de vscode completada!"
+#               ls -la /destination/
+#           volumeMounts:
+#             - name: source
+#               mountPath: /source
+#               readOnly: true
+#             - name: destination
+#               mountPath: /destination
+#       volumes:
+#         - name: source
+#           nfs:
+#             server: 192.168.0.29
+#             path: /mnt/SSD/docker/vscode
+#         - name: destination
+#           persistentVolumeClaim:
+#             claimName: vscode-config

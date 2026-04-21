@@ -1,0 +1,28 @@
+secrets.yaml
+sealed-secrets-key.yaml
+
+# Editor / OS artefacts
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+*.bak
+*.tmp
+*.orig
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Kubeconfig never belongs here
+kubeconfig
+*.kubeconfig
+
+# Claude-code / LLM assistant scratch
+.claude/
+
+# Ad-hoc tooling / scratch directories
+deployments/piracy/anime_sub_upgrade/
+.sisyphus/

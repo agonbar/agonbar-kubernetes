@@ -1,0 +1,305 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: backup
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pvc-backup
+  namespace: backup
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: pvc-backup
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["create", "delete", "get", "list", "watch"]
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshots"]
+    verbs: ["create", "delete", "get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "delete", "get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: pvc-backup
+subjects:
+  - kind: ServiceAccount
+    name: pvc-backup
+    namespace: backup
+roleRef:
+  kind: ClusterRole
+  name: pvc-backup
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-script
+  namespace: backup
+data:
+  backup.sh: |
+    #!/bin/sh
+    set -e
+
+    NFS_SERVER="192.168.0.29"
+    NFS_BACKUP_PATH="/mnt/RAID/docker/backups-iscsi"
+    SNAPSHOT_CLASS="truenas-iscsi-ssd"
+    TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+    FAILED=0
+
+    backup_pvc() {
+      NS="$1"
+      PVC="$2"
+      SNAP_NAME="backup-${PVC}-${TIMESTAMP}"
+      TEMP_PVC="backup-temp-${PVC}"
+      JOB_NAME="backup-rsync-${PVC}"
+
+      echo "=== [${NS}/${PVC}] Starting backup ==="
+
+      # cleanup any leftover resources from previous failed runs
+      kubectl delete job "${JOB_NAME}" -n "${NS}" --ignore-not-found 2>/dev/null || true
+      kubectl delete pvc "${TEMP_PVC}" -n "${NS}" --ignore-not-found 2>/dev/null || true
+
+      # 1. create snapshot
+      echo "[${NS}/${PVC}] Creating snapshot ${SNAP_NAME}..."
+      cat <<SNAP_EOF | kubectl apply -f -
+    apiVersion: snapshot.storage.k8s.io/v1
+    kind: VolumeSnapshot
+    metadata:
+      name: ${SNAP_NAME}
+      namespace: ${NS}
+    spec:
+      volumeSnapshotClassName: ${SNAPSHOT_CLASS}
+      source:
+        persistentVolumeClaimName: ${PVC}
+    SNAP_EOF
+
+      # 2. wait for snapshot ready
+      echo "[${NS}/${PVC}] Waiting for snapshot to be ready..."
+      if ! kubectl wait "volumesnapshot/${SNAP_NAME}" -n "${NS}" \
+        --for=jsonpath='{.status.readyToUse}'=true --timeout=300s; then
+        echo "[${NS}/${PVC}] ERROR: Snapshot not ready, skipping"
+        kubectl delete volumesnapshot "${SNAP_NAME}" -n "${NS}" --ignore-not-found 2>/dev/null || true
+        FAILED=1
+        return
+      fi
+
+      # 3. get restore size
+      RESTORE_SIZE=$(kubectl get volumesnapshot "${SNAP_NAME}" -n "${NS}" \
+        -o jsonpath='{.status.restoreSize}')
+      echo "[${NS}/${PVC}] Snapshot ready, restore size: ${RESTORE_SIZE}"
+
+      # 4. create temp PVC from snapshot
+      cat <<PVC_EOF | kubectl apply -f -
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: ${TEMP_PVC}
+      namespace: ${NS}
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      storageClassName: ${SNAPSHOT_CLASS}
+      resources:
+        requests:
+          storage: ${RESTORE_SIZE}
+      dataSource:
+        name: ${SNAP_NAME}
+        kind: VolumeSnapshot
+        apiGroup: snapshot.storage.k8s.io
+    PVC_EOF
+
+      # 5. wait for temp PVC bound
+      echo "[${NS}/${PVC}] Waiting for temp PVC to be bound..."
+      if ! kubectl wait "pvc/${TEMP_PVC}" -n "${NS}" \
+        --for=jsonpath='{.status.phase}'=Bound --timeout=300s; then
+        echo "[${NS}/${PVC}] ERROR: Temp PVC not bound, cleaning up"
+        kubectl delete pvc "${TEMP_PVC}" -n "${NS}" --ignore-not-found 2>/dev/null || true
+        kubectl delete volumesnapshot "${SNAP_NAME}" -n "${NS}" --ignore-not-found 2>/dev/null || true
+        FAILED=1
+        return
+      fi
+
+      # 6. create rsync job
+      echo "[${NS}/${PVC}] Starting rsync job..."
+      cat <<JOB_EOF | kubectl apply -f -
+    apiVersion: batch/v1
+    kind: Job
+    metadata:
+      name: ${JOB_NAME}
+      namespace: ${NS}
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 1800
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: rsync
+              image: alpine:latest
+              command:
+                - sh
+                - -c
+                - |
+                  apk add --no-cache rsync
+                  mkdir -p "/backup/${NS}/${PVC}"
+                  rsync -av --delete /source/ "/backup/${NS}/${PVC}/"
+                  echo "Backup complete"
+              volumeMounts:
+                - name: source
+                  mountPath: /source
+                  readOnly: true
+                - name: backup
+                  mountPath: /backup
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 500m
+                  memory: 256Mi
+          volumes:
+            - name: source
+              persistentVolumeClaim:
+                claimName: ${TEMP_PVC}
+            - name: backup
+              nfs:
+                server: ${NFS_SERVER}
+                path: ${NFS_BACKUP_PATH}
+          nodeSelector:
+            svccontroller.k3s.cattle.io/lbpool: lamg
+    JOB_EOF
+
+      # 7. wait for rsync job
+      echo "[${NS}/${PVC}] Waiting for rsync to complete..."
+      if ! kubectl wait "job/${JOB_NAME}" -n "${NS}" \
+        --for=condition=complete --timeout=1800s; then
+        echo "[${NS}/${PVC}] ERROR: Rsync job failed"
+        FAILED=1
+      fi
+
+      # 8. cleanup temp resources (keep the snapshot for quick restores)
+      echo "[${NS}/${PVC}] Cleaning up temp resources..."
+      kubectl delete job "${JOB_NAME}" -n "${NS}" --ignore-not-found 2>/dev/null || true
+      kubectl delete pvc "${TEMP_PVC}" -n "${NS}" --ignore-not-found 2>/dev/null || true
+
+      # 9. retention: keep only last 7 snapshots per PVC, delete older ones
+      echo "[${NS}/${PVC}] Enforcing snapshot retention (keep last 7)..."
+      SNAPS=$(kubectl get volumesnapshots -n "${NS}" \
+        --sort-by=.metadata.creationTimestamp \
+        -o jsonpath='{.items[?(@.spec.source.persistentVolumeClaimName=="'"${PVC}"'")].metadata.name}')
+      COUNT=0
+      TOTAL=0
+      for s in $SNAPS; do TOTAL=$((TOTAL + 1)); done
+      for s in $SNAPS; do
+        COUNT=$((COUNT + 1))
+        if [ $((TOTAL - COUNT)) -ge 7 ]; then
+          echo "[${NS}/${PVC}] Deleting old snapshot: ${s}"
+          kubectl delete volumesnapshot "${s}" -n "${NS}" 2>/dev/null || true
+        fi
+      done
+
+      echo "=== [${NS}/${PVC}] Backup finished ==="
+    }
+
+    echo "========================================="
+    echo "PVC Backup Run - ${TIMESTAMP}"
+    echo "========================================="
+
+    # agonbar namespace
+    backup_pvc agonbar homarr-appdata
+    backup_pvc agonbar paperless-redis
+    backup_pvc agonbar paperless-data
+
+    # dawarich namespace
+    backup_pvc dawarich dawarich-db-data
+
+    # games namespace
+    backup_pvc games enshrouded-data
+    backup_pvc games factorio-data
+    backup_pvc games palworld-data
+
+    # immich namespace
+    backup_pvc immich immich-db-data
+
+    # lamg namespace
+    backup_pvc lamg homeassistant-config
+    backup_pvc lamg influxdb-data
+    backup_pvc lamg plex-config
+    backup_pvc lamg scrutiny-config
+    backup_pvc lamg vscode-config
+    backup_pvc lamg zigbee2mqtt-config
+
+    # piracy namespace
+    backup_pvc piracy bazarr-config
+    backup_pvc piracy cruncharr-config
+    backup_pvc piracy emulerr-config
+    backup_pvc piracy houndarr-data
+    backup_pvc piracy jellyfin-config
+    backup_pvc piracy lidarr-config
+    backup_pvc piracy prowlarr-config
+    backup_pvc piracy qbittorrent-config
+    backup_pvc piracy qui-config
+    backup_pvc piracy radarr-config
+    backup_pvc piracy seerr-config
+    backup_pvc piracy slskd-config
+    backup_pvc piracy sonarr-config
+    backup_pvc piracy soularr-config
+    backup_pvc piracy tachidesk-data
+    backup_pvc piracy transmission-config
+
+    echo "========================================="
+    if [ "$FAILED" -eq 1 ]; then
+      echo "BACKUP COMPLETED WITH ERRORS"
+      exit 1
+    else
+      echo "ALL BACKUPS COMPLETED SUCCESSFULLY"
+    fi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pvc-backup
+  namespace: backup
+spec:
+  schedule: "0 4 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 28800
+      template:
+        spec:
+          serviceAccountName: pvc-backup
+          restartPolicy: Never
+          containers:
+            - name: backup
+              image: bitnami/kubectl:latest
+              command:
+                - /bin/sh
+                - /scripts/backup.sh
+              volumeMounts:
+                - name: script
+                  mountPath: /scripts
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 100m
+                  memory: 128Mi
+          volumes:
+            - name: script
+              configMap:
+                name: backup-script
+                defaultMode: 0755

@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: scrutiny-collector
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: scrutiny-collector
+  namespace: lamg
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scrutiny-collector
+  template:
+    metadata:
+      labels:
+        app: scrutiny-collector
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: "nas00"
+      containers:
+        - name: scrutiny-collector
+          image: ghcr.io/analogj/scrutiny:master-collector
+          env:
+            - name: COLLECTOR_RUN_STARTUP
+              value: "true"
+            - name: COLLECTOR_API_ENDPOINT
+              value: "http://192.168.0.24:8686"
+          volumeMounts:
+            - name: scrutiny-udev
+              mountPath: /run/udev
+              readOnly: true
+          securityContext:
+            privileged: true
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+        - name: scrutiny-udev
+          hostPath:
+            path: /run/udev
+            type: Directory

@@ -1,0 +1,117 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: seerr-deployment
+    namespace: piracy
+    labels:
+        app: seerr
+spec:
+    strategy:
+        type: Recreate
+    replicas: 1
+    selector:
+        matchLabels:
+            app: seerr
+    template:
+        metadata:
+            labels:
+                app: seerr
+        spec:
+            initContainers:
+                - name: fix-permissions
+                  image: busybox:latest
+                  command: ["sh", "-c", "chown -R 1000:1000 /app/config"]
+                  volumeMounts:
+                      - name: config
+                        mountPath: /app/config
+            containers:
+                - name: seerr
+                  image: ghcr.io/seerr-team/seerr:latest
+                  imagePullPolicy: IfNotPresent
+                  env:
+                      - name: LOG_LEVEL
+                        value: debug
+                      - name: TZ
+                        value: Europe/Madrid
+                      - name: PORT
+                        value: "5055"
+                  ports:
+                      - containerPort: 5055
+                        protocol: TCP
+                  volumeMounts:
+                      - name: config
+                        mountPath: /app/config
+                  livenessProbe:
+                      httpGet:
+                          path: /api/v1/status
+                          port: 5055
+                      initialDelaySeconds: 20
+                      periodSeconds: 15
+                      timeoutSeconds: 3
+                      failureThreshold: 3
+                  resources:
+                      requests:
+                          memory: 128Mi
+                          cpu: 100m
+                      limits:
+                          memory: 1Gi
+                          cpu: 500m
+            volumes:
+                - name: config
+                  persistentVolumeClaim:
+                      claimName: seerr-config
+            nodeSelector:
+                svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: seerr
+    namespace: piracy
+spec:
+    type: ClusterIP
+    ports:
+        - name: web
+          protocol: TCP
+          port: 5055
+          targetPort: 5055
+    selector:
+        app: seerr
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+    name: seerr-https
+    namespace: piracy
+    annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+    ingressClassName: traefik
+    rules:
+        - host: seerr.${BASE_DOMAIN}
+          http:
+              paths:
+                  - pathType: Prefix
+                    path: /
+                    backend:
+                        service:
+                            name: seerr
+                            port:
+                                number: 5055
+    tls:
+        - secretName: seerr.${BASE_DOMAIN}
+          hosts:
+              - seerr.${BASE_DOMAIN}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: seerr-config
+  namespace: piracy
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 5Gi

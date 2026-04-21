@@ -1,0 +1,135 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: homeassistant
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: homeassistant
+  namespace: lamg
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: homeassistant
+  template:
+    metadata:
+      labels:
+        app: homeassistant
+        app.vscode: "true"
+    spec:
+      containers:
+        - image: homeassistant/home-assistant:latest
+          name: homeassistant
+          ports:
+            - containerPort: 8123
+              name: homeassistant
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /config
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+        - image: ghcr.io/linuxserver/code-server
+          name: vscode
+          env:
+            - name: PUID
+              value: '1000'
+            - name: PGID
+              value: '1000'
+            - name: TZ
+              value: 'Europe/Madrid'
+            - name: SUDO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: lamg
+                  key: sudoPassword
+            - name: DEFAULT_WORKSPACE
+              value: '/config/workspace'
+          ports:
+            - containerPort: 8443
+              name: vscode
+              protocol: TCP
+          volumeMounts:
+            - name: vscode-config
+              mountPath: /config
+            - name: config
+              mountPath: /config/workspace
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: homeassistant-config
+        - name: vscode-config
+          persistentVolumeClaim:
+            claimName: vscode-config
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: homeassistant
+  namespace: lamg
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: lamg
+spec:
+  type: LoadBalancer
+  selector:
+    app: homeassistant
+  ports:
+    - protocol: TCP
+      port: 8123
+      targetPort: 8123
+      name: homeassistant
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: homeassistant-https
+  namespace: lamg
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: home.${BASE_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: homeassistant
+                port:
+                  number: 8123
+  tls:
+    - secretName: home.${BASE_DOMAIN}
+      hosts:
+        - home.${BASE_DOMAIN}
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: homeassistant-config
+  namespace: lamg
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 30Gi

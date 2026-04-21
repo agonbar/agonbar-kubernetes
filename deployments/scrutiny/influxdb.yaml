@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: influxdb
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: influxdb
+  namespace: lamg
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: influxdb
+  template:
+    metadata:
+      labels:
+        app: influxdb
+    spec:
+      containers:
+        - image: influxdb:2.2
+          name: influxdb
+          ports:
+            - containerPort: 8086
+              name: influxdb
+              protocol: TCP
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/influxdb2
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: influxdb-data
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: influxdb-data
+  namespace: lamg
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: influxdb
+  namespace: lamg
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: lamg
+spec:
+  type: LoadBalancer
+  ports:
+    - name: influxdb
+      protocol: TCP
+      port: 8086
+      targetPort: 8086
+  selector:
+    app: influxdb

@@ -1,0 +1,132 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cruncharr-deployment
+  namespace: piracy
+  labels:
+    app: cruncharr
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cruncharr
+  template:
+    metadata:
+      labels:
+        app: cruncharr
+    spec:
+      containers:
+        - name: cruncharr
+          image: ghcr.io/agonbar/cruncharr:latest
+          imagePullPolicy: Always
+          env:
+            - name: TZ
+              value: Europe/Madrid
+            - name: ANIDL_CRUNCHYROLL_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: cruncharr
+                  key: crunchyroll-username
+            - name: ANIDL_CRUNCHYROLL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: cruncharr
+                  key: crunchyroll-password
+            - name: ANIDL_GUI_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: cruncharr
+                  key: gui-password
+            - name: ANIDL_SONARR_ENABLED
+              value: "true"
+            - name: ANIDL_SONARR_FANSUB
+              value: "Cruncharr"
+            - name: ANIDL_DIR_CONTENT
+              value: /downloads/cruncharr
+            - name: ANIDL_DIR_TRASH
+              value: /downloads/cruncharr/_trash
+          ports:
+            - containerPort: 3000
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /data/config
+            - name: downloads
+              mountPath: /downloads
+          livenessProbe:
+            httpGet:
+              path: /api/app/status
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 5
+          resources:
+            requests:
+              memory: 512Mi
+              cpu: 100m
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: cruncharr-config
+        - name: downloads
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/SSD/torrents/
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cruncharr
+  namespace: piracy
+spec:
+  type: ClusterIP
+  ports:
+    - name: web
+      protocol: TCP
+      port: 3000
+      targetPort: 3000
+  selector:
+    app: cruncharr
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cruncharr-https
+  namespace: piracy
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: cruncharr.${BASE_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: cruncharr
+                port:
+                  number: 3000
+  tls:
+    - secretName: cruncharr.${BASE_DOMAIN}
+      hosts:
+        - cruncharr.${BASE_DOMAIN}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cruncharr-config
+  namespace: piracy
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 2Gi

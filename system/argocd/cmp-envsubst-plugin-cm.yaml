@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cmp-envsubst-plugin
+  namespace: argocd
+data:
+  plugin.yaml: |
+    apiVersion: argoproj.io/v1alpha1
+    kind: ConfigManagementPlugin
+    metadata:
+      name: envsubst-plugin
+    spec:
+      version: v1
+      generate:
+        command: [sh, -c]
+        args:
+          - |
+            find . -maxdepth 1 \( -name '*.yaml' -o -name '*.yml' \) \
+              | sort \
+              | while IFS= read -r f; do cat "$f"; printf '\n---\n'; done \
+              | envsubst '$BASE_DOMAIN $AMANDA_DOMAIN $LETSENCRYPT_EMAIL'

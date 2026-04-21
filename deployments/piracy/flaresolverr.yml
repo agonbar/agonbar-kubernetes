@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: flaresolverr-deployment # <--- change this
+    namespace: piracy
+    labels:
+        app: flaresolverr # <--- change this to match label on the pod
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            app: flaresolverr # <--- change this to match label on the pod
+    template:
+        metadata:
+            labels:
+                app: flaresolverr
+        spec:
+            containers:
+                - name: flaresolverr
+                  image: ghcr.io/flaresolverr/flaresolverr:latest
+                  imagePullPolicy: IfNotPresent
+                  env:
+                      - name: LOG_LEVEL
+                        value: info
+                      - name: LOG_HTML
+                        value: "false"
+                      - name: CAPTCHA_SOLVER
+                        value: none
+                      - name: TZ
+                        value: Europe/Madrid
+                  ports:
+                      - containerPort: 8191
+                        protocol: TCP
+                  livenessProbe:
+                      httpGet:
+                          path: /health
+                          port: 8191
+                      initialDelaySeconds: 30
+                      periodSeconds: 15
+                      timeoutSeconds: 5
+                      failureThreshold: 3
+                  readinessProbe:
+                      httpGet:
+                          path: /health
+                          port: 8191
+                      initialDelaySeconds: 15
+                      periodSeconds: 10
+                      timeoutSeconds: 5
+                      failureThreshold: 3
+                  resources:
+                      requests:
+                          memory: 128Mi
+                          cpu: 100m
+                      limits:
+                          memory: 1Gi
+                          cpu: 1000m
+            nodeSelector:
+              svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flaresolverr
+  namespace: piracy
+spec:
+  type: ClusterIP
+  ports:
+    - name: web
+      protocol: TCP
+      port: 8191
+      targetPort: 8191
+  selector:
+    app: flaresolverr
+---

@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: hyperion-deployment # <--- change this
+    namespace: aya
+    labels:
+        app: hyperion # <--- change this to match label on the pod
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            app: hyperion # <--- change this to match label on the pod
+    template: # => from here down copy and paste the pods metadata: and spec: sections
+        metadata:
+            labels:
+                app: hyperion
+        spec:
+            containers:
+                - name: hyperion
+                  # https://hub.docker.com/r/hyperion/hyperion/tags
+                  image: sirfragalot/hyperion.ng:2.0.16
+                  imagePullPolicy: IfNotPresent
+                  env:
+                      - name: TZ
+                        value: "Europe/Madrid"
+                      - name: WEBPASSWORD
+                        value: zt8m*#r6E3!Q@b@nubnms$w@9
+                  ports:
+                    - containerPort: 19445
+                      protocol: TCP
+                    - containerPort: 19444
+                      protocol: TCP
+                    - containerPort: 8090
+                      protocol: TCP
+                    - containerPort: 19333
+                      protocol: TCP
+                    - containerPort: 19333
+                      protocol: UDP
+                  volumeMounts:
+                    - name: config
+                      mountPath: /root/.hyperion
+                  resources:
+                    requests:
+                      memory: 128Mi
+                      cpu: 100m
+                    limits:
+                      memory: 2Gi
+                      cpu: 100m
+            volumes:
+              - name: config
+                nfs:
+                    server: ovh02
+                    path: /docker/hyperion-aya/
+            nodeSelector:
+                svccontroller.k3s.cattle.io/lbpool: aya
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hyperion-http
+  namespace: aya
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: aya
+spec:
+  type: LoadBalancer
+  ports:
+    - name: hyperion-http
+      protocol: TCP
+      port: 8090
+      targetPort: 8090
+    - name: hyperion-0
+      protocol: TCP
+      port: 19444
+      targetPort: 19444
+    - name: hyperion-1
+      protocol: TCP
+      port: 19445
+      targetPort: 19445
+    - name: hyperion-2
+      protocol: TCP
+      port: 19333
+      targetPort: 19333
+    - name: hyperion-3
+      protocol: UDP
+      port: 19333
+      targetPort: 19333
+  selector:
+    app: hyperion

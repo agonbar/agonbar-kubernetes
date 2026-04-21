@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: qui-deployment
+    namespace: piracy
+    labels:
+        app: qui
+spec:
+    strategy:
+        type: Recreate
+    replicas: 1
+    selector:
+        matchLabels:
+            app: qui
+    template:
+        metadata:
+            labels:
+                app: qui
+        spec:
+            containers:
+                - name: qui
+                  image: ghcr.io/autobrr/qui:latest
+                  imagePullPolicy: IfNotPresent
+                  env:
+                      - name: PGID
+                        value: '1000'
+                      - name: PUID
+                        value: '1000'
+                      - name: TZ
+                        value: Europe/Madrid
+                  ports:
+                      - containerPort: 7476
+                        protocol: TCP
+                  volumeMounts:
+                      - name: config
+                        mountPath: /config
+                      - name: downloads
+                        mountPath: /downloads
+                  resources:
+                      requests:
+                          memory: 128Mi
+                          cpu: 100m
+                      limits:
+                          memory: 512Mi
+                          cpu: 200m
+            volumes:
+                - name: config
+                  persistentVolumeClaim:
+                      claimName: qui-config
+                - name: downloads
+                  nfs:
+                      server: 192.168.0.29
+                      path: /mnt/SSD/torrents
+            nodeSelector:
+              svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qui
+  namespace: piracy
+spec:
+  type: ClusterIP
+  ports:
+    - name: web
+      protocol: TCP
+      port: 7476
+      targetPort: 7476
+  selector:
+    app: qui
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: qui-https
+  namespace: piracy
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: qui.${BASE_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: qui
+                port:
+                  number: 7476
+  tls:
+    - secretName: qui.${BASE_DOMAIN}
+      hosts:
+        - qui.${BASE_DOMAIN}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: qui-config
+  namespace: piracy
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 2Gi

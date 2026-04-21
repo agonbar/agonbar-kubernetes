@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: soularr-deployment
+    namespace: piracy
+    labels:
+        app: soularr
+spec:
+    replicas: 1
+    strategy:
+        type: Recreate
+    selector:
+        matchLabels:
+            app: soularr
+    template:
+        metadata:
+            labels:
+                app: soularr
+        spec:
+            securityContext:
+                runAsUser: 950
+                runAsGroup: 950
+                fsGroup: 950
+            containers:
+                - name: soularr
+                  image: mrusse08/soularr:latest
+                  imagePullPolicy: IfNotPresent
+                  env:
+                      - name: TZ
+                        value: Europe/Madrid
+                      - name: SCRIPT_INTERVAL
+                        value: '300'
+                      - name: SLSKD_API_KEY
+                        valueFrom:
+                          secretKeyRef:
+                            name: slskd
+                            key: api-key
+                  volumeMounts:
+                      - name: data
+                        mountPath: /data
+                      - name: downloads
+                        mountPath: /downloads
+                  resources:
+                      requests:
+                          memory: 64Mi
+                          cpu: 50m
+                      limits:
+                          memory: 512Mi
+                          cpu: 200m
+            volumes:
+                - name: data
+                  persistentVolumeClaim:
+                      claimName: soularr-config
+                - name: downloads
+                  nfs:
+                      server: 192.168.0.29
+                      path: /mnt/SSD/torrents/slskd
+            nodeSelector:
+              svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: soularr-config
+  namespace: piracy
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 1Gi

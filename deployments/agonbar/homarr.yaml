@@ -1,0 +1,113 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    annotations:
+        keel.sh/pollSchedule: "@every 72h"
+    name: homarr-deployment
+    namespace: agonbar
+    labels:
+        app: homarr
+        keel.sh/policy: force
+        keel.sh/match-tag: "true"
+        keel.sh/trigger: poll
+spec:
+    strategy:
+        type: Recreate
+    replicas: 1
+    selector:
+        matchLabels:
+            app: homarr
+    template:
+        metadata:
+            labels:
+                app: homarr
+        spec:
+            initContainers:
+                - name: fix-permissions
+                  image: busybox:latest
+                  command: ["sh", "-c", "chown -R 1000:1000 /appdata"]
+                  volumeMounts:
+                      - name: appdata
+                        mountPath: /appdata
+            containers:
+                - name: homarr
+                  image: ghcr.io/homarr-labs/homarr:latest
+                  imagePullPolicy: IfNotPresent
+                  env:
+                      - name: SECRET_ENCRYPTION_KEY
+                        valueFrom:
+                            secretKeyRef:
+                                name: agonbar
+                                key: homarrEncryptionKey
+                  ports:
+                      - containerPort: 7575
+                        protocol: TCP
+                  volumeMounts:
+                      - name: appdata
+                        mountPath: /appdata
+                  resources:
+                      requests:
+                          memory: 128Mi
+                          cpu: 100m
+                      limits:
+                          memory: 512Mi
+                          cpu: 200m
+            volumes:
+                - name: appdata
+                  persistentVolumeClaim:
+                      claimName: homarr-appdata
+            # nodeSelector:
+            #   svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: homarr
+    namespace: agonbar
+spec:
+    type: ClusterIP
+    ports:
+        - name: web
+          protocol: TCP
+          port: 7575
+          targetPort: 7575
+    selector:
+        app: homarr
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+    name: homarr-https
+    namespace: agonbar
+    annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+    ingressClassName: traefik
+    rules:
+        - host: homarr.${BASE_DOMAIN}
+          http:
+              paths:
+                  - pathType: Prefix
+                    path: /
+                    backend:
+                        service:
+                            name: homarr
+                            port:
+                                number: 7575
+    tls:
+        - secretName: homarr.${BASE_DOMAIN}
+          hosts:
+              - homarr.${BASE_DOMAIN}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: homarr-appdata
+  namespace: agonbar
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 5Gi

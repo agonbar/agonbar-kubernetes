@@ -1,0 +1,120 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    annotations:
+        keel.sh/pollSchedule: "@every 72h"
+    name: bazarr-deployment
+    namespace: piracy
+    labels:
+        app: bazarr
+        keel.sh/policy: force
+        keel.sh/match-tag: "true"
+        keel.sh/trigger: poll
+spec:
+    strategy:
+        type: Recreate
+    replicas: 1
+    selector:
+        matchLabels:
+            app: bazarr
+    template:
+        metadata:
+            labels:
+                app: bazarr
+        spec:
+            containers:
+                - name: bazarr
+                  image: linuxserver/bazarr:latest
+                  imagePullPolicy: IfNotPresent
+                  env:
+                      - name: PGID
+                        value: '1000'
+                      - name: PUID
+                        value: '1000'
+                      - name: TZ
+                        value: Europe/Madrid
+                  ports:
+                      - containerPort: 6767
+                        protocol: TCP
+                  volumeMounts:
+                      - name: config
+                        mountPath: /config
+                      - name: downloads
+                        mountPath: /downloads
+                      - name: tv
+                        mountPath: /tv
+                      # Si también tienes películas (Radarr), deberías añadir ese volumen aquí
+                  resources:
+                      requests:
+                          memory: 256Mi # Bazarr consume un poco más de RAM al indexar
+                          cpu: 100m
+                      limits:
+                          memory: 1Gi
+                          cpu: 500m
+            volumes:
+                - name: config
+                  persistentVolumeClaim:
+                      claimName: bazarr-config
+                - name: tv
+                  nfs:
+                      server: 192.168.0.29
+                      path: /mnt/RAID/docker/media/tv
+                - name: downloads
+                  nfs:
+                      server: 192.168.0.29
+                      path: /mnt/SSD/torrents
+            nodeSelector:
+              svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bazarr
+  namespace: piracy
+spec:
+  type: ClusterIP
+  ports:
+    - name: web
+      protocol: TCP
+      port: 6767
+      targetPort: 6767
+  selector:
+    app: bazarr
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bazarr-https
+  namespace: piracy
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: bazarr.${BASE_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: bazarr
+                port:
+                  number: 6767
+  tls:
+    - secretName: bazarr.${BASE_DOMAIN}
+      hosts:
+        - bazarr.${BASE_DOMAIN}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bazarr-config
+  namespace: piracy
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 5Gi

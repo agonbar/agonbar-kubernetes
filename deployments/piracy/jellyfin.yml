@@ -1,0 +1,290 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jellyfin-deployment # <--- change this
+  namespace: piracy
+  labels:
+    app: jellyfin # <--- change this to match label on the pod
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jellyfin # <--- change this to match label on the pod
+  template:
+    metadata:
+      labels:
+        app: jellyfin
+    spec:
+      initContainers:
+        - name: iscsi-fsck
+          image: alpine:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              MOUNTPOINT="/config"
+              echo "[iscsi-fsck] Checking filesystem at ${MOUNTPOINT}..."
+
+              # Try to write a test file to detect read-only state
+              if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                rm -f "${MOUNTPOINT}/.rw-test"
+                echo "[iscsi-fsck] Filesystem is writable. Nothing to do."
+                exit 0
+              fi
+
+              echo "[iscsi-fsck] Filesystem is READ-ONLY. Starting repair..."
+
+              # Install required tools
+              apk add --no-cache e2fsprogs util-linux 2>/dev/null
+
+              # Find the block device from host's /proc/1/mounts (mounted at /host-proc-mounts)
+              DEVICE=$(grep " ${MOUNTPOINT} " /host-proc-mounts | awk '{print $1}' | head -1)
+
+              if [ -z "${DEVICE}" ]; then
+                echo "[iscsi-fsck] ERROR: Could not find block device for ${MOUNTPOINT} in host mounts."
+                echo "[iscsi-fsck] Host mount table (iscsi/sd entries):"
+                grep -E "iscsi|/dev/sd|democratic-csi" /host-proc-mounts || true
+                exit 1
+              fi
+
+              echo "[iscsi-fsck] Found device: ${DEVICE}"
+
+              # Remount read-write first (may work if the FS was just briefly errored)
+              echo "[iscsi-fsck] Attempting remount rw..."
+              if mount -o remount,rw "${MOUNTPOINT}" 2>/dev/null; then
+                echo "[iscsi-fsck] Remount rw succeeded!"
+                if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                  rm -f "${MOUNTPOINT}/.rw-test"
+                  echo "[iscsi-fsck] Filesystem is now writable. Done."
+                  exit 0
+                fi
+              fi
+
+              echo "[iscsi-fsck] Simple remount failed. Running e2fsck..."
+
+              # Find the CSI globalmount path on the host to unmount before fsck
+              GLOBAL_MOUNT=$(grep "${DEVICE} " /host-proc-mounts | grep globalmount | awk '{print $2}' | head -1)
+              if [ -z "${GLOBAL_MOUNT}" ]; then
+                GLOBAL_MOUNT=$(grep "^${DEVICE} " /host-proc-mounts | awk '{print $2}' | head -1)
+              fi
+
+              if [ -n "${GLOBAL_MOUNT}" ]; then
+                echo "[iscsi-fsck] Unmounting ${GLOBAL_MOUNT} for fsck..."
+                umount -l "${GLOBAL_MOUNT}" || {
+                  echo "[iscsi-fsck] WARNING: umount failed, trying to fsck anyway..."
+                }
+              fi
+
+              echo "[iscsi-fsck] Running e2fsck on ${DEVICE}..."
+              e2fsck -y -f "${DEVICE}" || {
+                FSCK_EXIT=$?
+                # e2fsck exits 1 for corrected errors, 2 for reboot needed — both ok for us
+                if [ $FSCK_EXIT -gt 2 ]; then
+                  echo "[iscsi-fsck] e2fsck failed with exit code ${FSCK_EXIT}."
+                  exit 1
+                fi
+              }
+
+              echo "[iscsi-fsck] e2fsck complete. Remounting ${GLOBAL_MOUNT}..."
+              if [ -n "${GLOBAL_MOUNT}" ]; then
+                mount "${DEVICE}" "${GLOBAL_MOUNT}" || {
+                  echo "[iscsi-fsck] Mount failed after fsck. Exiting with error to trigger pod restart."
+                  exit 1
+                }
+              fi
+
+              # Verify filesystem is now writable
+              if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                rm -f "${MOUNTPOINT}/.rw-test"
+                echo "[iscsi-fsck] SUCCESS: Filesystem repaired and writable."
+                exit 0
+              else
+                echo "[iscsi-fsck] FAILED: Filesystem still not writable after repair."
+                exit 1
+              fi
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: host-proc-mounts
+              mountPath: /host-proc-mounts
+      containers:
+        - name: jellyfin
+          image: lscr.io/linuxserver/jellyfin:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          env:
+            - name: JELLYFIN_PublishedServerUrl
+              value: 80.241.214.254 # The IP number for your jellyfin server (see service config)
+            - name: PGID
+              value: "950"
+            - name: PUID
+              value: "950"
+            - name: TZ
+              value: Europe/Madrid
+          ports:
+            - containerPort: 8096
+              protocol: TCP
+            - containerPort: 8920
+              protocol: TCP
+            - containerPort: 1900
+              protocol: UDP
+            - containerPort: 7359
+              protocol: UDP
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: data
+              mountPath: /data
+            - name: media
+              mountPath: /media
+            - name: dev-dri
+              mountPath: /dev/dri
+            - name: dev-dma-heap
+              mountPath: /dev/dma_heap
+            - name: dev-mali0
+              mountPath: /dev/mali0
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8096
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8096
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: 128Mi
+              cpu: 100m
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: jellyfin-config
+        - name: data
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/Public
+        - name: media
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/media
+        - name: dev-dri
+          hostPath:
+            path: /dev/dri
+        - name: dev-dma-heap
+          hostPath:
+            path: /dev/dma_heap
+        - name: dev-mali0
+          hostPath:
+            path: /dev/mali0
+        - name: host-proc-mounts
+          hostPath:
+            path: /proc/1/mounts
+      nodeSelector:
+        kubernetes.io/hostname: orange-pi5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jellyfin-http
+  namespace: piracy
+spec:
+  type: LoadBalancer
+  ports:
+    - name: jellyfin-http
+      protocol: TCP
+      port: 8096
+      targetPort: 8096
+    - name: jellyfin-2
+      protocol: TCP
+      port: 8920
+      targetPort: 8920
+    - name: jellyfin-3
+      protocol: UDP
+      port: 1900
+      targetPort: 1900
+    - name: jellyfin-4
+      protocol: UDP
+      port: 7359
+      targetPort: 7359
+  selector:
+    app: jellyfin
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jellyfin
+  namespace: piracy
+spec:
+  type: ClusterIP
+  ports:
+    - name: jellyfin-http
+      protocol: TCP
+      port: 8096
+      targetPort: 8096
+    - name: jellyfin-2
+      protocol: TCP
+      port: 8920
+      targetPort: 8920
+    - name: jellyfin-3
+      protocol: UDP
+      port: 1900
+      targetPort: 1900
+    - name: jellyfin-4
+      protocol: UDP
+      port: 7359
+      targetPort: 7359
+  selector:
+    app: jellyfin
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jellyfin-https
+  namespace: piracy
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: jellyfin.${BASE_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: jellyfin
+                port:
+                  number: 8096
+  tls:
+    - secretName: jellyfin.${BASE_DOMAIN}
+      hosts:
+        - jellyfin.${BASE_DOMAIN}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jellyfin-config
+  namespace: piracy
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 10Gi

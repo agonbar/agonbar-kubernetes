@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: ts6
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: ts6
+  namespace: agonbar
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ts6
+  template:
+    metadata:
+      labels:
+        app: ts6
+    spec:
+      initContainers:
+        - name: fix-permissions
+          image: busybox
+          command: ['sh', '-c', 'chmod -R 777 /var/tsserver']
+          volumeMounts:
+            - name: ts6
+              mountPath: /var/tsserver
+      containers:
+        - image: teamspeaksystems/teamspeak6-server:latest
+          name: ts6
+          env:
+            - name: TSSERVER_LICENSE_ACCEPTED
+              value: 'accept'
+            - name: TSSERVER_FILE_TRANSFER_PORT
+              value: '30034'
+          ports:
+            - containerPort: 9987
+              name: ts6-voice
+              protocol: UDP
+            - containerPort: 30034
+              name: ts6-files
+              protocol: TCP
+          volumeMounts:
+            - name: ts6
+              mountPath: /var/tsserver
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+          livenessProbe:
+            tcpSocket:
+              port: 30034
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 6
+      volumes:
+      - name: ts6
+        hostPath:
+          path: /docker/ts6
+          type: DirectoryOrCreate
+      nodeSelector:
+        kubernetes.io/hostname: "ovh02"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ts6
+  namespace: agonbar
+spec:
+  type: LoadBalancer
+  ports:
+    - name: ts6-voice
+      protocol: UDP
+      port: 9987
+      targetPort: 9987
+    - name: ts6-files
+      protocol: TCP
+      port: 30034
+      targetPort: 30034
+  selector:
+    app: ts6

@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: dawarich-db
+  namespace: dawarich
+  labels:
+    app: dawarich-db
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dawarich-db
+  template:
+    metadata:
+      labels:
+        app: dawarich-db
+    spec:
+      nodeSelector:
+        kubernetes.io/arch: amd64
+        svccontroller.k3s.cattle.io/lbpool: lamg
+      containers:
+      - name: postgres
+        image: postgis/postgis:17-3.5-alpine
+        env:
+        - name: POSTGRES_USER
+          value: "dawarich"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: dawarich
+              key: databasePassword
+        - name: POSTGRES_DB
+          value: "dawarich_development"
+        volumeMounts:
+        - name: dawarich-db-data
+          mountPath: /var/lib/postgresql/data
+        - name: dawarich-shared
+          mountPath: /var/shared
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - dawarich
+            - -d
+            - dawarich_development
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 10
+          failureThreshold: 5
+      volumes:
+      - name: dawarich-db-data
+        persistentVolumeClaim:
+          claimName: dawarich-db-data
+      - name: dawarich-shared
+        nfs:
+          server: 192.168.0.29
+          path: /mnt/RAID/docker/dawarich/shared
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dawarich-db
+  namespace: dawarich
+spec:
+  selector:
+    app: dawarich-db
+  ports:
+   - protocol: TCP
+     port: 5432
+     targetPort: 5432
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dawarich-db-data
+  namespace: dawarich
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 5Gi

@@ -1,0 +1,35 @@
+---
+# Intentionally strict about correctness, intentionally loose about style.
+# Style issues (EOF newlines, trailing spaces, indent-sequences) produce
+# noise across ~50 files written by different tools (hand-edited, kubeseal,
+# Helm, kubectl) and add no real value. The rules that ARE enforced catch
+# actual bugs or manifest-parse-breakers.
+extends: default
+
+rules:
+  # style — disabled
+  line-length: disable
+  document-start: disable
+  document-end: disable
+  comments-indentation: disable
+  comments: disable
+  new-line-at-end-of-file: disable
+  trailing-spaces: disable
+  empty-lines: disable
+  empty-values: disable
+  indentation: disable
+  truthy:
+    # Upstream charts + some CRDs use "on" as a key.
+    check-keys: false
+
+  # correctness — enforced
+  key-duplicates: {}
+  hyphens: {}
+  colons: {}
+  commas: {}
+  brackets: {}
+  braces: {}
+
+ignore: |
+  .git/
+  deployments/piracy/anime_sub_upgrade/

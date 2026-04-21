@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: enshrouded
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: enshrouded
+  namespace: games
+spec:
+  strategy:
+    type: Recreate
+  replicas: 0
+  selector:
+    matchLabels:
+      app: enshrouded
+  template:
+    metadata:
+      labels:
+        app: enshrouded
+    spec:
+      containers:
+        - image: docker.io/sknnr/enshrouded-dedicated-server:latest
+          name: enshrouded
+          env:
+            - name: SERVER_NAME
+              value: "DivertiJeep"
+            - name: SERVER_PASSWORD
+              value: "lovamosviendo"
+            - name: PORT
+              value: "15637"
+            - name: SERVER_SLOTS
+              value: "16"
+          ports:
+            - containerPort: 15637
+              name: query-port
+              protocol: UDP
+          volumeMounts:
+            - mountPath: /home/steam/enshrouded/savegame
+              name: enshrouded-data
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+        - name: enshrouded-data
+          persistentVolumeClaim:
+            claimName: enshrouded-data
+      nodeSelector:
+        kubernetes.io/arch: amd64
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: enshrouded
+  namespace: games
+spec:
+  type: LoadBalancer
+
+  selector:
+    app: enshrouded
+
+  ports:
+    - port: 15637
+      targetPort: 15637
+      name: query-port
+      protocol: UDP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: enshrouded-data
+  namespace: games
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 10Gi

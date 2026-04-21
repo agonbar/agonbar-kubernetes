@@ -1,0 +1,166 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: dawarich-app
+  namespace: dawarich
+  labels:
+    app: dawarich-app
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dawarich-app
+  template:
+    metadata:
+      labels:
+        app: dawarich-app
+    spec:
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+      initContainers:
+      - name: db-migrate
+        image: freikin/dawarich:latest
+        command: ["/bin/sh", "-c"]
+        args: ["bin/rails db:migrate"]
+        env:
+        - name: RAILS_ENV
+          value: "development"
+        - name: REDIS_URL
+          value: "redis://dawarich-redis:6379/0"
+        - name: DATABASE_HOST
+          value: "dawarich-db"
+        - name: DATABASE_USERNAME
+          value: "dawarich"
+        - name: DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: dawarich
+              key: databasePassword
+        - name: DATABASE_NAME
+          value: "dawarich_development"
+        volumeMounts:
+        - name: dawarich-tmp
+          mountPath: /var/app/tmp
+      containers:
+      - name: dawarich-app
+        image: freikin/dawarich:latest
+        command: ["/bin/sh", "-c"]
+        args: ["rm -f /var/app/tmp/pids/server.pid && bin/rails server -p 3000 -b ::"]
+        env:
+        - name: RAILS_ENV
+          value: "development"
+        - name: REDIS_URL
+          value: "redis://dawarich-redis:6379/0"
+        - name: DATABASE_HOST
+          value: "dawarich-db"
+        - name: DATABASE_USERNAME
+          value: "dawarich"
+        - name: DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: dawarich
+              key: databasePassword
+        - name: DATABASE_NAME
+          value: "dawarich_development"
+        - name: MIN_MINUTES_SPENT_IN_CITY
+          value: "60"
+        - name: APPLICATION_HOSTS
+          value: "dawarich.${BASE_DOMAIN}"
+        - name: TIME_ZONE
+          value: "Europe/London"
+        - name: APPLICATION_PROTOCOL
+          value: "http"
+        - name: DISTANCE_UNIT
+          value: "km"
+        - name: PROMETHEUS_EXPORTER_ENABLED
+          value: "false"
+        - name: PROMETHEUS_EXPORTER_HOST
+          value: "0.0.0.0"
+        - name: PROMETHEUS_EXPORTER_PORT
+          value: "9394"
+        - name: SELF_HOSTED
+          value: "true"
+        ports:
+        - containerPort: 3000
+        volumeMounts:
+        - name: dawarich-public
+          mountPath: /var/app/public
+        - name: dawarich-watched
+          mountPath: /var/app/tmp/imports/watched
+        - name: dawarich-storage
+          mountPath: /var/app/storage
+        - name: dawarich-tmp
+          mountPath: /var/app/tmp
+        livenessProbe:
+          exec:
+            command:
+            - "/bin/sh"
+            - "-c"
+            - "wget -qO - http://127.0.0.1:3000/api/v1/health"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 10
+          failureThreshold: 30
+      securityContext:
+        fsGroup: 1000
+      volumes:
+      - name: dawarich-public
+        nfs:
+          server: 192.168.0.29
+          path: /mnt/RAID/docker/dawarich/public
+      - name: dawarich-watched
+        nfs:
+          server: 192.168.0.29
+          path: /mnt/RAID/docker/dawarich/watched
+      - name: dawarich-storage
+        nfs:
+          server: 192.168.0.29
+          path: /mnt/RAID/docker/dawarich/storage
+      - name: dawarich-tmp
+        nfs:
+          server: 192.168.0.29
+          path: /mnt/RAID/docker/dawarich/tmp
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dawarich-app
+  namespace: dawarich
+spec:
+  selector:
+    app: dawarich-app
+  ports:
+  - protocol: TCP
+    port: 3000
+    targetPort: 3000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dawarich-https
+  namespace: dawarich
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: dawarich.${BASE_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: dawarich-app
+                port:
+                  number: 3000
+  tls:
+    - secretName: dawarich.${BASE_DOMAIN}
+      hosts:
+        - dawarich.${BASE_DOMAIN}
+

@@ -1,0 +1,194 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: glance
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: glance
+  namespace: agonbar
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: glance
+  template:
+    metadata:
+      labels:
+        app: glance
+    spec:
+      containers:
+        - image: glanceapp/glance:latest
+          name: glance
+          ports:
+            - containerPort: 8080
+              name: glance
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+          volumeMounts:
+            - name: glance-config-volume
+              mountPath: /app/config/
+         #     subPath: glance.yml
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 6
+      # nodeSelector:
+      #  kubernetes.io/arch: amd64
+      #  svccontroller.k3s.cattle.io/lbpool: lamg
+      imagePullSecrets:
+        - name: dockerhub-secret
+      volumes:
+        - name: glance-config-volume
+          configMap:
+            name: glance-config
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: glance
+  namespace: agonbar
+spec:
+  type: NodePort
+
+  selector:
+    app: glance
+
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+      name: glance
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: glance
+  namespace: agonbar
+  annotations:
+    kubernetes.io/ingress.class: traefik
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: glance.${BASE_DOMAIN}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: glance
+            port:
+              number: 8080
+  tls:
+  - hosts:
+    - glance.${BASE_DOMAIN}
+    secretName: glance.${BASE_DOMAIN}
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: glance-config
+  namespace: agonbar
+  labels:
+    app: glance
+
+data:
+  glance.yml: |
+    pages:
+      - name: Home
+        columns:
+          - size: small
+            widgets:
+              - type: calendar
+                first-day-of-week: monday
+
+              - type: rss
+                limit: 10
+                collapse-after: 3
+                cache: 12h
+                feeds:
+                  - url: https://selfh.st/rss/
+                    title: selfh.st
+                    limit: 4
+                  - url: https://ciechanow.ski/atom.xml
+                  - url: https://www.joshwcomeau.com/rss.xml
+                    title: Josh Comeau
+                  - url: https://samwho.dev/rss.xml
+                  - url: https://ishadeed.com/feed.xml
+                    title: Ahmad Shadeed
+
+              - type: twitch-channels
+                channels:
+                  - theprimeagen
+                  - j_blow
+                  - piratesoftware
+                  - cohhcarnage
+                  - christitustech
+                  - EJ_SA
+
+          - size: full
+            widgets:
+              - type: group
+                widgets:
+                  - type: hacker-news
+                  - type: lobsters
+
+              - type: videos
+                channels:
+                  - UCXuqSBlHAE6Xw-yeJA0Tunw # Linus Tech Tips
+                  - UCR-DXc1voovS8nhAvccRZhg # Jeff Geerling
+                  - UCsBjURrPoezykLs9EqgamOA # Fireship
+                  - UCBJycsmduvYEL83R_U4JriQ # Marques Brownlee
+                  - UCHnyfMqiRRG1u-2MsSQLbXA # Veritasium
+
+              - type: group
+                widgets:
+                  - type: reddit
+                    subreddit: technology
+                    show-thumbnails: true
+                  - type: reddit
+                    subreddit: selfhosted
+                    show-thumbnails: true
+
+          - size: small
+            widgets:
+              - type: weather
+                location: London, United Kingdom
+                units: metric
+                hour-format: 12h
+
+              - type: markets
+                symbol-link-template: https://www.tradingview.com/symbols/{SYMBOL}/news
+                markets:
+                  - symbol: SPY
+                    name: S&P 500
+                  - symbol: BTC-USD
+                    name: Bitcoin
+                  - symbol: NVDA
+                    name: NVIDIA
+                  - symbol: AAPL
+                    name: Apple
+                  - symbol: MSFT
+                    name: Microsoft
+
+              - type: releases
+                cache: 1d
+                repositories:
+                  - glanceapp/glance
+                  - go-gitea/gitea
+                  - immich-app/immich
+                  - syncthing/syncthing

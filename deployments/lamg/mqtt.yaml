@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: mqtt
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: mqtt
+  namespace: lamg
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mqtt
+  template:
+    metadata:
+      labels:
+        app: mqtt
+    spec:
+      containers:
+        - image: emqx/emqx:5.8.0
+          name: mqtt
+          ports:
+            - containerPort: 1883
+              name: mqtt
+              protocol: TCP
+            - containerPort: 18083
+              name: mqtt-dashboard
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mqtt-lb
+  namespace: lamg
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: lamg
+spec:
+  type: LoadBalancer
+  ports:
+    - name: mqtt
+      protocol: TCP
+      port: 1883
+      targetPort: 1883
+    - name: mqtt-dashboard
+      protocol: TCP
+      port: 18083
+      targetPort: 18083
+  selector:
+    app: mqtt
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mqtt
+  namespace: lamg
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: lamg
+spec:
+  type: NodePort
+  ports:
+    - name: mqtt
+      protocol: TCP
+      port: 1883
+      targetPort: 1883
+  selector:
+    app: mqtt

@@ -1,0 +1,1386 @@
+# Restore jobs: rsync data from NFS/RAID backup into iSCSI PVCs
+# Usage: kubectl --context lamg apply -f system/snapshots/restore.yaml
+# Prerequisites: all target PVCs must exist and be Bound, all deployments scaled to 0
+# Cleanup: kubectl --context lamg delete -f system/snapshots/restore.yaml
+# See RESTORE.md for full procedure
+# ============================================================
+# agonbar namespace (3 PVCs)
+# ============================================================
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-homarr-appdata
+  namespace: agonbar
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/agonbar/homarr-appdata/ /data/
+              echo "Restore complete: homarr-appdata"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: homarr-appdata
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-paperless-redis
+  namespace: agonbar
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/agonbar/paperless-redis/ /data/
+              echo "Restore complete: paperless-redis"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: paperless-redis
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-paperless-data
+  namespace: agonbar
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/agonbar/paperless-data/ /data/
+              echo "Restore complete: paperless-data"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: paperless-data
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+# ============================================================
+# dawarich namespace (1 PVC)
+# ============================================================
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-dawarich-db-data
+  namespace: dawarich
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/dawarich/dawarich-db-data/ /data/
+              echo "Restore complete: dawarich-db-data"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: dawarich-db-data
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+# ============================================================
+# games namespace (3 PVCs)
+# ============================================================
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-enshrouded-data
+  namespace: games
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/games/enshrouded-data/ /data/
+              echo "Restore complete: enshrouded-data"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: enshrouded-data
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-factorio-data
+  namespace: games
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/games/factorio-data/ /data/
+              echo "Restore complete: factorio-data"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: factorio-data
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-palworld-data
+  namespace: games
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/games/palworld-data/ /data/
+              echo "Restore complete: palworld-data"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: palworld-data
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+# ============================================================
+# immich namespace (1 PVC)
+# ============================================================
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-immich-db-data
+  namespace: immich
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/immich/immich-db-data/ /data/
+              echo "Restore complete: immich-db-data"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: immich-db-data
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+# ============================================================
+# lamg namespace (6 PVCs)
+# ============================================================
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-homeassistant-config
+  namespace: lamg
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/lamg/homeassistant-config/ /data/
+              echo "Restore complete: homeassistant-config"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: homeassistant-config
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-influxdb-data
+  namespace: lamg
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/lamg/influxdb-data/ /data/
+              echo "Restore complete: influxdb-data"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: influxdb-data
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-plex-config
+  namespace: lamg
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 7200
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/lamg/plex-config/ /data/
+              echo "Restore complete: plex-config"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: plex-config
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-scrutiny-config
+  namespace: lamg
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/lamg/scrutiny-config/ /data/
+              echo "Restore complete: scrutiny-config"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: scrutiny-config
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-vscode-config
+  namespace: lamg
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/lamg/vscode-config/ /data/
+              echo "Restore complete: vscode-config"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: vscode-config
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-zigbee2mqtt-config
+  namespace: lamg
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/lamg/zigbee2mqtt-config/ /data/
+              echo "Restore complete: zigbee2mqtt-config"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: zigbee2mqtt-config
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+# ============================================================
+# piracy namespace (15 PVCs)
+# ============================================================
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-bazarr-config
+  namespace: piracy
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/piracy/bazarr-config/ /data/
+              echo "Restore complete: bazarr-config"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: bazarr-config
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-cruncharr-config
+  namespace: piracy
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/piracy/cruncharr-config/ /data/
+              echo "Restore complete: cruncharr-config"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: cruncharr-config
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-emulerr-config
+  namespace: piracy
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/piracy/emulerr-config/ /data/
+              echo "Restore complete: emulerr-config"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: emulerr-config
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-jellyfin-config
+  namespace: piracy
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/piracy/jellyfin-config/ /data/
+              echo "Restore complete: jellyfin-config"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: jellyfin-config
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-lidarr-config
+  namespace: piracy
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/piracy/lidarr-config/ /data/
+              echo "Restore complete: lidarr-config"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: lidarr-config
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-prowlarr-config
+  namespace: piracy
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/piracy/prowlarr-config/ /data/
+              echo "Restore complete: prowlarr-config"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: prowlarr-config
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-qbittorrent-config
+  namespace: piracy
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/piracy/qbittorrent-config/ /data/
+              echo "Restore complete: qbittorrent-config"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: qbittorrent-config
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-qui-config
+  namespace: piracy
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/piracy/qui-config/ /data/
+              echo "Restore complete: qui-config"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: qui-config
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-radarr-config
+  namespace: piracy
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/piracy/radarr-config/ /data/
+              echo "Restore complete: radarr-config"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: radarr-config
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-seerr-config
+  namespace: piracy
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/piracy/seerr-config/ /data/
+              echo "Restore complete: seerr-config"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: seerr-config
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-slskd-config
+  namespace: piracy
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/piracy/slskd-config/ /data/
+              echo "Restore complete: slskd-config"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: slskd-config
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-sonarr-config
+  namespace: piracy
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/piracy/sonarr-config/ /data/
+              echo "Restore complete: sonarr-config"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: sonarr-config
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-soularr-config
+  namespace: piracy
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/piracy/soularr-config/ /data/
+              echo "Restore complete: soularr-config"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: soularr-config
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-tachidesk-data
+  namespace: piracy
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/piracy/tachidesk-data/ /data/
+              echo "Restore complete: tachidesk-data"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: tachidesk-data
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: restore-transmission-config
+  namespace: piracy
+  labels:
+    app: pvc-restore
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: rsync
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache rsync
+              rsync -av /backup/piracy/transmission-config/ /data/
+              echo "Restore complete: transmission-config"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: backup
+              mountPath: /backup
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: transmission-config
+        - name: backup
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/backups-iscsi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg

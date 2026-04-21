@@ -1,0 +1,215 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: plex
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: plex
+  namespace: lamg
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: plex
+  template:
+    metadata:
+      labels:
+        app: plex
+    spec:
+      initContainers:
+        - name: iscsi-fsck
+          image: alpine:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              MOUNTPOINT="/config"
+              echo "[iscsi-fsck] Checking filesystem at ${MOUNTPOINT}..."
+              if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                rm -f "${MOUNTPOINT}/.rw-test"
+                echo "[iscsi-fsck] Filesystem is writable. Nothing to do."
+                exit 0
+              fi
+              echo "[iscsi-fsck] Filesystem is READ-ONLY. Starting repair..."
+              apk add --no-cache e2fsprogs util-linux 2>/dev/null
+              DEVICE=$(grep " ${MOUNTPOINT} " /host-proc-mounts | awk '{print $1}' | head -1)
+              if [ -z "${DEVICE}" ]; then
+                echo "[iscsi-fsck] ERROR: Could not find block device for ${MOUNTPOINT}."
+                grep -E "iscsi|/dev/sd|democratic-csi" /host-proc-mounts || true
+                exit 1
+              fi
+              echo "[iscsi-fsck] Found device: ${DEVICE}"
+              if mount -o remount,rw "${MOUNTPOINT}" 2>/dev/null; then
+                if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                  rm -f "${MOUNTPOINT}/.rw-test"
+                  echo "[iscsi-fsck] Remount rw succeeded."
+                  exit 0
+                fi
+              fi
+              echo "[iscsi-fsck] Running e2fsck on ${DEVICE}..."
+              GLOBAL_MOUNT=$(grep "^${DEVICE} " /host-proc-mounts | awk '{print $2}' | head -1)
+              if [ -n "${GLOBAL_MOUNT}" ]; then
+                umount -l "${GLOBAL_MOUNT}" || true
+              fi
+              e2fsck -y -f "${DEVICE}" || true
+              if [ -n "${GLOBAL_MOUNT}" ]; then
+                mount "${DEVICE}" "${GLOBAL_MOUNT}" || { echo "[iscsi-fsck] Mount failed."; exit 1; }
+              fi
+              if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                rm -f "${MOUNTPOINT}/.rw-test"
+                echo "[iscsi-fsck] SUCCESS: Filesystem repaired."
+                exit 0
+              fi
+              echo "[iscsi-fsck] FAILED: Still read-only after repair."
+              exit 1
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: host-proc-mounts
+              mountPath: /host-proc-mounts
+      containers:
+        - image: linuxserver/plex:latest
+          name: plex
+          env:
+            - name: PUID
+              value: '950'
+            - name: PGID
+              value: '950'
+            - name: PLEX_CLAIM
+              valueFrom:
+                secretKeyRef:
+                  name: lamg
+                  key: plexClaim
+            - name: TZ
+              value: Europe/Madrid
+            - name: VERSION
+              value: 'latest'
+            - name: ADVERTISE_IP
+              value: 'https://plex.${BASE_DOMAIN}:443'
+          ports:
+            - containerPort: 32400
+              name: plex-1
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: data
+              mountPath: /data
+            - name: media
+              mountPath: /media
+          livenessProbe:
+            httpGet:
+              path: /identity
+              port: 32400
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /identity
+              port: 32400
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+              claimName: plex-config
+        - name: data
+          nfs:
+              server: 192.168.0.29
+              path: /mnt/RAID/Public
+        - name: media
+          nfs:
+              server: 192.168.0.29
+              path: /mnt/RAID/docker/media
+        - name: host-proc-mounts
+          hostPath:
+              path: /proc/1/mounts
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: plex-lb
+  namespace: lamg
+spec:
+  type: LoadBalancer
+  ports:
+    - name: plex-1
+      protocol: TCP
+      port: 32400
+      targetPort: 32400
+  selector:
+    app: plex
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: plex
+  namespace: lamg
+spec:
+  type: ClusterIP
+  ports:
+    - name: plex-1
+      protocol: TCP
+      port: 32400
+      targetPort: 32400
+  selector:
+    app: plex
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: plex-https
+  namespace: lamg
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: plex.${BASE_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: plex
+                port:
+                  number: 32400
+  tls:
+    - secretName: plex.${BASE_DOMAIN}
+      hosts:
+        - plex.${BASE_DOMAIN}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: plex-config
+  namespace: lamg
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 30Gi

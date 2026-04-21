@@ -1,0 +1,296 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: reactive-resume-postgres
+  name: reactive-resume-postgres
+  namespace: agonbar
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: reactive-resume-postgres
+  template:
+    metadata:
+      labels:
+        app: reactive-resume-postgres
+    spec:
+      containers:
+        - image: docker.io/library/postgres:16-alpine
+          name: postgres
+          env:
+            - name: POSTGRES_DB
+              value: reactive_resume
+            - name: POSTGRES_USER
+              value: reactive_resume
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: agonbar
+                  key: reactiveResumeDbPassword
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+              name: postgres
+              protocol: TCP
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: 10m
+              memory: 50Mi
+      volumes:
+      - name: postgres-data
+        persistentVolumeClaim:
+          claimName: reactive-resume-postgres
+      imagePullSecrets:
+        - name: dockerhub-secret
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: reactive-resume-postgres
+  namespace: agonbar
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 2Gi
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: reactive-resume-postgres
+  namespace: agonbar
+spec:
+  type: ClusterIP
+  selector:
+    app: reactive-resume-postgres
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+      name: postgres
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: reactive-resume-printer
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: reactive-resume-printer
+  namespace: agonbar
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: reactive-resume-printer
+  template:
+    metadata:
+      labels:
+        app: reactive-resume-printer
+    spec:
+      containers:
+        - image: ghcr.io/browserless/chromium:latest
+          name: printer
+          ports:
+            - containerPort: 3000
+              name: printer
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 10m
+              memory: 200Mi
+          livenessProbe:
+            httpGet:
+              path: /pressure
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+      imagePullSecrets:
+        - name: dockerhub-secret
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: reactive-resume-printer
+  namespace: agonbar
+spec:
+  type: ClusterIP
+  selector:
+    app: reactive-resume-printer
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
+      name: printer
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: reactive-resume
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: reactive-resume
+  namespace: agonbar
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: reactive-resume
+  template:
+    metadata:
+      labels:
+        app: reactive-resume
+    spec:
+      containers:
+        - image: ghcr.io/amruthpillai/reactive-resume:latest
+          name: reactive-resume
+          env:
+            # Application
+            - name: APP_URL
+              value: https://cv.${BASE_DOMAIN}
+            - name: NODE_ENV
+              value: production
+            - name: FLAG_DISABLE_SIGNUPS
+              value: "false"
+
+            # Database
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: agonbar
+                  key: reactiveResumeDatabaseUrl
+
+            # Authentication
+            - name: AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: agonbar
+                  key: reactiveResumeAuthSecret
+
+            # Printer Service
+            - name: PRINTER_ENDPOINT
+              value: http://reactive-resume-printer:3000
+
+            # S3 Storage (MinIO)
+            - name: S3_ENDPOINT
+              value: http://minio:9000
+            - name: S3_BUCKET
+              value: reactive-resume
+            - name: S3_FORCE_PATH_STYLE
+              value: "true"
+            - name: S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: agonbar
+                  key: minioRootUser
+            - name: S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: agonbar
+                  key: minioRootPassword
+          ports:
+            - containerPort: 3000
+              name: http
+              protocol: TCP
+          volumeMounts:
+            - name: uploads
+              mountPath: /app/uploads
+          resources:
+            requests:
+              cpu: 20m
+              memory: 100Mi
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 6
+      volumes:
+      - name: uploads
+        persistentVolumeClaim:
+          claimName: reactive-resume-uploads
+      imagePullSecrets:
+        - name: dockerhub-secret
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: reactive-resume-uploads
+  namespace: agonbar
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: reactive-resume
+  namespace: agonbar
+spec:
+  type: NodePort
+  selector:
+    app: reactive-resume
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
+      name: http
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: reactive-resume-https
+  namespace: agonbar
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: cv.${BASE_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: reactive-resume
+                port:
+                  number: 3000
+  tls:
+    - secretName: cv.${BASE_DOMAIN}
+      hosts:
+        - cv.${BASE_DOMAIN}

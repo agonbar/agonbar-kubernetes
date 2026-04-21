@@ -1,0 +1,61 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: democratic-csi-nfs-ssd
+  namespace: argocd
+spec:
+  project: default
+  source:
+    chart: democratic-csi
+    repoURL: https://democratic-csi.github.io/charts/
+    targetRevision: 0.14.7
+    helm:
+      releaseName: democratic-csi-nfs-ssd
+      valuesObject:
+        csiDriver:
+          name: "org.democratic-csi.truenas-nfs-ssd"
+          fsGroupPolicy: File
+
+        storageClasses:
+          - name: truenas-nfs-ssd
+            defaultClass: false
+            reclaimPolicy: Delete
+            volumeBindingMode: Immediate
+            allowVolumeExpansion: true
+            parameters:
+              fsType: nfs
+            mountOptions:
+              - noatime
+              - nfsvers=4
+            secrets:
+              provisioner-secret:
+              controller-publish-secret:
+              node-stage-secret:
+              node-publish-secret:
+              controller-expand-secret:
+
+        volumeSnapshotClasses: []
+
+        driver:
+          existingConfigSecret: democratic-csi-nfs-ssd-driver-config
+          config:
+            driver: freenas-api-nfs
+  destination:
+    name: in-cluster
+    namespace: democratic-csi
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+      - RespectIgnoreDifferences=true
+      - Validate=false
+      - PrunePropagationPolicy=foreground
+    retry:
+      limit: 5
+      backoff:
+        duration: 20s
+        factor: 2
+        maxDuration: 3m0s

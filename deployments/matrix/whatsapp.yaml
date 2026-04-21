@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: whatsapp
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+  annotations:
+      keel.sh/pollSchedule: "@every 72h"
+  name: whatsapp
+  namespace: matrix
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: whatsapp
+  template:
+    metadata:
+      labels:
+        app: whatsapp
+    spec:
+      containers:
+        - image: dock.mau.dev/mautrix/whatsapp:latest
+          name: whatsapp
+          ports:
+            - containerPort: 29318
+              name: synapse
+              protocol: TCP
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+      - name: data
+        hostPath:
+          path: /docker/matrix/whatsapp
+          type: Directory
+      nodeSelector:
+        kubernetes.io/hostname: "ovh02"
+      imagePullSecrets:
+        - name: dockerhub-secret
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: mautrix-whatsapp
+  namespace: matrix
+spec:
+  type: NodePort
+
+  selector:
+    app: whatsapp
+
+  ports:
+    - protocol: TCP
+      port: 29318
+      targetPort: 29318
+      name: mautrix-whatsapp

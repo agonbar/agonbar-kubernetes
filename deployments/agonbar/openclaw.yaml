@@ -1,0 +1,150 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: openclaw
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: openclaw
+  namespace: agonbar
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: openclaw
+  template:
+    metadata:
+      labels:
+        app: openclaw
+    spec:
+      containers:
+        - image: ghcr.io/openclaw/openclaw:latest
+          name: openclaw
+          imagePullPolicy: Always
+          env:
+            - name: HOME
+              value: /home/node
+            - name: TERM
+              value: xterm-256color
+            - name: TELEGRAM_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: agonbar
+                  key: telegramBotToken
+            - name: OPENROUTER_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: agonbar
+                  key: openrouterApiKey
+            - name: OPENCLAW_GATEWAY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: agonbar
+                  key: openclawGatewayToken
+          ports:
+            - containerPort: 18789
+              name: gateway
+              protocol: TCP
+            - containerPort: 18790
+              name: bridge
+              protocol: TCP
+          volumeMounts:
+            - name: openclaw-config
+              mountPath: /home/node/.openclaw
+            - name: openclaw-workspace
+              mountPath: /home/node/clawd
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          startupProbe:
+            tcpSocket:
+              port: 18789
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            tcpSocket:
+              port: 18789
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            tcpSocket:
+              port: 18789
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 6
+      volumes:
+      - name: openclaw-config
+        hostPath:
+          path: /docker/openclaw/config
+          type: DirectoryOrCreate
+      - name: openclaw-workspace
+        hostPath:
+          path: /docker/openclaw/workspace
+          type: DirectoryOrCreate
+      nodeSelector:
+        kubernetes.io/hostname: "ovh02"
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: openclaw
+  namespace: agonbar
+spec:
+  type: ClusterIP
+  selector:
+    app: openclaw
+  ports:
+    - protocol: TCP
+      port: 18789
+      targetPort: 18789
+      name: gateway
+    - protocol: TCP
+      port: 18790
+      targetPort: 18790
+      name: bridge
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: openclaw-https
+  namespace: agonbar
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: openclaw.${BASE_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: openclaw
+                port:
+                  number: 18789
+  tls:
+    - secretName: openclaw.${BASE_DOMAIN}
+      hosts:
+        - openclaw.${BASE_DOMAIN}

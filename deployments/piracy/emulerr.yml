@@ -1,0 +1,216 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: emulerr-deployment
+    namespace: piracy
+    labels:
+        app: emulerr
+spec:
+    strategy:
+        type: Recreate
+    replicas: 1
+    selector:
+        matchLabels:
+            app: emulerr
+    template:
+        metadata:
+            labels:
+                app: emulerr
+        spec:
+            initContainers:
+                - name: iscsi-fsck
+                  image: alpine:latest
+                  imagePullPolicy: IfNotPresent
+                  securityContext:
+                      privileged: true
+                  command:
+                      - /bin/sh
+                      - -c
+                      - |
+                        set -e
+                        MOUNTPOINT="/config"
+                        echo "[iscsi-fsck] Checking filesystem at ${MOUNTPOINT}..."
+                        if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                          rm -f "${MOUNTPOINT}/.rw-test"
+                          echo "[iscsi-fsck] Filesystem is writable. Nothing to do."
+                          exit 0
+                        fi
+                        echo "[iscsi-fsck] Filesystem is READ-ONLY. Starting repair..."
+                        apk add --no-cache e2fsprogs util-linux 2>/dev/null
+                        DEVICE=$(grep " ${MOUNTPOINT} " /host-proc-mounts | awk '{print $1}' | head -1)
+                        if [ -z "${DEVICE}" ]; then
+                          echo "[iscsi-fsck] ERROR: Could not find block device for ${MOUNTPOINT}."
+                          exit 1
+                        fi
+                        echo "[iscsi-fsck] Found device: ${DEVICE}"
+                        if mount -o remount,rw "${MOUNTPOINT}" 2>/dev/null; then
+                          if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                            rm -f "${MOUNTPOINT}/.rw-test"
+                            echo "[iscsi-fsck] Remount rw succeeded."
+                            exit 0
+                          fi
+                        fi
+                        echo "[iscsi-fsck] Running e2fsck on ${DEVICE}..."
+                        GLOBAL_MOUNT=$(nsenter -t 1 -m -- sh -c "grep '^${DEVICE} ' /proc/mounts | awk '{print \$2}' | head -1")
+                        if [ -n "${GLOBAL_MOUNT}" ]; then
+                          umount -l "${GLOBAL_MOUNT}" || true
+                        fi
+                        e2fsck -y -f "${DEVICE}" || true
+                        if [ -n "${GLOBAL_MOUNT}" ]; then
+                          mount "${DEVICE}" "${GLOBAL_MOUNT}" || { echo "[iscsi-fsck] Mount failed."; exit 1; }
+                        fi
+                        if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                          rm -f "${MOUNTPOINT}/.rw-test"
+                          echo "[iscsi-fsck] SUCCESS: Filesystem repaired."
+                          exit 0
+                        fi
+                        echo "[iscsi-fsck] FAILED: Still read-only after repair."
+                        exit 1
+                  volumeMounts:
+                      - name: config
+                        mountPath: /config
+                      - name: host-proc-mounts
+                        mountPath: /host-proc-mounts
+            containers:
+                - name: emulerr
+                  image: isc30/emulerr:latest
+                  imagePullPolicy: IfNotPresent
+                  env:
+                      - name: PGID
+                        value: '950'
+                      - name: PUID
+                        value: '950'
+                      - name: TZ
+                        value: Europe/Madrid
+                      - name: PASSWORD
+                        valueFrom:
+                            secretKeyRef:
+                                name: emulerr
+                                key: password
+                  ports:
+                      - containerPort: 3000
+                        protocol: TCP
+                      - containerPort: 4662
+                        protocol: TCP
+                      - containerPort: 4662
+                        protocol: UDP
+                      - containerPort: 4665
+                        protocol: UDP
+                  volumeMounts:
+                      - name: config
+                        mountPath: /config
+                      - name: downloads
+                        mountPath: /downloads
+                  livenessProbe:
+                      tcpSocket:
+                          port: 3000
+                      initialDelaySeconds: 30
+                      periodSeconds: 15
+                      timeoutSeconds: 5
+                      failureThreshold: 3
+                  readinessProbe:
+                      tcpSocket:
+                          port: 3000
+                      initialDelaySeconds: 15
+                      periodSeconds: 10
+                      timeoutSeconds: 5
+                      failureThreshold: 3
+                  resources:
+                      requests:
+                          memory: 128Mi
+                          cpu: 5m
+                      limits:
+                          memory: 512Mi
+                          cpu: 1000m
+            volumes:
+                - name: config
+                  persistentVolumeClaim:
+                      claimName: emulerr-config
+                - name: downloads
+                  nfs:
+                      server: 192.168.0.29
+                      path: /mnt/SSD/torrents/
+                - name: host-proc-mounts
+                  hostPath:
+                      path: /proc/1/mounts
+            nodeSelector:
+              svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: emulerr
+  namespace: piracy
+spec:
+  type: ClusterIP
+  ports:
+    - name: web
+      protocol: TCP
+      port: 3000
+      targetPort: 3000
+  selector:
+    app: emulerr
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: emulerr-ed2k
+  namespace: piracy
+spec:
+  type: NodePort
+  ports:
+    - name: ed2k-tcp
+      protocol: TCP
+      port: 4662
+      targetPort: 4662
+      nodePort: 30462
+    - name: ed2k-udp
+      protocol: UDP
+      port: 4662
+      targetPort: 4662
+      nodePort: 30463
+    - name: ed2k-search
+      protocol: UDP
+      port: 4665
+      targetPort: 4665
+      nodePort: 30465
+  selector:
+    app: emulerr
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: emulerr-https
+  namespace: piracy
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: emulerr.${BASE_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: emulerr
+                port:
+                  number: 3000
+  tls:
+    - secretName: emulerr.${BASE_DOMAIN}
+      hosts:
+        - emulerr.${BASE_DOMAIN}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: emulerr-config
+  namespace: piracy
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 5Gi

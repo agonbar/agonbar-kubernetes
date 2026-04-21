@@ -1,0 +1,160 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: houndarr-deployment
+    namespace: piracy
+    labels:
+        app: houndarr
+spec:
+    strategy:
+        type: Recreate
+    replicas: 1
+    selector:
+        matchLabels:
+            app: houndarr
+    template:
+        metadata:
+            labels:
+                app: houndarr
+        spec:
+            enableServiceLinks: false
+            initContainers:
+                - name: iscsi-fsck
+                  image: alpine:latest
+                  imagePullPolicy: IfNotPresent
+                  securityContext:
+                      privileged: true
+                  command:
+                      - /bin/sh
+                      - -c
+                      - |
+                        set -e
+                        MOUNTPOINT="/data"
+                        echo "[iscsi-fsck] Checking filesystem at ${MOUNTPOINT}..."
+                        if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                          rm -f "${MOUNTPOINT}/.rw-test"
+                          echo "[iscsi-fsck] Filesystem is writable. Nothing to do."
+                          exit 0
+                        fi
+                        echo "[iscsi-fsck] Filesystem is READ-ONLY. Starting repair..."
+                        apk add --no-cache e2fsprogs util-linux 2>/dev/null
+                        DEVICE=$(grep " ${MOUNTPOINT} " /host-proc-mounts | awk '{print $1}' | head -1)
+                        if [ -z "${DEVICE}" ]; then
+                          echo "[iscsi-fsck] ERROR: Could not find block device for ${MOUNTPOINT}."
+                          exit 1
+                        fi
+                        echo "[iscsi-fsck] Found device: ${DEVICE}"
+                        if mount -o remount,rw "${MOUNTPOINT}" 2>/dev/null; then
+                          if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                            rm -f "${MOUNTPOINT}/.rw-test"
+                            echo "[iscsi-fsck] Remount rw succeeded."
+                            exit 0
+                          fi
+                        fi
+                        echo "[iscsi-fsck] Running e2fsck on ${DEVICE}..."
+                        GLOBAL_MOUNT=$(nsenter -t 1 -m -- sh -c "grep '^${DEVICE} ' /proc/mounts | awk '{print \$2}' | head -1")
+                        if [ -n "${GLOBAL_MOUNT}" ]; then
+                          umount -l "${GLOBAL_MOUNT}" || true
+                        fi
+                        e2fsck -y -f "${DEVICE}" || true
+                        if [ -n "${GLOBAL_MOUNT}" ]; then
+                          mount "${DEVICE}" "${GLOBAL_MOUNT}" || { echo "[iscsi-fsck] Mount failed."; exit 1; }
+                        fi
+                        if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                          rm -f "${MOUNTPOINT}/.rw-test"
+                          echo "[iscsi-fsck] SUCCESS: Filesystem repaired."
+                          exit 0
+                        fi
+                        echo "[iscsi-fsck] FAILED: Still read-only after repair."
+                        exit 1
+                  volumeMounts:
+                      - name: data
+                        mountPath: /data
+                      - name: host-proc-mounts
+                        mountPath: /host-proc-mounts
+            containers:
+                - name: houndarr
+                  image: ghcr.io/av1155/houndarr:latest
+                  imagePullPolicy: IfNotPresent
+                  env:
+                      - name: PGID
+                        value: '950'
+                      - name: PUID
+                        value: '950'
+                      - name: TZ
+                        value: Europe/Madrid
+                  ports:
+                      - containerPort: 8877
+                        protocol: TCP
+                  volumeMounts:
+                      - name: data
+                        mountPath: /data
+                  resources:
+                      requests:
+                          memory: 128Mi
+                          cpu: 100m
+                      limits:
+                          memory: 1Gi
+                          cpu: 500m
+            volumes:
+                - name: data
+                  persistentVolumeClaim:
+                      claimName: houndarr-data
+                - name: host-proc-mounts
+                  hostPath:
+                      path: /proc/1/mounts
+            nodeSelector:
+                svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: houndarr
+  namespace: piracy
+spec:
+  type: ClusterIP
+  ports:
+    - name: web
+      protocol: TCP
+      port: 8877
+      targetPort: 8877
+  selector:
+    app: houndarr
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: houndarr-https
+  namespace: piracy
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: houndarr.${BASE_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: houndarr
+                port:
+                  number: 8877
+  tls:
+    - secretName: houndarr.${BASE_DOMAIN}
+      hosts:
+        - houndarr.${BASE_DOMAIN}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: houndarr-data
+  namespace: piracy
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 5Gi

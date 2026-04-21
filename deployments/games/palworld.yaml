@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: palworld
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: palworld
+  namespace: games
+spec:
+  strategy:
+    type: Recreate
+  replicas: 0
+  selector:
+    matchLabels:
+      app: palworld
+  template:
+    metadata:
+      labels:
+        app: palworld
+    spec:
+      containers:
+        - image: thijsvanloef/palworld-server-docker:v1.4.5
+          name: palworld
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: PORT
+              value: "8211"
+            - name: PLAYERS
+              value: "12"
+            - name: MULTITHREADING
+              value: "true"
+            - name: RCON_ENABLED
+              value: "true"
+            - name: RCON_PORT
+              value: "25575"
+            - name: ADMIN_PASSWORD
+              value: "divertriclo"
+            - name: COMMUNITY
+              value: "true"
+            - name: SERVER_NAME
+              value: "DivertiJeep"
+            - name: SERVER_DESCRIPTION
+              value: "Servidor de DivertiJeep"
+            - name: SERVER_PASSWORD
+              value: "lovamosviendo"
+            - name: TZ
+              value: "Europe/Madrid"
+            - name: PUBLIC_IP
+              value: "80.241.214.25"
+          ports:
+            - containerPort: 8211
+              name: steamport
+              protocol: UDP
+            - containerPort: 27015
+              name: gameport
+              protocol: UDP
+          volumeMounts:
+            - mountPath: /palworld
+              name: palworld
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+        - name: palworld
+          persistentVolumeClaim:
+            claimName: palworld-data
+      nodeSelector:
+        kubernetes.io/arch: amd64
+        svccontroller.k3s.cattle.io/lbpool: lamg
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: palworld
+  namespace: games
+spec:
+  type: LoadBalancer
+
+  selector:
+    app: palworld
+
+  ports:
+    - port: 8211
+      targetPort: 8211
+      name: steamport
+      protocol: UDP
+    - port: 27015
+      targetPort: 27015
+      name: gameport
+      protocol: UDP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: palworld-data
+  namespace: games
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 10Gi

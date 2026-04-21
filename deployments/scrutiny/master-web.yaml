@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: scrutiny
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: scrutiny
+  namespace: lamg
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scrutiny
+  template:
+    metadata:
+      labels:
+        app: scrutiny
+    spec:
+      containers:
+        - image: ghcr.io/analogj/scrutiny:master-web
+          name: scrutiny
+          env:
+            - name: TZ
+              value: Europe/Madrid
+            - name: SCRUTINY_WEB_INFLUXDB_HOST
+              value: 'influxdb'
+          ports:
+            - containerPort: 8080
+              name: scrutiny
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /opt/scrutiny/config
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+              claimName: scrutiny-config
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: scrutiny-config
+  namespace: lamg
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: scrutiny
+  namespace: lamg
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: lamg
+spec:
+  type: LoadBalancer
+  ports:
+    - name: scrutiny
+      protocol: TCP
+      port: 8686
+      targetPort: 8080
+  selector:
+    app: scrutiny

@@ -1,0 +1,243 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: slskd-deployment
+    namespace: piracy
+    labels:
+        app: slskd
+spec:
+    strategy:
+        type: Recreate
+    replicas: 1
+    selector:
+        matchLabels:
+            app: slskd
+    template:
+        metadata:
+            labels:
+                app: slskd
+        spec:
+            securityContext:
+                runAsUser: 950
+                runAsGroup: 950
+                fsGroup: 950
+            dnsPolicy: "None"
+            dnsConfig:
+                nameservers:
+                    - 1.1.1.1
+            initContainers:
+                - name: iscsi-fsck
+                  image: alpine:latest
+                  imagePullPolicy: IfNotPresent
+                  securityContext:
+                      privileged: true
+                      runAsUser: 0
+                  command:
+                      - /bin/sh
+                      - -c
+                      - |
+                        set -e
+                        MOUNTPOINT="/app"
+                        echo "[iscsi-fsck] Checking filesystem at ${MOUNTPOINT}..."
+                        if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                          rm -f "${MOUNTPOINT}/.rw-test"
+                          echo "[iscsi-fsck] Filesystem is writable. Nothing to do."
+                          exit 0
+                        fi
+                        echo "[iscsi-fsck] Filesystem is READ-ONLY. Starting repair..."
+                        apk add --no-cache e2fsprogs util-linux 2>/dev/null
+                        DEVICE=$(grep " ${MOUNTPOINT} " /host-proc-mounts | awk '{print $1}' | head -1)
+                        if [ -z "${DEVICE}" ]; then
+                          echo "[iscsi-fsck] ERROR: Could not find block device for ${MOUNTPOINT}."
+                          grep -E "iscsi|/dev/sd|democratic-csi" /host-proc-mounts || true
+                          exit 1
+                        fi
+                        echo "[iscsi-fsck] Found device: ${DEVICE}"
+                        if mount -o remount,rw "${MOUNTPOINT}" 2>/dev/null; then
+                          if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                            rm -f "${MOUNTPOINT}/.rw-test"
+                            echo "[iscsi-fsck] Remount rw succeeded."
+                            exit 0
+                          fi
+                        fi
+                        echo "[iscsi-fsck] Running e2fsck on ${DEVICE}..."
+                        GLOBAL_MOUNT=$(grep "^${DEVICE} " /host-proc-mounts | awk '{print $2}' | head -1)
+                        if [ -n "${GLOBAL_MOUNT}" ]; then
+                          umount -l "${GLOBAL_MOUNT}" || true
+                        fi
+                        e2fsck -y -f "${DEVICE}" || true
+                        if [ -n "${GLOBAL_MOUNT}" ]; then
+                          mount "${DEVICE}" "${GLOBAL_MOUNT}" || { echo "[iscsi-fsck] Mount failed."; exit 1; }
+                        fi
+                        if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                          rm -f "${MOUNTPOINT}/.rw-test"
+                          echo "[iscsi-fsck] SUCCESS: Filesystem repaired."
+                          exit 0
+                        fi
+                        echo "[iscsi-fsck] FAILED: Still read-only after repair."
+                        exit 1
+                  volumeMounts:
+                      - name: app
+                        mountPath: /app
+                      - name: host-proc-mounts
+                        mountPath: /host-proc-mounts
+            containers:
+                - name: slskd
+                  image: slskd/slskd:latest
+                  imagePullPolicy: IfNotPresent
+                  env:
+                      - name: SLSKD_REMOTE_CONFIGURATION
+                        value: 'true'
+                      - name: SLSKD_SHARED_DIR
+                        value: /music
+                      - name: SLSKD_USERNAME
+                        valueFrom:
+                          secretKeyRef:
+                            name: slskd
+                            key: username
+                      - name: SLSKD_PASSWORD
+                        valueFrom:
+                          secretKeyRef:
+                            name: slskd
+                            key: password
+                      - name: SLSKD_JWT_KEY
+                        valueFrom:
+                          secretKeyRef:
+                            name: slskd
+                            key: jwt-key
+                      - name: SLSKD_SLSK_USERNAME
+                        valueFrom:
+                          secretKeyRef:
+                            name: slskd
+                            key: slsk-username
+                      - name: SLSKD_SLSK_PASSWORD
+                        valueFrom:
+                          secretKeyRef:
+                            name: slskd
+                            key: slsk-password
+                      - name: SLSKD_API_KEY
+                        valueFrom:
+                          secretKeyRef:
+                            name: slskd
+                            key: api-key
+                  ports:
+                      - containerPort: 5030
+                        protocol: TCP
+                        name: web
+                      - containerPort: 5031
+                        protocol: TCP
+                        name: web-https
+                      - containerPort: 50300
+                        protocol: TCP
+                        name: soulseek
+                  volumeMounts:
+                      - name: app
+                        mountPath: /app
+                      - name: incomplete
+                        mountPath: /app/incomplete
+                      - name: downloads
+                        mountPath: /app/downloads
+                      - name: music
+                        mountPath: /music
+                        readOnly: true
+                  livenessProbe:
+                      httpGet:
+                          path: /
+                          port: 5030
+                      initialDelaySeconds: 30
+                      periodSeconds: 15
+                      timeoutSeconds: 5
+                      failureThreshold: 3
+                  readinessProbe:
+                      httpGet:
+                          path: /
+                          port: 5030
+                      initialDelaySeconds: 15
+                      periodSeconds: 10
+                      timeoutSeconds: 5
+                      failureThreshold: 3
+                  resources:
+                      requests:
+                          memory: 128Mi
+                          cpu: 100m
+                      limits:
+                          memory: 1Gi
+                          cpu: 1000m
+            volumes:
+                - name: app
+                  persistentVolumeClaim:
+                      claimName: slskd-config
+                - name: incomplete
+                  nfs:
+                      server: 192.168.0.29
+                      path: /mnt/SSD/torrents/slskd-incomplete
+                - name: downloads
+                  nfs:
+                      server: 192.168.0.29
+                      path: /mnt/SSD/torrents/slskd
+                - name: music
+                  nfs:
+                      server: 192.168.0.29
+                      path: /mnt/RAID/docker/media/music
+                - name: host-proc-mounts
+                  hostPath:
+                      path: /proc/1/mounts
+            nodeSelector:
+              svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: slskd
+  namespace: piracy
+spec:
+  type: ClusterIP
+  ports:
+    - name: web
+      protocol: TCP
+      port: 5030
+      targetPort: 5030
+    - name: soulseek
+      protocol: TCP
+      port: 50300
+      targetPort: 50300
+  selector:
+    app: slskd
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: slskd-https
+  namespace: piracy
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: slskd.${BASE_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: slskd
+                port:
+                  number: 5030
+  tls:
+    - secretName: slskd.${BASE_DOMAIN}
+      hosts:
+        - slskd.${BASE_DOMAIN}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: slskd-config
+  namespace: piracy
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 10Gi

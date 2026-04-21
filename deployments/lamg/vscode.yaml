@@ -1,0 +1,33 @@
+# vscode container is now part of homeassistant deployment
+# This file only contains the Service and PVC
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: vscode
+  namespace: lamg
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: lamg
+spec:
+  type: LoadBalancer
+  ports:
+    - name: vscode
+      protocol: TCP
+      port: 8443
+      targetPort: 8443
+  selector:
+    app.vscode: "true"
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vscode-config
+  namespace: lamg
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 5Gi

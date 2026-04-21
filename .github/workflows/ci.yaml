@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  yamllint:
+    name: yamllint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install yamllint
+        run: pipx install yamllint==1.37.1
+      - name: Lint
+        run: yamllint -c .yamllint.yaml deployments/ system/
+
+  kubeconform:
+    name: kubeconform (raw manifests)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install kubeconform
+        env:
+          VERSION: 0.7.0
+        run: |
+          curl -fsSL "https://github.com/yannh/kubeconform/releases/download/v${VERSION}/kubeconform-linux-amd64.tar.gz" | tar -xz
+          sudo install kubeconform /usr/local/bin/
+          kubeconform -v
+      - name: Validate
+        run: |
+          kubeconform \
+            -strict \
+            -summary \
+            -ignore-missing-schemas \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+            -ignore-filename-pattern 'anime_sub_upgrade/' \
+            -ignore-filename-pattern '\.claude/' \
+            -ignore-filename-pattern 'values\.yaml$' \
+            -ignore-filename-pattern 'argocd-repo-server-cmp-sidecar-patch\.yaml$' \
+            deployments/ system/
+
+  cmp-render:
+    name: envsubst CMP renders valid manifests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        env:
+          VERSION: 0.7.0
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -qq -y gettext-base
+          curl -fsSL "https://github.com/yannh/kubeconform/releases/download/v${VERSION}/kubeconform-linux-amd64.tar.gz" | tar -xz
+          sudo install kubeconform /usr/local/bin/
+      - name: Render each namespace through envsubst + validate
+        env:
+          BASE_DOMAIN: example.com
+        run: |
+          set -euo pipefail
+          fail=0
+          for dir in deployments/*/; do
+            ns=$(basename "$dir")
+            [ "$ns" = "anime_sub_upgrade" ] && continue
+            echo "::group::${ns}"
+            # shellcheck disable=SC2016  # single-quoted $BASE_DOMAIN is an envsubst allowlist, not a shell expansion
+            rendered=$(find "$dir" -maxdepth 1 \( -name '*.yaml' -o -name '*.yml' \) \
+              ! -name 'values.yaml' \
+              | sort \
+              | while IFS= read -r f; do cat "$f"; printf '\n---\n'; done \
+              | envsubst '$BASE_DOMAIN')
+            if echo "$rendered" | kubeconform \
+                -strict \
+                -ignore-missing-schemas \
+                -schema-location default \
+                -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+                -; then
+              echo "PASS"
+            else
+              echo "FAIL"
+              fail=$((fail + 1))
+            fi
+            echo "::endgroup::"
+          done
+          if [ "$fail" -gt 0 ]; then
+            echo "::error::${fail} namespace(s) failed CMP-render validation"
+            exit 1
+          fi
+
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install + run actionlint
+        run: |
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -color

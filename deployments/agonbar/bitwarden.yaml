@@ -1,0 +1,134 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: bitwarden
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: bitwarden
+  namespace: agonbar
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bitwarden
+  template:
+    metadata:
+      labels:
+        app: bitwarden
+    spec:
+      containers:
+        - image: vaultwarden/server:1.35.2-alpine
+          name: bitwarden
+          env:
+            - name: DOMAIN
+              value: 'https://bitwarden.${BASE_DOMAIN}'
+            - name: SMTP_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: agonbar
+                  key: bitwardenSmtpHost
+            - name: SMTP_FROM
+              valueFrom:
+                secretKeyRef:
+                  name: agonbar
+                  key: bitwardenSmtpFrom
+            - name: SMTP_PORT
+              value: '587'
+            - name: SMTP_SSL
+              value: 'true'
+            - name: SMTP_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: agonbar
+                  key: bitwardenSmtpFrom
+            - name: SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: agonbar
+                  key: bitwardenSmtpPassword
+            - name: WEBSOCKET_ENABLED
+              value: 'true'
+            - name: SIGNUPS_ALLOWED
+              value: 'false'
+            - name: ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: agonbar
+                  key: bitwardenAdminToken
+          ports:
+            - containerPort: 80
+              name: bitwarden
+              protocol: TCP
+          volumeMounts:
+            - name: bitwarden
+              mountPath: /data
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 6
+      volumes:
+      - name: bitwarden
+        hostPath:
+          path: /docker/bitwarden
+          type: Directory
+      nodeSelector:
+        kubernetes.io/hostname: "ovh02"
+      imagePullSecrets:
+        - name: dockerhub-secret
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: bitwarden
+  namespace: agonbar
+spec:
+  type: NodePort
+
+  selector:
+    app: bitwarden
+
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+      name: bitwarden
+
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bitwarden-https
+  namespace: agonbar
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: bitwarden.${BASE_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: bitwarden
+                port:
+                  number: 80
+  tls:
+    - secretName: bitwarden.${BASE_DOMAIN}
+      hosts:
+        - bitwarden.${BASE_DOMAIN}

@@ -1,0 +1,138 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: server
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: server
+  namespace: immich
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: server 
+  template:
+    metadata:
+      labels:
+        app: server 
+    spec:
+      containers:
+        - image: ghcr.io/immich-app/immich-server:v2.6.2
+          name: server 
+          # command: ["/bin/sh"]
+          # args: ["./start-server.sh"]
+          securityContext:
+            runAsUser: 950
+            runAsGroup: 950
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: DB_HOSTNAME
+              value: "postgre.immich.svc.cluster.local"
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: immich
+                  key: dbUser
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: immich
+                  key: dbPassword
+            - name: DB_DATABASE_NAME
+              value: "immich"
+            - name: REDIS_HOSTNAME
+              value: "redis.immich.svc.cluster.local"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: LOG_LEVEL
+              value: "log"
+            - name: TYPESENSE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: immich
+                  key: typesenseApiKey
+            - name: REVERSE_GEOCODING_PRECISION
+              value: "1"
+            - name: IMMICH_PORT
+              value: "2283"
+          ports:
+            - containerPort: 2283
+              name: server 
+              protocol: TCP
+          volumeMounts:
+            - name: upload
+              mountPath: /usr/src/app/upload
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+        - name: upload
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/immich/upload
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: server 
+  namespace: immich
+spec:
+  type: NodePort
+  selector:
+    app: server 
+  ports:
+    - protocol: TCP
+      port: 2283
+      targetPort: 2283
+      name: server
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: server-lb
+  namespace: immich
+spec:
+  type: LoadBalancer
+  selector:
+    app: server 
+  ports:
+    - protocol: TCP
+      port: 2283
+      targetPort: 2283
+      name: server
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: immich-https
+  namespace: immich
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: immich.${BASE_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: server
+                port:
+                  number: 2283
+  tls:
+    - secretName: immich.${BASE_DOMAIN}
+      hosts:
+        - immich.${BASE_DOMAIN}
+

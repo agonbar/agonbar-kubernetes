@@ -1,0 +1,215 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: anisub-deployment
+    namespace: piracy
+    labels:
+        app: anisub
+spec:
+    strategy:
+        type: Recreate
+    replicas: 1
+    selector:
+        matchLabels:
+            app: anisub
+    template:
+        metadata:
+            labels:
+                app: anisub
+        spec:
+            enableServiceLinks: false
+            initContainers:
+                - name: iscsi-fsck
+                  image: alpine:latest
+                  imagePullPolicy: IfNotPresent
+                  securityContext:
+                      privileged: true
+                  command:
+                      - /bin/sh
+                      - -c
+                      - |
+                        set -e
+                        MOUNTPOINT="/data"
+                        echo "[iscsi-fsck] Checking filesystem at ${MOUNTPOINT}..."
+                        if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                          rm -f "${MOUNTPOINT}/.rw-test"
+                          echo "[iscsi-fsck] Filesystem is writable. Nothing to do."
+                          exit 0
+                        fi
+                        echo "[iscsi-fsck] Filesystem is READ-ONLY. Starting repair..."
+                        apk add --no-cache e2fsprogs util-linux 2>/dev/null
+                        DEVICE=$(grep " ${MOUNTPOINT} " /host-proc-mounts | awk '{print $1}' | head -1)
+                        if [ -z "${DEVICE}" ]; then
+                          echo "[iscsi-fsck] ERROR: Could not find block device for ${MOUNTPOINT}."
+                          exit 1
+                        fi
+                        echo "[iscsi-fsck] Found device: ${DEVICE}"
+                        if mount -o remount,rw "${MOUNTPOINT}" 2>/dev/null; then
+                          if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                            rm -f "${MOUNTPOINT}/.rw-test"
+                            echo "[iscsi-fsck] Remount rw succeeded."
+                            exit 0
+                          fi
+                        fi
+                        echo "[iscsi-fsck] Running e2fsck on ${DEVICE}..."
+                        GLOBAL_MOUNT=$(nsenter -t 1 -m -- sh -c "grep '^${DEVICE} ' /proc/mounts | awk '{print \$2}' | head -1")
+                        if [ -n "${GLOBAL_MOUNT}" ]; then
+                          umount -l "${GLOBAL_MOUNT}" || true
+                        fi
+                        e2fsck -y -f "${DEVICE}" || true
+                        if [ -n "${GLOBAL_MOUNT}" ]; then
+                          mount "${DEVICE}" "${GLOBAL_MOUNT}" || { echo "[iscsi-fsck] Mount failed."; exit 1; }
+                        fi
+                        if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                          rm -f "${MOUNTPOINT}/.rw-test"
+                          echo "[iscsi-fsck] SUCCESS: Filesystem repaired."
+                          exit 0
+                        fi
+                        echo "[iscsi-fsck] FAILED: Still read-only after repair."
+                        exit 1
+                  volumeMounts:
+                      - name: data
+                        mountPath: /data
+                      - name: host-proc-mounts
+                        mountPath: /host-proc-mounts
+            containers:
+                - name: anisub
+                  image: ghcr.io/agonbar/anisub:latest
+                  imagePullPolicy: Always
+                  env:
+                      - name: BAZARR_URL
+                        value: "http://bazarr:6767"
+                      - name: SONARR_URL
+                        value: "http://sonarr:8989"
+                      - name: CRUNCHARR_URL
+                        value: "http://cruncharr:3000"
+                      - name: BAZARR_API_KEY
+                        valueFrom:
+                            secretKeyRef:
+                                name: anisub-secrets
+                                key: BAZARR_API_KEY
+                      - name: SONARR_API_KEY
+                        valueFrom:
+                            secretKeyRef:
+                                name: anisub-secrets
+                                key: SONARR_API_KEY
+                      - name: CRUNCHARR_API_KEY
+                        valueFrom:
+                            secretKeyRef:
+                                name: anisub-secrets
+                                key: CRUNCHARR_API_KEY
+                      - name: DATA_DIR
+                        value: "/data"
+                      - name: WEB_PORT
+                        value: "8080"
+                      - name: POLL_INTERVAL
+                        value: "30m"
+                      - name: HTTP_TIMEOUT
+                        value: "180s"
+                      - name: CHECK_CONCURRENCY
+                        value: "3"
+                      - name: TRIGGER_BATCH_SIZE
+                        value: "5"
+                      - name: TRIGGER_BATCH_DELAY
+                        value: "30s"
+                      - name: DRY_RUN
+                        value: "false"
+                      - name: LOG_LEVEL
+                        value: "info"
+                      - name: DISCOVERY_ENABLED
+                        value: "true"
+                      - name: SONARR_PUBLIC_URL
+                        value: "https://sonarr.${BASE_DOMAIN}"
+                      - name: UPGRADE_NON_CRUNCHYROLL
+                        value: "true"
+                      - name: UPGRADE_DRY_RUN
+                        value: "false"
+                  ports:
+                      - containerPort: 8080
+                        protocol: TCP
+                  volumeMounts:
+                      - name: data
+                        mountPath: /data
+                  resources:
+                      requests:
+                          memory: 64Mi
+                          cpu: 50m
+                      limits:
+                          memory: 256Mi
+                          cpu: 250m
+                  livenessProbe:
+                      httpGet:
+                          path: /api/status
+                          port: 8080
+                      initialDelaySeconds: 10
+                      periodSeconds: 30
+                      timeoutSeconds: 5
+                      failureThreshold: 3
+                  readinessProbe:
+                      httpGet:
+                          path: /api/status
+                          port: 8080
+                      initialDelaySeconds: 5
+                      periodSeconds: 10
+            volumes:
+                - name: data
+                  persistentVolumeClaim:
+                      claimName: anisub-data
+                - name: host-proc-mounts
+                  hostPath:
+                      path: /proc/1/mounts
+            nodeSelector:
+                svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: anisub
+    namespace: piracy
+spec:
+    type: ClusterIP
+    ports:
+        - name: web
+          protocol: TCP
+          port: 8080
+          targetPort: 8080
+    selector:
+        app: anisub
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+    name: anisub-https
+    namespace: piracy
+    annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+    ingressClassName: traefik
+    rules:
+        - host: anisub.${BASE_DOMAIN}
+          http:
+              paths:
+                  - pathType: Prefix
+                    path: /
+                    backend:
+                        service:
+                            name: anisub
+                            port:
+                                number: 8080
+    tls:
+        - secretName: anisub.${BASE_DOMAIN}
+          hosts:
+              - anisub.${BASE_DOMAIN}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: anisub-data
+    namespace: piracy
+spec:
+    accessModes:
+        - ReadWriteOnce
+    storageClassName: truenas-iscsi-ssd
+    resources:
+        requests:
+            storage: 1Gi

@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: homeassistant
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: homeassistant
+  namespace: aya
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: homeassistant
+  template:
+    metadata:
+      labels:
+        app: homeassistant
+    spec:
+      containers:
+        - image: homeassistant/home-assistant:latest
+          name: homeassistant
+          ports:
+            - containerPort: 8123
+              name: homeassistant
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /config
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+        - name: config
+          nfs:
+            server: 100.72.0.34
+            path: /docker/aya-homeassistant/
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: aya
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: homeassistant
+  namespace: aya
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: aya
+spec:
+  type: LoadBalancer
+
+  selector:
+    app: homeassistant
+
+  ports:
+    - protocol: TCP
+      port: 8123
+      targetPort: 8123
+      name: homeassistant
+
+---

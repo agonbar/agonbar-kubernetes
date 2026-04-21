@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: postgre
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: postgre
+  namespace: immich
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgre
+  template:
+    metadata:
+      labels:
+        app: postgre
+    spec:
+      containers:
+        - image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3
+          securityContext:
+            runAsUser: 950
+          name: postgre
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: immich
+                  key: dbPassword
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: immich
+                  key: dbUser
+            - name: POSTGRES_DB
+              value: immich
+            - name: POSTGRES_INITDB_ARGS
+              value: "--data-checksums"
+            - name: DB_STORAGE_TYPE
+              value: "SSD"
+            - name: PG_DATA
+              value: /var/lib/postgresql/data
+          ports:
+            - containerPort: 5432
+              name: postgre
+              protocol: TCP
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      securityContext:
+        fsGroup: 950
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: immich-db-data
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: postgre
+  namespace: immich
+spec:
+  type: NodePort
+
+  selector:
+    app: postgre 
+
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+      name: postgre
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: immich-db-data
+  namespace: immich
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 5Gi
+
+

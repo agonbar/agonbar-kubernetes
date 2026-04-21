@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: machine-learning
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: machine-learning
+  namespace: immich
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: machine-learning 
+  template:
+    metadata:
+      labels:
+        app: machine-learning 
+    spec:
+      containers:
+        - image: ghcr.io/immich-app/immich-machine-learning:v2.6.2
+          name: machine-learning 
+          env:
+            - name: DB_HOSTNAME
+              valueFrom:
+                secretKeyRef:
+                  name: immich
+                  key: dbHost
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: immich
+                  key: dbUser
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: immich
+                  key: dbPassword
+            - name: DB_DATABASE_NAME
+              value: "immich"
+            - name: REDIS_HOSTNAME
+              value: "redis"
+            - name: LOG_LEVEL
+              value: "simple"
+            - name: TYPESENSE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: immich
+                  key: typesenseApiKey
+            - name: REVERSE_GEOCODING_PRECISION
+              value: "1"
+            - name: MACHINE_LEARNING_PORT
+              value: "3003"
+          ports:
+            - containerPort: 3003
+              name: machinelearning 
+              protocol: TCP
+          volumeMounts:
+            - name: upload
+              mountPath: /usr/src/app/upload
+            - name: cache
+              mountPath: /cache
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+        - name: upload
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/immich/upload
+        - name: cache
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/immich/models
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: machine-learning 
+  namespace: immich
+spec:
+  type: NodePort
+
+  selector:
+    app: machine-learning 
+
+  ports:
+    - protocol: TCP
+      port: 3003
+      targetPort: 3003
+      name: machinelearning
+
+
+

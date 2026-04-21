@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: web-amanda
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: web-amanda
+  namespace: agonbar
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web-amanda
+  template:
+    metadata:
+      labels:
+        app: web-amanda
+    spec:
+      containers:
+        - image: nginx:mainline-alpine
+          name: web-amanda
+          ports:
+            - containerPort: 80
+              name: web-amanda
+              protocol: TCP
+          volumeMounts:
+            - name: web-amanda
+              mountPath: /usr/share/nginx/html
+              readOnly: true
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 6
+      volumes:
+      - name: web-amanda
+        hostPath:
+          path: /var/www/${AMANDA_DOMAIN}/html/
+          type: Directory
+      nodeSelector:
+        kubernetes.io/hostname: "ovh02"
+      imagePullSecrets:
+        - name: dockerhub-secret
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: web-amanda
+  namespace: agonbar
+spec:
+  type: NodePort
+
+  selector:
+    app: web-amanda
+
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+      name: web-amanda
+
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web-amanda-https
+  namespace: agonbar
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: ${AMANDA_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: web-amanda
+                port:
+                  number: 80
+  tls:
+    - secretName: ${AMANDA_DOMAIN}
+      hosts:
+        - ${AMANDA_DOMAIN}

@@ -1,0 +1,61 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: democratic-csi-iscsi-ssd
+  namespace: argocd
+spec:
+  project: default
+  source:
+    chart: democratic-csi
+    repoURL: https://democratic-csi.github.io/charts/
+    targetRevision: 0.14.7
+    helm:
+      releaseName: democratic-csi-iscsi-ssd
+      valuesObject:
+        csiDriver:
+          name: "org.democratic-csi.truenas-iscsi-ssd"
+
+        storageClasses:
+          - name: truenas-iscsi-ssd
+            defaultClass: false
+            reclaimPolicy: Delete
+            volumeBindingMode: Immediate
+            allowVolumeExpansion: true
+            parameters:
+              fsType: ext4
+            mountOptions: []
+            secrets:
+              provisioner-secret:
+              controller-publish-secret:
+              node-stage-secret:
+              node-publish-secret:
+              controller-expand-secret:
+
+        volumeSnapshotClasses:
+          - name: truenas-iscsi-ssd
+            deletionPolicy: Delete
+            parameters: {}
+
+        driver:
+          existingConfigSecret: democratic-csi-iscsi-ssd-driver-config
+          config:
+            driver: freenas-api-iscsi
+  destination:
+    name: in-cluster
+    namespace: democratic-csi
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+      - RespectIgnoreDifferences=true
+      - Validate=false
+      - PrunePropagationPolicy=foreground
+    retry:
+      limit: 5
+      backoff:
+        duration: 20s
+        factor: 2
+        maxDuration: 3m0s

@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: slash
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: slash
+  namespace: agonbar
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: slash
+  template:
+    metadata:
+      labels:
+        app: slash
+    spec:
+      containers:
+        - image: yourselfhosted/slash:latest
+          name: slash
+          command: ["./slash", "--port", "5231"]
+          ports:
+            - containerPort: 5231
+              name: slash
+              protocol: TCP
+          volumeMounts:
+            - name: slash
+              mountPath: /var/opt/slash
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 5231
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 6
+      volumes:
+      - name: slash
+        hostPath:
+          path: /docker/slash
+          type: Directory
+      nodeSelector:
+        kubernetes.io/hostname: "ovh02"
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: slash
+  namespace: agonbar
+spec:
+  type: NodePort
+
+  selector:
+    app: slash
+
+  ports:
+    - protocol: TCP
+      port: 5231
+      targetPort: 5231
+      name: slash
+
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: slash-https
+  namespace: agonbar
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: slash.${BASE_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: slash
+                port:
+                  number: 5231
+  tls:
+    - secretName: slash.${BASE_DOMAIN}
+      hosts:
+        - slash.${BASE_DOMAIN}

@@ -1,0 +1,21 @@
+# install using 
+#               kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -    
+#               kubectl apply -k system/argocd
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: argocd
+
+resources:
+  - https://raw.githubusercontent.com/argoproj/argo-cd/v2.14.2/manifests/install.yaml
+  - cmp-envsubst-plugin-cm.yaml
+  - sealedsecrets.yaml
+
+patches:
+  - path: argocd-cmd-params-cm-patch.yml
+    target:
+      kind: ConfigMap
+      name: argocd-cmd-params-cm
+  - path: argocd-repo-server-cmp-sidecar-patch.yaml
+    target:
+      kind: Deployment
+      name: argocd-repo-server
