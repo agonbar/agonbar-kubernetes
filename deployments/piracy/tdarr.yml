@@ -76,8 +76,6 @@ spec:
                 - name: tdarr
                   image: ghcr.io/haveagitgat/tdarr:latest
                   imagePullPolicy: IfNotPresent
-                  securityContext:
-                      privileged: true
                   env:
                       - name: TZ
                         value: Europe/Madrid
@@ -94,7 +92,7 @@ spec:
                       - name: webUIPort
                         value: '8265'
                       - name: internalNode
-                        value: 'true'
+                        value: 'false'
                       - name: inContainer
                         value: 'true'
                       - name: auth
@@ -118,6 +116,7 @@ spec:
                       - containerPort: 8265
                         protocol: TCP
                       - containerPort: 8266
+                        hostPort: 8266
                         protocol: TCP
                   volumeMounts:
                       - name: config
@@ -126,14 +125,6 @@ spec:
                         mountPath: /app/server
                       - name: media
                         mountPath: /media
-                      - name: transcode-cache
-                        mountPath: /transcode_cache
-                      - name: dev-dri
-                        mountPath: /dev/dri
-                      - name: dev-dma-heap
-                        mountPath: /dev/dma_heap
-                      - name: dev-mali0
-                        mountPath: /dev/mali0
                   livenessProbe:
                       httpGet:
                           path: /
@@ -155,8 +146,8 @@ spec:
                           memory: 256Mi
                           cpu: 200m
                       limits:
-                          memory: 4Gi
-                          cpu: 4000m
+                          memory: 1Gi
+                          cpu: 1000m
             volumes:
                 - name: config
                   persistentVolumeClaim:
@@ -168,17 +159,6 @@ spec:
                   nfs:
                       server: 192.168.0.29
                       path: /mnt/RAID/docker/media
-                - name: transcode-cache
-                  emptyDir: {}
-                - name: dev-dri
-                  hostPath:
-                      path: /dev/dri
-                - name: dev-dma-heap
-                  hostPath:
-                      path: /dev/dma_heap
-                - name: dev-mali0
-                  hostPath:
-                      path: /dev/mali0
                 - name: host-proc-mounts
                   hostPath:
                       path: /proc/1/mounts
