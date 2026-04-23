@@ -54,7 +54,7 @@ spec:
                 - name: downloads
                   nfs:
                       server: 192.168.0.29
-                      path: /mnt/SSD/torrents/slskd
+                      path: /mnt/SSD/torrents
             nodeSelector:
               svccontroller.k3s.cattle.io/lbpool: lamg
 ---
