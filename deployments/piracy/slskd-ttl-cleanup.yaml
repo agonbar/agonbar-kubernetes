@@ -1,0 +1,91 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: slskd-ttl-cleanup
+  namespace: piracy
+  labels:
+    app: slskd-ttl-cleanup
+spec:
+  # Weekly, Sunday 03:00 Europe/Madrid (approx — cluster is UTC; pick an off-peak hour)
+  schedule: "0 3 * * 0"
+  timeZone: Europe/Madrid
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 1209600
+      template:
+        spec:
+          restartPolicy: OnFailure
+          nodeSelector:
+            svccontroller.k3s.cattle.io/lbpool: lamg
+          containers:
+            - name: cleanup
+              image: alpine:latest
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: STALE_DAYS
+                  value: "7"
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -u
+                  echo "[ttl-cleanup] threshold: files newer than ${STALE_DAYS}d keep the folder"
+                  deleted=0
+                  freed_mb=0
+                  # A folder is stale if `find -mtime -N` returns no files.
+                  # Works on both busybox find and GNU find (no -printf needed).
+                  is_stale() {
+                    target="$1"
+                    recent=$(find "$target" -type f -mtime "-${STALE_DAYS}" 2>/dev/null | head -1)
+                    [ -z "$recent" ]
+                  }
+                  try_delete() {
+                    d="$1"
+                    size_kb=$(du -sk "$d" 2>/dev/null | awk '{print $1}')
+                    : "${size_kb:=0}"
+                    echo "[ttl-cleanup] delete: ${d} ($((size_kb/1024)) MB)"
+                    rm -rf "$d"
+                    deleted=$((deleted+1))
+                    freed_mb=$((freed_mb + size_kb/1024))
+                  }
+                  sweep() {
+                    base="$1"
+                    [ -d "$base" ] || return 0
+                    for d in "$base"/*/; do
+                      [ -d "$d" ] || continue
+                      if is_stale "$d"; then
+                        try_delete "$d"
+                      fi
+                    done
+                  }
+                  # Top-level slskd folders, excluding failed_imports/
+                  for d in /slskd/*/; do
+                    [ -d "$d" ] || continue
+                    name=$(basename "$d")
+                    [ "$name" = "failed_imports" ] && continue
+                    if is_stale "$d"; then
+                      try_delete "$d"
+                    fi
+                  done
+                  # Lidarr-couldn't-match graveyard
+                  sweep /slskd/failed_imports
+                  echo "[ttl-cleanup] done: deleted=${deleted} freed=${freed_mb}MB"
+                  df -h /slskd | tail -1
+              volumeMounts:
+                - name: slskd
+                  mountPath: /slskd
+              resources:
+                requests:
+                  memory: 32Mi
+                  cpu: 50m
+                limits:
+                  memory: 128Mi
+                  cpu: 500m
+          volumes:
+            - name: slskd
+              nfs:
+                server: 192.168.0.29
+                path: /mnt/SSD/torrents/slskd
