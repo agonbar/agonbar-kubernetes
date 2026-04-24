@@ -124,6 +124,14 @@ spec:
                         value: "true"
                       - name: UPGRADE_DRY_RUN
                         value: "false"
+                      - name: FORCE_GRAB_ENABLED
+                        value: "true"
+                      - name: FORCE_GRAB_DRY_RUN
+                        value: "true"
+                      - name: FORCE_GRAB_INDEXER_NAME
+                        value: "Cruncharr"
+                      - name: FORCEGRAB_RESCAN_DELAYS
+                        value: "10m,8h,24h,72h,168h"
                   ports:
                       - containerPort: 8080
                         protocol: TCP
