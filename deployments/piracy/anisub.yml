@@ -127,9 +127,11 @@ spec:
                       - name: FORCE_GRAB_ENABLED
                         value: "true"
                       - name: FORCE_GRAB_DRY_RUN
-                        value: "true"
+                        value: "false"
                       - name: FORCE_GRAB_INDEXER_NAME
                         value: "Cruncharr"
+                      - name: FORCE_GRAB_MAX_PER_CYCLE
+                        value: "20"
                       - name: FORCEGRAB_RESCAN_DELAYS
                         value: "10m,8h,24h,72h,168h"
                   ports:
