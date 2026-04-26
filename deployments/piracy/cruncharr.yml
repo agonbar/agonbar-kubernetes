@@ -75,11 +75,14 @@ spec:
           persistentVolumeClaim:
             claimName: cruncharr-config
         - name: downloads
+          # nas02 is the same TrueNAS as 192.168.0.29 — using the tailnet
+          # hostname lets the pod schedule on encoder VMs in the aya LAN
+          # which only reach the NAS over tailnet.
           nfs:
-            server: 192.168.0.29
+            server: nas02
             path: /mnt/SSD/torrents/
       nodeSelector:
-        svccontroller.k3s.cattle.io/lbpool: lamg
+        workload: media
 ---
 apiVersion: v1
 kind: Service
