@@ -61,7 +61,10 @@ spec:
               port: 3000
             initialDelaySeconds: 30
             periodSeconds: 60
-            timeoutSeconds: 10
+            # Bun's event loop blocks for several seconds when shaka-packager /
+            # mp4decrypt / mkvmerge subprocesses are spawned, so the probe
+            # needs a long timeout to avoid spurious kills under load.
+            timeoutSeconds: 60
             failureThreshold: 5
           resources:
             requests:
