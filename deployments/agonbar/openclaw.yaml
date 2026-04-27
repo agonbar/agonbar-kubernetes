@@ -24,6 +24,11 @@ spec:
         - image: ghcr.io/openclaw/openclaw:latest
           name: openclaw
           imagePullPolicy: Always
+          # Workaround for openclaw#24178: gateway startup hangs in non-TTY
+          # because the doctor check uses @clack/prompts and blocks on stdin.
+          # Redirecting stdin to /dev/null lets the prompt non-block + skip.
+          command: ["/bin/sh", "-c"]
+          args: ["exec /usr/local/bin/openclaw gateway --allow-unconfigured </dev/null"]
           env:
             - name: HOME
               value: /home/node
