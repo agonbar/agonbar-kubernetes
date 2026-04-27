@@ -1,0 +1,90 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: qbit-stale-cleanup
+  namespace: piracy
+  labels:
+    app: qbit-stale-cleanup
+spec:
+  # Weekly, Sunday 04:00 Europe/Madrid (1h after slskd-ttl-cleanup)
+  schedule: "0 4 * * 0"
+  timeZone: Europe/Madrid
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 1209600
+      template:
+        spec:
+          restartPolicy: OnFailure
+          nodeSelector:
+            svccontroller.k3s.cattle.io/lbpool: lamg
+          containers:
+            - name: cleanup
+              image: alpine:latest
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: QBIT_URL
+                  value: "http://qbittorrent.piracy.svc.cluster.local:8080"
+                - name: QBIT_USER
+                  value: "admin"
+                - name: QBIT_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: qbit-creds
+                      key: password
+                - name: STALE_DAYS
+                  value: "7"
+                # Flip to "false" after the first dry runs look correct.
+                - name: DRY_RUN
+                  value: "true"
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -eu
+                  apk add --no-cache curl jq >/dev/null
+                  COOKIE=/tmp/qb.cookies
+                  echo "[qbit-cleanup] login to ${QBIT_URL}"
+                  RESP=$(curl -sf -c "$COOKIE" \
+                    --data-urlencode "username=$QBIT_USER" \
+                    --data-urlencode "password=$QBIT_PASSWORD" \
+                    -H "Referer: ${QBIT_URL}" \
+                    "${QBIT_URL}/api/v2/auth/login")
+                  echo "$RESP" | grep -q "Ok." || { echo "[qbit-cleanup] auth FAILED: $RESP"; exit 1; }
+                  curl -sf -b "$COOKIE" "${QBIT_URL}/api/v2/torrents/info" > /tmp/torrents.json
+                  total=$(jq length /tmp/torrents.json)
+                  cutoff=$(( $(date +%s) - STALE_DAYS*86400 ))
+                  jq -r --argjson cutoff "$cutoff" '
+                    .[]
+                    | select(.downloaded == 0 and .last_activity < $cutoff)
+                    | "\(.hash)\t\(((now - .added_on) / 86400 | floor))d\t\(.state)\t\(.name)"
+                  ' /tmp/torrents.json > /tmp/dead.txt
+                  count=$(wc -l < /tmp/dead.txt)
+                  echo "[qbit-cleanup] qbit-total=${total} candidates=${count} (downloaded==0 AND last_activity older than ${STALE_DAYS}d)"
+                  if [ "$count" -eq 0 ]; then
+                    echo "[qbit-cleanup] nothing to do"
+                    exit 0
+                  fi
+                  echo "[qbit-cleanup] candidates (age, state, name):"
+                  awk -F'\t' '{printf "  %-6s %-10s %s\n", $2, $3, $4}' /tmp/dead.txt
+                  if [ "${DRY_RUN}" = "true" ]; then
+                    echo "[qbit-cleanup] DRY_RUN=true — not deleting. Set env DRY_RUN=false to enable."
+                    exit 0
+                  fi
+                  HASHES=$(awk -F'\t' '{print $1}' /tmp/dead.txt | tr '\n' '|' | sed 's/|$//')
+                  echo "[qbit-cleanup] deleting ${count} torrents with deleteFiles=true"
+                  curl -sf -b "$COOKIE" \
+                    --data-urlencode "hashes=$HASHES" \
+                    --data-urlencode "deleteFiles=true" \
+                    -H "Referer: ${QBIT_URL}" \
+                    "${QBIT_URL}/api/v2/torrents/delete"
+                  echo "[qbit-cleanup] deleted=${count}. Sonarr/Lidarr/Radarr will reconcile via their own ProcessMonitoredDownloads + autoRedownloadFailed chain."
+              resources:
+                requests:
+                  memory: 32Mi
+                  cpu: 50m
+                limits:
+                  memory: 128Mi
+                  cpu: 500m
