@@ -11,7 +11,7 @@ metadata:
   name: openclaw
   namespace: agonbar
 spec:
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app: openclaw
@@ -34,11 +34,11 @@ spec:
                 secretKeyRef:
                   name: agonbar
                   key: telegramBotToken
-            - name: OPENROUTER_API_KEY
+            - name: LITELLM_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: agonbar
-                  key: openrouterApiKey
+                  key: litellmApiKey
             - name: OPENCLAW_GATEWAY_TOKEN
               valueFrom:
                 secretKeyRef:
