@@ -92,7 +92,7 @@ spec:
                       - name: webUIPort
                         value: '8265'
                       - name: internalNode
-                        value: 'false'
+                        value: 'true'
                       - name: inContainer
                         value: 'true'
                       - name: auth
@@ -146,8 +146,8 @@ spec:
                           memory: 256Mi
                           cpu: 200m
                       limits:
-                          memory: 1Gi
-                          cpu: 1000m
+                          memory: 4Gi
+                          cpu: 4000m
             volumes:
                 - name: config
                   persistentVolumeClaim:
