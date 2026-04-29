@@ -92,7 +92,7 @@ spec:
                       - name: webUIPort
                         value: '8265'
                       - name: internalNode
-                        value: 'true'
+                        value: 'false'
                       - name: inContainer
                         value: 'true'
                       - name: auth
