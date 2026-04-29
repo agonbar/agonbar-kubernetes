@@ -1,28 +1,35 @@
+# Tdarr distributed worker, runs as a DaemonSet on every node labelled
+# workload=media (currently work-vm-01 and work-vm-02).
+#
+# Each pod registers as ${HOSTNAME}-pod (downward API) so the server sees
+# them as distinct nodes. CPU limit is ~80% of an 8c/16t Ryzen 7 7700.
+#
+# GPU note: NVENC/NVDEC is NOT enabled. The cluster has no NVIDIA
+# container runtime configured (k3s/containerd default runtime + no
+# nvidia-device-plugin). To enable GPU acceleration later: install
+# nvidia-container-toolkit on the work-vm hosts (NixOS), wire it as a
+# k3s containerd runtime, deploy nvidia-device-plugin, then add
+# `resources.limits.nvidia.com/gpu: 1` here. Until then the bundled
+# libsvtav1 / libx265 CPU encoders work fine.
 apiVersion: apps/v1
-kind: Deployment
+kind: DaemonSet
 metadata:
-    name: tdarr-node-vm02
+    name: tdarr-node
     namespace: piracy
     labels:
         app: tdarr-node
-        host: work-vm-02
 spec:
-    strategy:
-        type: Recreate
-    replicas: 1
     selector:
         matchLabels:
             app: tdarr-node
-            host: work-vm-02
     template:
         metadata:
             labels:
                 app: tdarr-node
-                host: work-vm-02
         spec:
             enableServiceLinks: false
             nodeSelector:
-                kubernetes.io/hostname: work-vm-02
+                workload: media
             containers:
                 - name: tdarr-node
                   image: ghcr.io/haveagitgat/tdarr_node:2.70.01
@@ -36,8 +43,14 @@ spec:
                         value: '950'
                       - name: UMASK_SET
                         value: '002'
+                      # Use the host's k8s node name as a stable suffix for the
+                      # Tdarr nodeName so each pod registers separately.
+                      - name: NODE_HOSTNAME
+                        valueFrom:
+                            fieldRef:
+                                fieldPath: spec.nodeName
                       - name: nodeName
-                        value: work-vm-02-pod
+                        value: $(NODE_HOSTNAME)-pod
                       - name: serverIP
                         value: 100.72.0.16
                       - name: serverPort
@@ -61,10 +74,10 @@ spec:
                   resources:
                       requests:
                           memory: 1Gi
-                          cpu: 500m
+                          cpu: 1000m
                       limits:
-                          memory: 8Gi
-                          cpu: 4000m
+                          memory: 12Gi
+                          cpu: '12'
             volumes:
                 - name: configs
                   emptyDir: {}
