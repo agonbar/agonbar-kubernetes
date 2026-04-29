@@ -67,8 +67,6 @@ spec:
                   volumeMounts:
                       - name: configs
                         mountPath: /app/configs
-                      - name: cache
-                        mountPath: /transcode_cache
                       - name: media
                         mountPath: /media
                   resources:
@@ -81,8 +79,10 @@ spec:
             volumes:
                 - name: configs
                   emptyDir: {}
-                - name: cache
-                  emptyDir: {}
+                # Library cache lives on the same NFS share as /media so the
+                # server pod's cacheCopyService can see the post-transcode
+                # files (server runs the move from cache → output folder).
+                # Configure each library with cache: /media/tdarr-cache.
                 - name: media
                   nfs:
                       server: 100.72.0.41
