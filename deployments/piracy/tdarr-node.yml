@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: tdarr-node-vm02
+    namespace: piracy
+    labels:
+        app: tdarr-node
+        host: work-vm-02
+spec:
+    strategy:
+        type: Recreate
+    replicas: 1
+    selector:
+        matchLabels:
+            app: tdarr-node
+            host: work-vm-02
+    template:
+        metadata:
+            labels:
+                app: tdarr-node
+                host: work-vm-02
+        spec:
+            enableServiceLinks: false
+            nodeSelector:
+                kubernetes.io/hostname: work-vm-02
+            containers:
+                - name: tdarr-node
+                  image: ghcr.io/haveagitgat/tdarr_node:2.70.01
+                  imagePullPolicy: IfNotPresent
+                  env:
+                      - name: TZ
+                        value: Europe/Madrid
+                      - name: PUID
+                        value: '950'
+                      - name: PGID
+                        value: '950'
+                      - name: UMASK_SET
+                        value: '002'
+                      - name: nodeName
+                        value: work-vm-02-pod
+                      - name: serverIP
+                        value: 100.72.0.16
+                      - name: serverPort
+                        value: '8266'
+                      - name: serverURL
+                        value: ''
+                      - name: inContainer
+                        value: 'true'
+                      - name: apiKey
+                        valueFrom:
+                            secretKeyRef:
+                                name: tdarr
+                                key: seeded-api-key
+                  volumeMounts:
+                      - name: configs
+                        mountPath: /app/configs
+                      - name: cache
+                        mountPath: /transcode_cache
+                      - name: media
+                        mountPath: /media
+                  resources:
+                      requests:
+                          memory: 1Gi
+                          cpu: 500m
+                      limits:
+                          memory: 8Gi
+                          cpu: 4000m
+            volumes:
+                - name: configs
+                  emptyDir: {}
+                - name: cache
+                  emptyDir: {}
+                - name: media
+                  nfs:
+                      server: 192.168.0.29
+                      path: /mnt/RAID/docker/media
