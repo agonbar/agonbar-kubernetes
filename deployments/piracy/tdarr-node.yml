@@ -72,5 +72,5 @@ spec:
                   emptyDir: {}
                 - name: media
                   nfs:
-                      server: 192.168.0.29
+                      server: 100.72.0.41
                       path: /mnt/RAID/docker/media
