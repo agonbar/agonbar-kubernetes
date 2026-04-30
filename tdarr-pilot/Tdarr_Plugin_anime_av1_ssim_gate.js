@@ -1,23 +1,28 @@
-/* AV1 SSIM Gate — runs after the cache → output move on the
-   `pilot_av1_001` library. Compares the transcoded output against the
-   preserved source via ffmpeg's bundled `ssim` filter. Logs the score
-   and (when below threshold) flags the file as needing review.
+/* AV1 SSIM Gate — DISABLED 2026-04-30. Kept for reference.
 
-   Why SSIM and not VMAF: the bundled Tdarr_Node ffmpeg
-   (haveagitgat/tdarr_node:2.70.01, Jellyfin build) ships ssim/psnr/
-   xpsnr/vmafmotion but NOT libvmaf — see `--enable-` flags from
-   `ffmpeg -version` on the pod. The bench used nixpkgs ffmpeg-full
-   for libvmaf. Real VMAF would require either a custom node image with
-   libvmaf compiled in, or a sidecar with ffmpeg-full mounted at a
-   second path the plugin can shell out to. SSIM is the sufficient
-   tool for the user's stated goal ("decide if it went ok or something
-   broke") — catastrophic regressions (corrupt source, encoder collapse)
-   are caught at SSIM ≥ 0.95 with no false negatives.
+   Tdarr loads post-processing plugins inside the server's Node event
+   loop and calls them synchronously (the plugin function returns the
+   verdict directly). This plugin shells out to `ffmpeg ssim`, which
+   for a 24-min 1080p video takes minutes — blocking the event loop
+   the whole time. The kubelet liveness probe at `/:8265` then times
+   out and kills the pod mid-run. Pod restart loses all the verdict
+   state, the file's TranscodeDecisionMaker stays "Queued", and the
+   transcode is re-queued forever.
 
-   Source is preserved by the library's
-   `folderToFolderConversionDeleteSource: false`. On a failed gate the
-   plugin only deletes the transcoded output — anisub's bridge can then
-   pick the source up via the Unhealthy queue if needed.
+   Verified pattern across 4 attempts on 2026-04-30: every transcode
+   produced a clean AV1 output and reached "Plugin 2: running
+   Tdarr_Plugin_anime_av1_ssim_gate", then the report truncated and
+   the pod restarted (restart count climbed from 0 to 12 in ~80 min).
+
+   Decision: the SSIM check moves into the planned external Tier 2
+   acceptance pass alongside libvmaf — neither runs inline. Originals
+   are still preserved by `folderToFolderConversionDeleteSource:false`
+   so a bad transcode never destroys data; the batch script is the
+   single quality gate before the eventual source-deletion sweep.
+
+   This file is kept (rather than deleted) because the SSIM filter
+   parsing logic and otherArguments contract are reusable when we
+   build the Tier 2 script.
 */
 
 const details = () => ({

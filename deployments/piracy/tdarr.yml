@@ -125,22 +125,28 @@ spec:
                         mountPath: /app/server
                       - name: media
                         mountPath: /media
+                  # Liveness probe relaxed (was 5s/15s/3): the server's
+                  # /Node event loop blocks on heavy SQLite writes (queue
+                  # builder over a 6500-file library) and on synchronous
+                  # ffmpeg post-processing plugins. The previous defaults
+                  # killed the pod mid-job. With the long timeout the pod
+                  # only restarts on a true wedge.
                   livenessProbe:
                       httpGet:
                           path: /
                           port: 8265
-                      initialDelaySeconds: 30
-                      periodSeconds: 15
-                      timeoutSeconds: 5
-                      failureThreshold: 3
+                      initialDelaySeconds: 60
+                      periodSeconds: 60
+                      timeoutSeconds: 30
+                      failureThreshold: 5
                   readinessProbe:
                       httpGet:
                           path: /
                           port: 8265
-                      initialDelaySeconds: 15
-                      periodSeconds: 10
-                      timeoutSeconds: 5
-                      failureThreshold: 3
+                      initialDelaySeconds: 30
+                      periodSeconds: 30
+                      timeoutSeconds: 15
+                      failureThreshold: 5
                   resources:
                       requests:
                           memory: 256Mi
