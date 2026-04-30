@@ -26,7 +26,7 @@ built-in `ffmpeg -err_detect explode` decode pass on every video file and
 update the `HealthCheck` field in `FileJSONDB`:
 
 - `Queued` — scan pending
-- `Healthy` — pass
+- `Success` — pass (verified against the running 2.70.01 DB on 2026-04-30)
 - `Unhealthy` — decode errors (corrupt source — the cruncharr wedge-bug
   class flagged in `vault/projects/tdarr.md`)
 
@@ -58,49 +58,72 @@ unhealthy = [f for f in files
 Tdarr API URL inside the cluster: `http://tdarr.piracy.svc.cluster.local:8266`
 (or the `tdarr` service name from the same namespace).
 
-## 3. VMAF quality validation (TODO)
+## 3. Quality gating (two-tier: SSIM now, VMAF later)
 
 The bench measured VMAF 97.4 globally, but per-file regressions are
-possible (rare scenes the encoder handles poorly). To validate each
-transcode:
+possible (rare scenes the encoder handles poorly, corrupt source).
+Originals stay (`folderToFolderConversionDeleteSource: false`) so a
+bad transcode can never destroy data. Two checks, in order:
 
-### Option A: post-processing plugin
-Tdarr supports `Stage: 'Post-processing'` plugins that run after the
-cache file is created but before cacheCopyService moves it. Plugin can
-shell out to `ffmpeg -i ORIGINAL -i CACHE -lavfi libvmaf -f null -` and
-parse the score. If below threshold (e.g. 92), the plugin fails the job
-and the cache file is discarded.
+### Tier 1 — inline SSIM (live as of 2026-04-30)
 
-Skeleton:
-```js
-const details = () => ({
-  id: 'Tdarr_Plugin_anime_av1_vmaf_check',
-  Stage: 'Post-processing',
-  Name: 'AV1 VMAF gate',
-  Type: 'Video',
-  Operation: 'Other',
-  Description: 'Compute VMAF original vs transcoded; reject if score < 92.',
-  Inputs: [
-    {name: 'minVmaf', type: 'number', defaultValue: 92, ...},
-  ],
-});
-const plugin = (file, librarySettings, inputs, otherArguments) => {
-  // file.file = the cache (transcoded) file path
-  // otherArguments has the original path
-  // Run ffmpeg with libvmaf, parse score, fail if below threshold.
-  ...
-};
-```
+`Tdarr_Plugin_anime_av1_ssim_gate.js` (in this directory, uploaded to
+Tdarr as Local plugin `Tdarr_Plugin_anime_av1_ssim_gate`, attached as
+plugin2 on `pilot_av1_001` with `minSsim=0.95, deleteOnFail=true`).
 
-### Option B: external script triggered via Tdarr webhook
-Less integrated. Skip unless A is too constraining.
+- `Stage: 'Post-processing'` → runs in `runPostProcPlugins` after
+  `cacheCopyService` has already moved the file to the output folder.
+- Computes `ssim(source, transcoded)` via the bundled ffmpeg's
+  `[0:v:0][1:v:0]ssim=stats_file=...` filter; parses the `All:` score
+  from ffmpeg's stderr.
+- If score < `minSsim`, `unlink`s the moved output. Source untouched.
+- Tdarr's runPostProcPlugins doesn't have a rollback hook, so the
+  `FileJSONDB` row will still say `TranscodeDecisionMaker = 'Transcode
+  success'` until a rescan. anisub's reconcile phase (or a manual
+  rescan) will pick up that the output is missing and re-queue.
+
+**Why SSIM and not VMAF for this tier**: bundled Tdarr_Node ffmpeg is
+the Jellyfin build (verified on the running pod via `ffmpeg -version`
+flags) — `--enable-libsvtav1 --enable-libx265 --enable-ffnvcodec ...`
+but **no `--enable-libvmaf`**. It ships `ssim`, `psnr`, `xpsnr`, and
+`vmafmotion`. SSIM ≥ 0.95 catches catastrophic regressions ("did
+something break") with no false negatives. Real libvmaf would require
+a custom Tdarr_Node image or a sidecar with ffmpeg-full at a second
+path the plugin can shell out to — both add image-maintenance cost
+that the SSIM gate avoids.
+
+### Tier 2 — final libvmaf acceptance pass (planned)
+
+Before flipping `folderToFolderConversionDeleteSource: true` (i.e.,
+before reclaiming the projected ~4.57 TB of source files), every
+SSIM-passed AV1 should be re-validated against its source with
+**real libvmaf** — bench-grade per-frame quality scoring. Only files
+that pass both tiers should have their source deleted. Likely shape:
+
+- External script (Go/Python) on a host with a libvmaf-capable
+  ffmpeg (the bench used nixpkgs `ffmpeg-full` 8.0.1).
+- Reads candidates from Tdarr's `FileJSONDB` where
+  `TranscodeDecisionMaker = 'Transcode success'` and `DB =
+  pilot_av1_001` (or whatever AV1 library handles the rollout).
+- For each pair (source path from `originalLibraryFile.file` if still
+  recorded, else derived from the library's folder mapping; output
+  path from the moved-to location), run
+  `ffmpeg -i SOURCE -i AV1 -lavfi libvmaf -f null -` and parse the
+  harmonic-mean VMAF.
+- On VMAF ≥ threshold (likely 95 or 96, given the bench median 97.4):
+  `rm` the source. On fail: log, leave both, surface for review.
+
+Defer this until: (a) the AV1 sweep has produced a sizeable batch
+of SSIM-passed outputs to validate, AND (b) the disk-space pressure
+from keeping originals + AV1s justifies the cleanup work.
 
 ### Where to fail safely
-Tdarr's `setAllStatus` API + `transcodeUserVerdict` can mark the file
-as `Transcode error`, which keeps the source intact and removes the
-cache. Combine with `autoAcceptTranscodes: false` for the AV1 library
-during the rollout, then flip to true once the VMAF gate has run on a
-representative sample.
+
+For the inline SSIM gate, "fail safely" is automatic — the plugin
+deletes only the output, source is preserved by the library setting.
+For the final VMAF pass, the script SHOULD never delete a source
+without a green VMAF score AND a sanity check that the AV1 file is
+present and non-empty.
 
 ## 4. Manual queries / state
 
