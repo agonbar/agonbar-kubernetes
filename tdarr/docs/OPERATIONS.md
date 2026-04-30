@@ -122,8 +122,8 @@ the single-pass gating below safe.
 ### Why no inline SSIM gate (rejected 2026-04-30)
 
 The earlier plan was an inline SSIM check via a post-processing
-plugin (`Tdarr_Plugin_anime_av1_ssim_gate.js`, still in this
-directory). Tdarr loads post-processing plugins synchronously inside
+plugin (`Tdarr_Plugin_anime_av1_ssim_gate.js`, kept under
+`../plugins/` for reuse). Tdarr loads post-processing plugins synchronously inside
 the server's Node event loop and waits for the plugin function to
 return. The plugin shells out to `ffmpeg ssim` which runs for
 minutes per file, blocking the event loop the whole time. Kubelet's
