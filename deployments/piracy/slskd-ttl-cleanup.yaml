@@ -6,8 +6,8 @@ metadata:
   labels:
     app: slskd-ttl-cleanup
 spec:
-  # Weekly, Sunday 03:00 Europe/Madrid (approx — cluster is UTC; pick an off-peak hour)
-  schedule: "0 3 * * 0"
+  # Daily 03:00 Europe/Madrid — slskd downloads imported within hours, no need to let them sit a week.
+  schedule: "0 3 * * *"
   timeZone: Europe/Madrid
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
@@ -26,7 +26,7 @@ spec:
               imagePullPolicy: IfNotPresent
               env:
                 - name: STALE_DAYS
-                  value: "7"
+                  value: "2"
               command:
                 - /bin/sh
                 - -c
