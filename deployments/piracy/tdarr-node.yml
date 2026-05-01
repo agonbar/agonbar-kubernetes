@@ -74,7 +74,7 @@ spec:
                           memory: 1Gi
                           cpu: 1000m
                       limits:
-                          memory: 12Gi
+                          memory: 100Gi
                           cpu: '12'
             volumes:
                 - name: configs
