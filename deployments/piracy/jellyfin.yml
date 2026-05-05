@@ -44,7 +44,7 @@ spec:
               apk add --no-cache e2fsprogs util-linux 2>/dev/null
 
               # Find the block device from host's /proc/1/mounts (mounted at /host-proc-mounts)
-              DEVICE=$(grep " ${MOUNTPOINT} " /host-proc-mounts | awk '{print $1}' | head -1)
+              DEVICE=$(grep " ${MOUNTPOINT} " /proc/mounts | awk '{print $1}' | head -1)
 
               if [ -z "${DEVICE}" ]; then
                 echo "[iscsi-fsck] ERROR: Could not find block device for ${MOUNTPOINT} in host mounts."
