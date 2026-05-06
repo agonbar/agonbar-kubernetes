@@ -37,7 +37,7 @@ spec:
                         fi
                         echo "[iscsi-fsck] Filesystem is READ-ONLY. Starting repair..."
                         apk add --no-cache e2fsprogs util-linux 2>/dev/null
-                        DEVICE=$(grep " ${MOUNTPOINT} " /host-proc-mounts | awk '{print $1}' | head -1)
+                        DEVICE=$(grep " ${MOUNTPOINT} " /proc/mounts | awk '{print $1}' | head -1)
                         if [ -z "${DEVICE}" ]; then
                           echo "[iscsi-fsck] ERROR: Could not find block device for ${MOUNTPOINT}."
                           exit 1
