@@ -23,6 +23,87 @@ spec:
         app: homeassistant
         app.vscode: "true"
     spec:
+      initContainers:
+        - name: iscsi-fsck
+          image: alpine:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              MOUNTPOINT="/config"
+              echo "[iscsi-fsck] Checking filesystem at ${MOUNTPOINT}..."
+
+              if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                rm -f "${MOUNTPOINT}/.rw-test"
+                echo "[iscsi-fsck] Filesystem is writable. Nothing to do."
+                exit 0
+              fi
+
+              echo "[iscsi-fsck] Filesystem is READ-ONLY. Starting repair..."
+              apk add --no-cache e2fsprogs util-linux 2>/dev/null
+
+              DEVICE=$(grep " ${MOUNTPOINT} " /proc/mounts | awk '{print $1}' | head -1)
+
+              if [ -z "${DEVICE}" ]; then
+                echo "[iscsi-fsck] ERROR: Could not find block device for ${MOUNTPOINT}."
+                echo "[iscsi-fsck] Host mount table (iscsi/sd entries):"
+                grep -E "iscsi|/dev/sd|democratic-csi" /host-proc-mounts || true
+                exit 1
+              fi
+
+              echo "[iscsi-fsck] Found device: ${DEVICE}"
+              echo "[iscsi-fsck] Attempting remount rw..."
+              if mount -o remount,rw "${MOUNTPOINT}" 2>/dev/null; then
+                if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                  rm -f "${MOUNTPOINT}/.rw-test"
+                  echo "[iscsi-fsck] Remount rw succeeded!"
+                  exit 0
+                fi
+              fi
+
+              echo "[iscsi-fsck] Simple remount failed. Running e2fsck..."
+              GLOBAL_MOUNT=$(grep "${DEVICE} " /host-proc-mounts | grep globalmount | awk '{print $2}' | head -1)
+              if [ -z "${GLOBAL_MOUNT}" ]; then
+                GLOBAL_MOUNT=$(grep "^${DEVICE} " /host-proc-mounts | awk '{print $2}' | head -1)
+              fi
+
+              if [ -n "${GLOBAL_MOUNT}" ]; then
+                echo "[iscsi-fsck] Unmounting ${GLOBAL_MOUNT} for fsck..."
+                umount -l "${GLOBAL_MOUNT}" || echo "[iscsi-fsck] WARNING: umount failed, trying to fsck anyway..."
+              fi
+
+              e2fsck -y -f "${DEVICE}" || {
+                FSCK_EXIT=$?
+                if [ $FSCK_EXIT -gt 2 ]; then
+                  echo "[iscsi-fsck] e2fsck failed with exit code ${FSCK_EXIT}."
+                  exit 1
+                fi
+              }
+
+              if [ -n "${GLOBAL_MOUNT}" ]; then
+                mount "${DEVICE}" "${GLOBAL_MOUNT}" || {
+                  echo "[iscsi-fsck] Mount failed after fsck. Triggering pod restart."
+                  exit 1
+                }
+              fi
+
+              if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                rm -f "${MOUNTPOINT}/.rw-test"
+                echo "[iscsi-fsck] SUCCESS: Filesystem repaired and writable."
+                exit 0
+              else
+                echo "[iscsi-fsck] FAILED: Filesystem still not writable after repair."
+                exit 1
+              fi
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: host-proc-mounts
+              mountPath: /host-proc-mounts
       containers:
         - image: homeassistant/home-assistant:latest
           name: homeassistant
@@ -73,6 +154,9 @@ spec:
         - name: vscode-config
           persistentVolumeClaim:
             claimName: vscode-config
+        - name: host-proc-mounts
+          hostPath:
+            path: /proc/1/mounts
       nodeSelector:
         svccontroller.k3s.cattle.io/lbpool: lamg
 
