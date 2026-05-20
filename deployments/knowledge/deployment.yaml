@@ -79,12 +79,16 @@ spec:
           # /mcp GET without an Accept header returns 406, so probe via tcpSocket
           # (uvicorn only binds once FastMCP is fully initialized). First boot
           # ~2 min: clone repo + download bge-small (~80MB) + build index.
+          # uvicorn binds :8000 only after the embedding index is built. The
+          # knowledge-vault is ~1700 chunks → first build is ~15-30 min on CPU;
+          # give it a wide budget. Subsequent boots are fast (index cached on
+          # the state PVC).
           startupProbe:
             tcpSocket:
               port: mcp
             initialDelaySeconds: 30
             periodSeconds: 10
-            failureThreshold: 30
+            failureThreshold: 240
           livenessProbe:
             tcpSocket:
               port: mcp
