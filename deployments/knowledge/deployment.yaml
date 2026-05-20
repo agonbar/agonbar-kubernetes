@@ -54,6 +54,15 @@ spec:
               value: /data/state/fastmcp
             - name: MARKDOWN_VAULT_MCP_READ_ONLY
               value: "false"
+            # --- auth: static bearer token gates the /mcp endpoint (covers BOTH the
+            # tailnet path AND in-cluster ClusterIP/pod-IP reach; no app auth = any
+            # lamg pod could read/write the vault otherwise). Clients send
+            # `Authorization: Bearer <token>`.
+            - name: MARKDOWN_VAULT_MCP_BEARER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: vault-mcp-auth
+                  key: bearer-token
             # --- managed git mode: gitea is the source of truth, bidirectional ---
             - name: MARKDOWN_VAULT_MCP_GIT_REPO_URL
               value: https://gitea.adriangonzalezbarbosa.eu/agonbar/knowledge-vault.git
