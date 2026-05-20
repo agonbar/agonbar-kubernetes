@@ -90,10 +90,15 @@ spec:
               port: mcp
             periodSeconds: 30
           volumeMounts:
+            # subPath so the container sees a clean dir — a fresh ext4/iSCSI PVC
+            # has a lost+found at its root, which makes managed git mode refuse
+            # SOURCE_DIR ("must be empty or a git repository").
             - name: vault-data
               mountPath: /data/vault
+              subPath: vault
             - name: state
               mountPath: /data/state
+              subPath: state
           resources:
             requests:
               cpu: 50m
