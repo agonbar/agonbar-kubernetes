@@ -36,9 +36,17 @@ spec:
                       key: password
                 - name: STALE_DAYS
                   value: "7"
-                # Flip to "false" after the first dry runs look correct.
+                # Second category: stale partials of oversized packs.
+                # Reaped when bigger than BIG_SIZE_GB, less than BIG_PROGRESS_PCT
+                # done, and untouched for STALE_DAYS (e.g. the The Boys 4K /
+                # Bleach packs that saturated the 200G pool 2026-05-16).
+                - name: BIG_SIZE_GB
+                  value: "50"
+                - name: BIG_PROGRESS_PCT
+                  value: "50"
+                # Live since 2026-05-16 (first run deleted 62 stale torrents).
                 - name: DRY_RUN
-                  value: "true"
+                  value: "false"
               command:
                 - /bin/sh
                 - -c
@@ -56,13 +64,18 @@ spec:
                   curl -sf -b "$COOKIE" "${QBIT_URL}/api/v2/torrents/info" > /tmp/torrents.json
                   total=$(jq length /tmp/torrents.json)
                   cutoff=$(( $(date +%s) - STALE_DAYS*86400 ))
-                  jq -r --argjson cutoff "$cutoff" '
+                  bigbytes=$(( BIG_SIZE_GB * 1073741824 ))
+                  jq -r --argjson cutoff "$cutoff" --argjson bigbytes "$bigbytes" --argjson bigpct "$BIG_PROGRESS_PCT" '
                     .[]
-                    | select(.downloaded == 0 and .last_activity < $cutoff)
+                    | select(
+                        (.downloaded == 0 and .last_activity < $cutoff)
+                        or
+                        (.downloaded > 0 and .size > $bigbytes and (.progress * 100) < $bigpct and .last_activity < $cutoff)
+                      )
                     | "\(.hash)\t\(((now - .added_on) / 86400 | floor))d\t\(.state)\t\(.name)"
                   ' /tmp/torrents.json > /tmp/dead.txt
                   count=$(wc -l < /tmp/dead.txt)
-                  echo "[qbit-cleanup] qbit-total=${total} candidates=${count} (downloaded==0 AND last_activity older than ${STALE_DAYS}d)"
+                  echo "[qbit-cleanup] qbit-total=${total} candidates=${count} (last_activity older than ${STALE_DAYS}d AND [downloaded==0 OR (size>${BIG_SIZE_GB}G AND progress<${BIG_PROGRESS_PCT}%)])"
                   if [ "$count" -eq 0 ]; then
                     echo "[qbit-cleanup] nothing to do"
                     exit 0
