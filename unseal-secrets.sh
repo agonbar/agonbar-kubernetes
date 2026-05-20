@@ -28,3 +28,4 @@ unseal ./deployments/immich/sealedsecrets.yaml    ./deployments/immich/secrets.y
 unseal ./deployments/lamg/sealedsecrets.yaml      ./deployments/lamg/secrets.yaml
 unseal ./deployments/yavoo/sealedsecrets.yaml     ./deployments/yavoo/secrets.yaml
 unseal ./deployments/piracy/sealedsecrets.yaml    ./deployments/piracy/secrets.yaml
+unseal ./deployments/knowledge/sealedsecrets.yaml ./deployments/knowledge/secrets.yaml

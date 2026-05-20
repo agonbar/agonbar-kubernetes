@@ -1,0 +1,135 @@
+# markdown-vault-mcp serving the Obsidian knowledge-vault, kept in bidirectional
+# sync with gitea (source of truth). Exposed tailnet-only via a tailscale sidecar
+# (joins headscale as node "vault-mcp", untagged → owned by agonbar@; reachable
+# from agonbar@ devices via the autogroup:self ACL rule, no ACL change needed).
+# No public ingress, no GPU, no Electron. Reach it at vault-mcp.senseizero.lan:8000/mcp.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vault-mcp
+  namespace: knowledge
+  labels:
+    app: vault-mcp
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate            # RWO PVCs — never two pods mounting at once
+  selector:
+    matchLabels:
+      app: vault-mcp
+  template:
+    metadata:
+      labels:
+        app: vault-mcp
+    spec:
+      serviceAccountName: vault-mcp
+      nodeSelector:
+        kubernetes.io/hostname: ovh02   # amd64, has spare room
+      volumes:
+        - name: vault-data
+          persistentVolumeClaim:
+            claimName: vault-data
+        - name: state
+          persistentVolumeClaim:
+            claimName: vault-state
+      containers:
+        - name: vault-mcp
+          image: ghcr.io/pvliesdonk/markdown-vault-mcp:latest   # TODO: pin a digest
+          env:
+            # Transport: server always exposes streamable-http at /mcp (transport
+            # env is ignored in v3.x — learned on the holmes deploy).
+            - name: MARKDOWN_VAULT_MCP_HOST
+              value: "0.0.0.0"
+            - name: MARKDOWN_VAULT_MCP_PORT
+              value: "8000"
+            - name: MARKDOWN_VAULT_MCP_SOURCE_DIR
+              value: /data/vault
+            - name: MARKDOWN_VAULT_MCP_INDEX_PATH
+              value: /data/state/index.db
+            - name: MARKDOWN_VAULT_MCP_EMBEDDINGS_PATH
+              value: /data/state/embeddings/embeddings
+            - name: MARKDOWN_VAULT_MCP_FASTEMBED_CACHE_DIR
+              value: /data/state/fastembed
+            - name: FASTMCP_HOME
+              value: /data/state/fastmcp
+            - name: MARKDOWN_VAULT_MCP_READ_ONLY
+              value: "false"
+            # --- managed git mode: gitea is the source of truth, bidirectional ---
+            - name: MARKDOWN_VAULT_MCP_GIT_REPO_URL
+              value: https://gitea.adriangonzalezbarbosa.eu/agonbar/knowledge-vault.git
+            - name: MARKDOWN_VAULT_MCP_GIT_USERNAME
+              value: agonbar
+            - name: MARKDOWN_VAULT_MCP_GIT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: vault-mcp-git
+                  key: token
+            - name: MARKDOWN_VAULT_MCP_GIT_PULL_INTERVAL_S
+              value: "300"       # pull gitea every 5 min (ff-only)
+            - name: MARKDOWN_VAULT_MCP_GIT_PUSH_DELAY_S
+              value: "15"        # push 15s after a write settles
+            - name: MARKDOWN_VAULT_MCP_GIT_COMMIT_NAME
+              value: vault-mcp
+            - name: MARKDOWN_VAULT_MCP_GIT_COMMIT_EMAIL
+              value: vault-mcp@adriangonzalezbarbosa.eu
+          ports:
+            - containerPort: 8000
+              name: mcp
+              protocol: TCP
+          # /mcp GET without an Accept header returns 406, so probe via tcpSocket
+          # (uvicorn only binds once FastMCP is fully initialized). First boot
+          # ~2 min: clone repo + download bge-small (~80MB) + build index.
+          startupProbe:
+            tcpSocket:
+              port: mcp
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            tcpSocket:
+              port: mcp
+            periodSeconds: 30
+          volumeMounts:
+            - name: vault-data
+              mountPath: /data/vault
+            - name: state
+              mountPath: /data/state
+          resources:
+            requests:
+              cpu: 50m
+              memory: 512Mi
+            limits:
+              memory: 1Gi
+        # Tailscale sidecar — shares the pod netns, so :8000 above becomes
+        # reachable tailnet-wide at vault-mcp.senseizero.lan. Mirrors the
+        # chino-prd pattern, minus tags (registers untagged under agonbar@).
+        - name: tailscale
+          image: ghcr.io/tailscale/tailscale:latest
+          env:
+            - name: TS_KUBE_SECRET
+              value: vault-mcp-ts-state
+            - name: TS_HOSTNAME
+              value: vault-mcp
+            - name: TS_USERSPACE
+              value: "false"
+            - name: TS_DEBUG_FIREWALL_MODE
+              value: auto
+            - name: TS_EXTRA_ARGS
+              value: "--login-server=https://headscale.prd.senseizero.es"
+            - name: TS_AUTHKEY
+              valueFrom:
+                secretKeyRef:
+                  name: tailscale-auth
+                  key: TS_AUTHKEY
+                  optional: true
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+          resources:
+            requests:
+              cpu: 10m
+              memory: 100Mi
+            limits:
+              cpu: 100m
+              memory: 100Mi

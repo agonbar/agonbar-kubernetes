@@ -1,0 +1,39 @@
+# The tailscale sidecar (kernel mode, joins headscale as the node "vault-mcp")
+# persists its node state into a Secret named by TS_KUBE_SECRET. It must be able
+# to create that Secret once and then read/update it. Kept separate from the
+# sealed `tailscale-auth` (which only holds the preauth key) so ArgoCD selfHeal
+# never fights the sidecar's state writes.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vault-mcp
+  namespace: knowledge
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: vault-mcp-tailscale
+  namespace: knowledge
+rules:
+  # create cannot be restricted to a resourceName
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["vault-mcp-ts-state"]
+    verbs: ["get", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vault-mcp-tailscale
+  namespace: knowledge
+subjects:
+  - kind: ServiceAccount
+    name: vault-mcp
+    namespace: knowledge
+roleRef:
+  kind: Role
+  name: vault-mcp-tailscale
+  apiGroup: rbac.authorization.k8s.io

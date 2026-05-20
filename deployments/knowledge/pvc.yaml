@@ -1,0 +1,29 @@
+# Vault content (markdown). markdown-vault-mcp clones gitea into here on first
+# boot (managed git mode), then keeps it in bidirectional sync.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vault-data
+  namespace: knowledge
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 1Gi
+---
+# Index, embeddings, fastembed model cache, fastmcp state. Separate PVC so the
+# index isn't rebuilt on every pod restart.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vault-state
+  namespace: knowledge
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 1Gi
