@@ -96,17 +96,23 @@ spec:
             # Do NOT manage LoadBalancer services — K3s ServiceLB handles that
             - name: svc_enable
               value: "false"
-            # Leader election for HA failover
+            # Leader election for HA failover.
+            # Timings deliberately RELAXED (was 5/3/1) — the aggressive 1s renew
+            # made kube-vip rewrite its Lease ~1×/sec AND fatal+restart the instant
+            # the (kine/SQLite) control plane was >3s slow, producing a crashloop
+            # storm that hammered the datastore. 30/20/5 cuts lease-write traffic
+            # ~5× and tolerates ~20s of API latency before failing over (~30s
+            # failover, fine for a LAN VIP). See runbooks/ovh02-cryptojacking-incident.md.
             - name: vip_leaderelection
               value: "true"
             - name: vip_leasename
               value: "kube-vip-lamg"
             - name: vip_leaseduration
-              value: "5"
+              value: "30"
             - name: vip_renewdeadline
-              value: "3"
+              value: "20"
             - name: vip_retryperiod
-              value: "1"
+              value: "5"
             # Prometheus metrics endpoint
             - name: prometheus_server
               value: ":2112"
