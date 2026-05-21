@@ -159,6 +159,27 @@ spec:
             path: /proc/1/mounts
       nodeSelector:
         svccontroller.k3s.cattle.io/lbpool: lamg
+      # nas00 is a 2-core/3GB box that flaps NodeNotReady under load; its RWO
+      # iSCSI config volume then takes ~20min to fail over, causing the daily
+      # home.* 503. Keep HA off nas00 (it talks to zigbee2mqtt over MQTT, so it
+      # does not need the dongle that pins to nas00). Prefer nas01 (stablest).
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: NotIn
+                    values:
+                      - nas00
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values:
+                      - nas01
 
 ---
 kind: Service
