@@ -33,21 +33,14 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 
 ---
-# kube-vip DaemonSet for lamg LAN virtual IP
+# kube-vip DaemonSet for lamg LAN virtual IP — DISABLED
 #
-# Provides a floating VIP (192.168.0.26) across the lamg worker nodes
-# (nas00, nas01, orange-pi5) on their physical LAN interfaces.
-#
-# How it works:
-# - Leader election via Kubernetes Lease — one node holds the VIP at a time
-# - ARP mode — the leader responds to ARP requests for the VIP
-# - Auto-detect interface — finds the LAN interface by matching the VIP
-#   subnet (192.168.0.0/24) against each node's interfaces
-# - K3s ServiceLB svclb pods already bind to 0.0.0.0:port (hostPort),
-#   so all lamg services are automatically accessible through the VIP
-# - Failover in ~5 seconds if the leader node goes down
-#
-# No changes to existing services are required.
+# VIP 192.168.0.26 is now a static IP on orange-pi5 (eth0:1,
+# persisted in /etc/network/interfaces.d/vip-domotic).
+# kube-vip is disabled until the control plane migrates off SQLite,
+# because leader-election lease writes amplify the kine/SQLite
+# write-lock contention that causes the death-spiral.
+# To re-enable: change nodeSelector back to lbpool: lamg.
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -67,7 +60,7 @@ spec:
     spec:
       serviceAccountName: kube-vip
       nodeSelector:
-        svccontroller.k3s.cattle.io/lbpool: lamg
+        kube-vip-disabled: "true"
       hostNetwork: true
       tolerations:
         - effect: NoSchedule
