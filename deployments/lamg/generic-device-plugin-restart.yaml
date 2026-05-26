@@ -52,7 +52,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: kubectl
-              image: bitnami/kubectl:1.34
+              image: rancher/kubectl:v1.34.7
               command:
                 - kubectl
                 - -n
