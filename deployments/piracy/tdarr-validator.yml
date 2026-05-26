@@ -1,0 +1,166 @@
+# Continuous AV1 quality gate for the anime_health rollout.
+#
+# Three Deployments (tdarr-validator-{0,1,2}), one pinned to each
+# workload=media node. Each pod processes a disjoint shard of the
+# FileJSONDB candidates — sha1(src) % 3 == SHARD_INDEX — and loops
+# forever, re-listing candidates every LOOP_SECONDS.
+#
+# Tdarr keeps `folderToFolderConversionDeleteSource: false` permanently
+# (sources in /media/tv/, AV1 outputs in /media/tv-pilot/). DRY_RUN is
+# the safety: it computes VMAF and writes passed/failed audits but
+# never moves a file. Flip to "false" only after spot-checking the
+# passed-*.jsonl audit across all three shards.
+#
+# Audit files are sharded (passed-YYYYMMDD-sN.jsonl etc.) to avoid
+# concurrent NFS appends; load_passed_index() globs passed-*.jsonl so
+# every pod still sees every other shard's fingerprints.
+#
+# Per-shard config differs only in SHARD_INDEX + nodeSelector; the
+# repetition is deliberate (each Deployment reads top-to-bottom in
+# isolation, no YAML anchor games across documents).
+#
+# See ~/Documents/knowledge/projects/tdarr.md "Quality gating" for the
+# design and ~/Documents/projects/kubernetes/tdarr/validator/ for the
+# script + Dockerfile.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tdarr-validator-0
+  namespace: piracy
+  labels: {app: tdarr-validator, shard: "0"}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: tdarr-validator, shard: "0"}
+  template:
+    metadata:
+      labels: {app: tdarr-validator, shard: "0"}
+    spec:
+      nodeSelector: {kubernetes.io/hostname: work-vm-00}
+      imagePullSecrets: [{name: ghcr-agonbar}]
+      containers:
+        - name: validator
+          image: ghcr.io/agonbar/tdarr-validator:latest
+          imagePullPolicy: Always
+          env:
+            - {name: TZ, value: Europe/Madrid}
+            - {name: TDARR_URL, value: http://tdarr.piracy.svc.cluster.local:8266}
+            - name: TDARR_API_KEY
+              valueFrom: {secretKeyRef: {name: tdarr, key: seeded-api-key}}
+            - {name: LIBRARY_DB, value: anime_health}
+            - {name: SOURCE_PREFIX, value: /media/tv/}
+            - {name: OUTPUT_PREFIX, value: /media/tv-pilot/}
+            - {name: AUDIT_DIR, value: /media/tdarr-validator}
+            - {name: VMAF_MIN, value: "95.0"}
+            - {name: WINDOW_SECONDS, value: "30"}
+            - {name: SHARD_COUNT, value: "3"}
+            - {name: MAX_FILES, value: "500"}
+            - {name: MAX_RUNTIME_SECONDS, value: "3600"}
+            - {name: LOOP_SECONDS, value: "30"}
+            - {name: DRY_RUN, value: "true"}
+            - {name: SHARD_INDEX, value: "0"}
+          volumeMounts:
+            - {name: media, mountPath: /media}
+          resources:
+            requests: {memory: 512Mi, cpu: 1000m}
+            # Input-seek libvmaf peaks ~670 MB on 1080p 10-bit.
+            limits: {memory: 2Gi, cpu: "4"}
+      volumes:
+        - name: media
+          nfs: {server: 100.72.0.41, path: /mnt/RAID/docker/media}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tdarr-validator-1
+  namespace: piracy
+  labels: {app: tdarr-validator, shard: "1"}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: tdarr-validator, shard: "1"}
+  template:
+    metadata:
+      labels: {app: tdarr-validator, shard: "1"}
+    spec:
+      nodeSelector: {kubernetes.io/hostname: work-vm-01}
+      imagePullSecrets: [{name: ghcr-agonbar}]
+      containers:
+        - name: validator
+          image: ghcr.io/agonbar/tdarr-validator:latest
+          imagePullPolicy: Always
+          env:
+            - {name: TZ, value: Europe/Madrid}
+            - {name: TDARR_URL, value: http://tdarr.piracy.svc.cluster.local:8266}
+            - name: TDARR_API_KEY
+              valueFrom: {secretKeyRef: {name: tdarr, key: seeded-api-key}}
+            - {name: LIBRARY_DB, value: anime_health}
+            - {name: SOURCE_PREFIX, value: /media/tv/}
+            - {name: OUTPUT_PREFIX, value: /media/tv-pilot/}
+            - {name: AUDIT_DIR, value: /media/tdarr-validator}
+            - {name: VMAF_MIN, value: "95.0"}
+            - {name: WINDOW_SECONDS, value: "30"}
+            - {name: SHARD_COUNT, value: "3"}
+            - {name: MAX_FILES, value: "500"}
+            - {name: MAX_RUNTIME_SECONDS, value: "3600"}
+            - {name: LOOP_SECONDS, value: "30"}
+            - {name: DRY_RUN, value: "true"}
+            - {name: SHARD_INDEX, value: "1"}
+          volumeMounts:
+            - {name: media, mountPath: /media}
+          resources:
+            requests: {memory: 512Mi, cpu: 1000m}
+            limits: {memory: 2Gi, cpu: "4"}
+      volumes:
+        - name: media
+          nfs: {server: 100.72.0.41, path: /mnt/RAID/docker/media}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tdarr-validator-2
+  namespace: piracy
+  labels: {app: tdarr-validator, shard: "2"}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: tdarr-validator, shard: "2"}
+  template:
+    metadata:
+      labels: {app: tdarr-validator, shard: "2"}
+    spec:
+      nodeSelector: {kubernetes.io/hostname: work-vm-02}
+      imagePullSecrets: [{name: ghcr-agonbar}]
+      containers:
+        - name: validator
+          image: ghcr.io/agonbar/tdarr-validator:latest
+          imagePullPolicy: Always
+          env:
+            - {name: TZ, value: Europe/Madrid}
+            - {name: TDARR_URL, value: http://tdarr.piracy.svc.cluster.local:8266}
+            - name: TDARR_API_KEY
+              valueFrom: {secretKeyRef: {name: tdarr, key: seeded-api-key}}
+            - {name: LIBRARY_DB, value: anime_health}
+            - {name: SOURCE_PREFIX, value: /media/tv/}
+            - {name: OUTPUT_PREFIX, value: /media/tv-pilot/}
+            - {name: AUDIT_DIR, value: /media/tdarr-validator}
+            - {name: VMAF_MIN, value: "95.0"}
+            - {name: WINDOW_SECONDS, value: "30"}
+            - {name: SHARD_COUNT, value: "3"}
+            - {name: MAX_FILES, value: "500"}
+            - {name: MAX_RUNTIME_SECONDS, value: "3600"}
+            - {name: LOOP_SECONDS, value: "30"}
+            - {name: DRY_RUN, value: "true"}
+            - {name: SHARD_INDEX, value: "2"}
+          volumeMounts:
+            - {name: media, mountPath: /media}
+          resources:
+            requests: {memory: 512Mi, cpu: 1000m}
+            limits: {memory: 2Gi, cpu: "4"}
+      volumes:
+        - name: media
+          nfs: {server: 100.72.0.41, path: /mnt/RAID/docker/media}

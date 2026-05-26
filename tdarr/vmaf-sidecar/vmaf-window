@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+"""Single-file VMAF gate, invoked by the Tdarr worker plugin.
+
+Usage: vmaf-window <src> <out>
+
+Computes libvmaf across 3 windows (10%/50%/90% of duration) for the
+distorted file (`out`, AV1) vs reference (`src`, h264). Prints one JSON
+line on stdout:
+
+  {"verdict":"pass","vmaf_worst":97.06,"vmaf_mean":97.29,
+   "windows":[{"start":...,"vmaf":...},...],"seconds":312.4}
+
+Exit code 0 on a clean run regardless of verdict (pass / fail / error_*).
+Non-zero exit only if argv is wrong or ffprobe can't even start.
+
+The invocation is the same one validator.py uses — input-seek, both
+inputs forced to yuv420p10le, pool=mean. Getting any of these wrong
+yields garbage scores; see architecture/libvmaf-measurement-gotchas in
+the knowledge vault.
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+
+FFMPEG = os.environ.get("FFMPEG", "/sidecar/bin/ffmpeg")
+FFPROBE = os.environ.get("FFPROBE", "/sidecar/bin/ffprobe")
+WINDOW_SECONDS = int(os.environ.get("WINDOW_SECONDS", "30"))
+VMAF_MIN = float(os.environ.get("VMAF_MIN", "95.0"))
+
+VMAF_RE = re.compile(r"VMAF score:\s*([0-9.]+)")
+
+
+def probe_duration(path):
+    r = subprocess.run(
+        [FFPROBE, "-v", "error", "-show_entries", "format=duration",
+         "-of", "csv=p=0", path],
+        capture_output=True, text=True,
+    )
+    try:
+        return float(r.stdout.strip())
+    except ValueError:
+        return None
+
+
+def vmaf_window(src, out, start):
+    cmd = [
+        FFMPEG, "-nostdin", "-hide_banner",
+        "-ss", f"{start:.3f}", "-t", str(WINDOW_SECONDS), "-i", out,
+        "-ss", f"{start:.3f}", "-t", str(WINDOW_SECONDS), "-i", src,
+        "-lavfi",
+        "[0:v]format=yuv420p10le[dist];[1:v]format=yuv420p10le[ref];"
+        "[dist][ref]libvmaf=pool=mean",
+        "-f", "null", "-",
+    ]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    m = VMAF_RE.search(r.stderr)
+    return (float(m.group(1)) if m else None, r.stderr[-1500:])
+
+
+def main():
+    if len(sys.argv) != 3:
+        print("usage: vmaf-window <src> <out>", file=sys.stderr)
+        return 2
+    src, out = sys.argv[1], sys.argv[2]
+    rec = {"src": src, "out": out}
+    t0 = time.time()
+    duration = probe_duration(src)
+    if duration is None or duration < 3 * WINDOW_SECONDS + 10:
+        rec.update(verdict="error_duration", duration=duration,
+                   seconds=round(time.time() - t0, 1))
+        print(json.dumps(rec))
+        return 0
+    starts = [duration * 0.10, duration * 0.50, duration * 0.90]
+    windows = []
+    error_tail = None
+    for s in starts:
+        v, err = vmaf_window(src, out, s)
+        windows.append({"start": round(s, 2), "vmaf": v})
+        if v is None and error_tail is None:
+            error_tail = err
+    rec["windows"] = windows
+    if any(w["vmaf"] is None for w in windows):
+        rec.update(verdict="error_vmaf", error_tail=error_tail,
+                   seconds=round(time.time() - t0, 1))
+        print(json.dumps(rec))
+        return 0
+    vmafs = [w["vmaf"] for w in windows]
+    rec["vmaf_mean"] = round(sum(vmafs) / len(vmafs), 3)
+    rec["vmaf_worst"] = round(min(vmafs), 3)
+    rec["verdict"] = "pass" if rec["vmaf_worst"] >= VMAF_MIN else "fail"
+    rec["seconds"] = round(time.time() - t0, 1)
+    print(json.dumps(rec))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

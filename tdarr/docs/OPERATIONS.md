@@ -44,6 +44,13 @@ On `anime_health` (via the cruddb API or the UI):
   delete a source.
 - `pluginIDs: [{_id:"plugin1", id:"Tdarr_Plugin_anime_av1_pilot",
   checked:true, source:"Local", priority:0, InputsDB:{}}]`
+- `decisionMaker.settingsPlugin: true` ← **required**, otherwise the
+  worker takes the "no settings" branch in `determineTranscodeSettings`
+  and marks every file `Transcode error` without invoking ffmpeg.
+  Verified failure mode 2026-05-01: 505/6609 files errored before the
+  flag was flipped (then reset to `Queued` and retried). The pluginIDs
+  list alone is not enough; this toggle picks the plugin path over
+  basic-video / basic-audio / none.
 
 The plugin already skips non-h264 sources (HEVC and AV1 fall through
 with `Primary video codec is X; only h264 sources are converted`),
@@ -140,42 +147,55 @@ The plugin file is kept for reference: its SSIM-filter parsing and
 `otherArguments.originalLibraryFile` contract are reusable in the
 batch pass below.
 
-### Tier 2 — batch SSIM + VMAF acceptance pass (planned)
+### Tier 2 — continuous VMAF acceptance pass (deployed 2026-05-26)
 
-Before flipping `folderToFolderConversionDeleteSource: true` (i.e.,
-before reclaiming the projected ~4.57 TB of source files), every
-AV1 output is re-validated against its source by an external
-script. This is the only quality gate. Shape:
+Tdarr keeps `folderToFolderConversionDeleteSource: false`
+permanently. The deletion decision is owned by `tdarr-validator`,
+which now runs as **three Deployments** (`tdarr-validator-{0,1,2}`),
+one pinned to each `workload=media` node:
 
-- External script (Go/Python) on a host with a libvmaf-capable
-  ffmpeg (the bench used nixpkgs `ffmpeg-full` 8.0.1).
-- Reads candidates from Tdarr's `FileJSONDB` where
-  `TranscodeDecisionMaker = 'Transcode success'` and `DB =
-  pilot_av1_001` (or whatever AV1 library handles the rollout).
-- For each pair (source path from `originalLibraryFile.file` if
-  still recorded — see the F2FOutputJSONDB row inserted for the
-  pilot file as the canonical example, else derived from the
-  library's folder mapping; output path from the moved-to location):
-  - Cheap pass: `ffmpeg -i SOURCE -i AV1 -lavfi ssim -f null -`,
-    parse `SSIM ... All:`. Reject below 0.95 immediately.
-  - Expensive pass (only if SSIM passed): same shape with
-    `-lavfi libvmaf`, parse harmonic-mean VMAF. Reject below
-    threshold (likely 95–96 given bench median 97.4).
-- On both-pass: `rm` the source. On either fail: log, leave both,
-  surface for review.
+- Code: `tdarr/validator/validator.py`. Per file: 3 × 30s libvmaf
+  windows at 10/50/90% of duration, pass = worst window ≥ 95
+  (env `VMAF_MIN`). On pass + `DRY_RUN=false`, atomic
+  `os.replace(out, src)` on the shared NFS mount.
+- Manifest: `deployments/piracy/tdarr-validator.yml`.
+- Sharding: pod N processes files where
+  `sha1(src) % SHARD_COUNT == SHARD_INDEX`. Disjoint sets, no
+  coordinator. Each pod loops forever (`LOOP_SECONDS=30`),
+  re-listing candidates every iteration, bounded per-iteration by
+  `MAX_FILES=500` + `MAX_RUNTIME_SECONDS=3600`.
+- Audit logs at `/media/tdarr-validator/{passed,failed,errors}-YYYYMMDD-s{0,1,2}.jsonl`.
+  Sharded filenames avoid concurrent NFS appends.
+  `load_passed_index()` globs `passed-*.jsonl` so every pod still
+  sees every other shard's fingerprints (fingerprint-stable
+  skipping across shards).
+- The earlier `tdarr-validator` CronJob is deleted; the only
+  scheduling now is the Deployment loop.
 
-Defer this until: (a) the AV1 sweep has produced a sizeable batch
-of outputs to validate, AND (b) the disk-space pressure from
-keeping originals + AV1s justifies the cleanup work.
+### Flipping DRY_RUN → false
+
+After spot-checking a per-shard `passed-YYYYMMDD-sN.jsonl` and
+confirming the VMAF scores look right:
+
+```bash
+for n in 0 1 2; do
+  kubectl --context lamg -n piracy set env deploy/tdarr-validator-$n DRY_RUN=false
+done
+```
+
+The replay path on fingerprint hits then performs the move without
+recomputing VMAF (`pass_replayed` counter in logs), so the prior
+DRY_RUN cache front-loads the first real run.
 
 ### Where to fail safely
 
-The batch script SHOULD never delete a source without:
-1. SSIM pass on the new output
-2. VMAF pass on the new output
-3. Sanity check that the AV1 file is present and non-empty
-4. Sanity check that the AV1 stream count matches the source's
+The validator SHOULD never delete a source without:
+1. Per-window VMAF ≥ VMAF_MIN on all three windows
+2. Sanity check that the AV1 file is present and non-empty
+3. Sanity check that the AV1 stream count matches the source's
    non-attachment streams (catches truncated muxes)
+
+(2) and (3) are not yet enforced — open work.
 
 ## 4. Manual queries / state
 
