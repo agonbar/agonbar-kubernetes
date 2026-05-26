@@ -53,3 +53,5 @@ spec:
           path: /dev
   updateStrategy:
     type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 100%
