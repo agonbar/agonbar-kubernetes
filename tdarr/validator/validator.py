@@ -43,7 +43,10 @@ SOURCE_PREFIX = os.environ.get("SOURCE_PREFIX", "/media/tv/")
 OUTPUT_PREFIX = os.environ.get("OUTPUT_PREFIX", "/media/tv-pilot/")
 AUDIT_DIR = os.environ.get("AUDIT_DIR", "/media/tdarr-validator")
 VMAF_MIN = float(os.environ.get("VMAF_MIN", "95.0"))
-WINDOW_SECONDS = int(os.environ.get("WINDOW_SECONDS", "30"))
+# libvmaf's internal worker thread count. Bigger = faster decode of the
+# 24-min-ish anime files. 4 is a reasonable default vs the validator pod's
+# cpu limit of 4; bump alongside `resources.limits.cpu` if it changes.
+VMAF_THREADS = int(os.environ.get("VMAF_THREADS", "4"))
 MAX_FILES = int(os.environ.get("MAX_FILES", "10"))
 MAX_RUNTIME_SECONDS = int(os.environ.get("MAX_RUNTIME_SECONDS", "21600"))  # 6h
 DRY_RUN = os.environ.get("DRY_RUN", "true").lower() == "true"
@@ -86,7 +89,10 @@ def fingerprint(path: str) -> dict:
 def load_passed_index() -> dict[str, dict]:
     """Build {src_path: {src_fp, out_fp}} from every passed-*.jsonl audit
     file, so prior validations can be skipped when nothing on disk has
-    changed. Only "pass" records count — failures/errors are re-checked."""
+    changed. Only "pass" records produced by the CURRENT algorithm
+    count — old algorithm passes are ignored so an algorithm change
+    forces re-validation (otherwise a flawed-measurement pass would
+    skip forever). Failures/errors are always re-checked."""
     index: dict[str, dict] = {}
     for path in sorted(glob.glob(f"{AUDIT_DIR}/passed-*.jsonl")):
         with open(path) as f:
@@ -96,6 +102,8 @@ def load_passed_index() -> dict[str, dict]:
                 except json.JSONDecodeError:
                     continue
                 if rec.get("verdict") != "pass":
+                    continue
+                if rec.get("algorithm") != ALGORITHM:
                     continue
                 src = rec.get("src")
                 fp = rec.get("fingerprint")
@@ -145,21 +153,30 @@ def probe_duration(path: str) -> float | None:
         return None
 
 
-def vmaf_window(src: str, out: str, start: float) -> tuple[float | None, str]:
-    # Input seek (-ss/-t BEFORE each -i): jumps to the keyframe near `start`
-    # and decodes only the window. Output seek (-ss AFTER -i) instead decodes
-    # and discards from t=0, which makes both memory and wall time scale with
-    # the seek offset — a 90% window on a 24-min file then buffers tens of GB
-    # and OOMs. Input seek is accurate in modern ffmpeg (it decodes from the
-    # keyframe to the exact seek point) and bounded. See
-    # architecture/libvmaf-measurement-gotchas in the vault.
+ALGORITHM = "full_v2"
+# Whole-file VMAF, no input seek. The previous windowed sampler
+# (algorithm "windowed_v1") seeked to t=10/50/90% independently on src
+# and out, which produced garbage scores when libsvtav1 dropped duplicate
+# frames during encode (VFR-ish sources: e.g. Black Clover S1 reported
+# 34377 src frames vs 34138 AV1 frames over an identical 1435s duration
+# — seeks to a wall-clock T landed on different source moments on each
+# side, scoring 49-66 on visually-fine encodes). The fix is to feed both
+# files start-to-end and let libvmaf's framesync align by PTS: each
+# AV1 frame is compared against the h264 frame at the same PTS, and
+# duplicate-frame drops show up as the (correct, lossless) cost they
+# actually are. Trade-off: ~10x slower per file vs windowed sampling,
+# which the user explicitly accepted in exchange for correctness.
+
+def vmaf_full(src: str, out: str) -> tuple[float | None, str]:
     cmd = [
         FFMPEG, "-nostdin", "-hide_banner",
-        "-ss", f"{start:.3f}", "-t", str(WINDOW_SECONDS), "-i", out,
-        "-ss", f"{start:.3f}", "-t", str(WINDOW_SECONDS), "-i", src,
+        "-i", out,
+        "-i", src,
+        "-an", "-sn",   # ignore audio + subtitles, decode video only
         "-lavfi",
-        "[0:v]format=yuv420p10le[dist];[1:v]format=yuv420p10le[ref];"
-        "[dist][ref]libvmaf=pool=mean",
+        "[0:v]format=yuv420p10le[dist];"
+        "[1:v]format=yuv420p10le[ref];"
+        f"[dist][ref]libvmaf=pool=mean:n_threads={VMAF_THREADS}",
         "-f", "null", "-",
     ]
     r = subprocess.run(cmd, capture_output=True, text=True)
@@ -169,26 +186,20 @@ def vmaf_window(src: str, out: str, start: float) -> tuple[float | None, str]:
 
 def validate(pair: dict) -> dict:
     src, out = pair["src"], pair["out"]
-    rec = {"src": src, "out": out, "tdarr_id": pair["tdarr_id"]}
+    rec = {"src": src, "out": out, "tdarr_id": pair["tdarr_id"],
+           "algorithm": ALGORITHM}
     duration = probe_duration(src)
-    if duration is None or duration < 3 * WINDOW_SECONDS + 10:
+    if duration is None or duration < 30:
         rec["verdict"] = "error_duration"
         rec["duration"] = duration
         return rec
-    starts = [duration * 0.10, duration * 0.50, duration * 0.90]
-    window_results = []
-    for s in starts:
-        v, err = vmaf_window(src, out, s)
-        window_results.append({"start": round(s, 2), "vmaf": v, "err": err if v is None else None})
-    rec["windows"] = [{"start": w["start"], "vmaf": w["vmaf"]} for w in window_results]
-    if any(w["vmaf"] is None for w in window_results):
+    v, err = vmaf_full(src, out)
+    if v is None:
         rec["verdict"] = "error_vmaf"
-        rec["error_tails"] = [w["err"] for w in window_results if w["err"]][:1]
+        rec["error_tail"] = err
         return rec
-    vmafs = [w["vmaf"] for w in window_results]
-    rec["vmaf_mean"] = round(sum(vmafs) / len(vmafs), 3)
-    rec["vmaf_worst"] = round(min(vmafs), 3)
-    rec["verdict"] = "pass" if rec["vmaf_worst"] >= VMAF_MIN else "fail"
+    rec["vmaf"] = round(v, 3)
+    rec["verdict"] = "pass" if v >= VMAF_MIN else "fail"
     return rec
 
 
@@ -258,8 +269,8 @@ def run_once() -> dict:
             }
         counts[rec["verdict"]] = counts.get(rec["verdict"], 0) + 1
         log.info(
-            "verdict=%s vmaf_mean=%s vmaf_worst=%s seconds=%.1f",
-            rec["verdict"], rec.get("vmaf_mean"), rec.get("vmaf_worst"), rec["seconds"],
+            "verdict=%s vmaf=%s seconds=%.1f",
+            rec["verdict"], rec.get("vmaf"), rec["seconds"],
         )
         if rec["verdict"] == "pass":
             append_audit("passed", rec)

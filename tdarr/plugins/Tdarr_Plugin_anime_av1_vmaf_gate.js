@@ -131,10 +131,11 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
 
   // Run the gate. Synchronous — the worker pod has no tight liveness
   // probe and routinely blocks for tens of minutes on libsvtav1.
+  // Whole-file VMAF on a 24-min anime episode runs ~15-20 min wall time.
   const r = spawnSync(sidecarBin, [src, out], {
     encoding: 'utf8',
     maxBuffer: 32 * 1024 * 1024,
-    timeout: 30 * 60 * 1000,   // 30 min hard cap per file
+    timeout: 60 * 60 * 1000,   // 60 min hard cap per file
   });
   if (r.status !== 0 || !r.stdout) {
     response.error = true;
@@ -156,15 +157,14 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
   if (verdict.verdict !== 'pass') {
     response.error = true;
     response.infoLog += `VMAF gate FAIL: verdict=${verdict.verdict} `
-      + `worst=${verdict.vmaf_worst} mean=${verdict.vmaf_mean} `
-      + `windows=${JSON.stringify(verdict.windows)} seconds=${verdict.seconds}. `
+      + `vmaf=${verdict.vmaf} seconds=${verdict.seconds}. `
       + 'Both files left on disk for manual review.\n';
     return response;
   }
 
-  if (verdict.vmaf_worst < minVmaf) {
+  if (verdict.vmaf < minVmaf) {
     response.error = true;
-    response.infoLog += `VMAF gate FAIL: worst=${verdict.vmaf_worst} < minVmaf=${minVmaf}. `
+    response.infoLog += `VMAF gate FAIL: vmaf=${verdict.vmaf} < minVmaf=${minVmaf}. `
       + 'Both files left on disk.\n';
     return response;
   }
@@ -181,7 +181,7 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
     return response;
   }
 
-  response.infoLog += `VMAF gate PASS: worst=${verdict.vmaf_worst} mean=${verdict.vmaf_mean} `
+  response.infoLog += `VMAF gate PASS: vmaf=${verdict.vmaf} `
     + `seconds=${verdict.seconds}. Renamed AV1 over h264 source: "${src}".\n`;
 
   // Disk is now the source of truth. Tell Tdarr to drop the stale
