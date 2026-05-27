@@ -117,7 +117,7 @@ spec:
               cpu: 50m
               memory: 512Mi
             limits:
-              memory: 1Gi
+              memory: 2Gi  # bumped 2026-05-27 — was 1Gi, OOM-killed 6x in a day under vault-curator write bursts (embeddings/index)
         # Tailscale sidecar — shares the pod netns, so :8000 above becomes
         # reachable tailnet-wide at vault-mcp.senseizero.lan. Mirrors the
         # chino-prd pattern, minus tags (registers untagged under agonbar@).
