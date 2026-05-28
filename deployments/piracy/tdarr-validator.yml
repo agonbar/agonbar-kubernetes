@@ -59,7 +59,7 @@ spec:
             - {name: MAX_FILES, value: "500"}
             - {name: MAX_RUNTIME_SECONDS, value: "3600"}
             - {name: LOOP_SECONDS, value: "30"}
-            - {name: DRY_RUN, value: "true"}
+            - {name: DRY_RUN, value: "false"}
             - {name: SHARD_INDEX, value: "0"}
           volumeMounts:
             - {name: media, mountPath: /media}
@@ -107,7 +107,7 @@ spec:
             - {name: MAX_FILES, value: "500"}
             - {name: MAX_RUNTIME_SECONDS, value: "3600"}
             - {name: LOOP_SECONDS, value: "30"}
-            - {name: DRY_RUN, value: "true"}
+            - {name: DRY_RUN, value: "false"}
             - {name: SHARD_INDEX, value: "1"}
           volumeMounts:
             - {name: media, mountPath: /media}
@@ -154,7 +154,7 @@ spec:
             - {name: MAX_FILES, value: "500"}
             - {name: MAX_RUNTIME_SECONDS, value: "3600"}
             - {name: LOOP_SECONDS, value: "30"}
-            - {name: DRY_RUN, value: "true"}
+            - {name: DRY_RUN, value: "false"}
             - {name: SHARD_INDEX, value: "2"}
           volumeMounts:
             - {name: media, mountPath: /media}
