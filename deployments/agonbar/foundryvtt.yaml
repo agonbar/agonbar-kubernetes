@@ -31,7 +31,7 @@ spec:
             - name: CONTAINER_PRESERVE_CONFIG
               value: "true"
             - name: FOUNDRY_HOSTNAME
-              value: foundryvtt.${BASE_DOMAIN}
+              value: foundryvtt.${AMANDA_DOMAIN}
             - name: FOUNDRY_PROXY_SSL
               value: "true"
             - name: FOUNDRY_PROXY_PORT
@@ -124,7 +124,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - host: foundryvtt.${BASE_DOMAIN}
+    - host: foundryvtt.${AMANDA_DOMAIN}
       http:
         paths:
           - pathType: Prefix
@@ -135,6 +135,6 @@ spec:
                 port:
                   number: 30000
   tls:
-    - secretName: foundryvtt.${BASE_DOMAIN}
+    - secretName: foundryvtt.${AMANDA_DOMAIN}
       hosts:
-        - foundryvtt.${BASE_DOMAIN}
+        - foundryvtt.${AMANDA_DOMAIN}
