@@ -86,22 +86,19 @@ def fingerprint(path: str) -> dict:
     return {"mtime": int(s.st_mtime), "size": s.st_size}
 
 
-def load_passed_index() -> dict[str, dict]:
-    """Build {src_path: {src_fp, out_fp}} from every passed-*.jsonl audit
-    file, so prior validations can be skipped when nothing on disk has
-    changed. Only "pass" records produced by the CURRENT algorithm
-    count — old algorithm passes are ignored so an algorithm change
-    forces re-validation (otherwise a flawed-measurement pass would
-    skip forever). Failures/errors are always re-checked."""
+def _load_verdict_index(glob_pattern: str, want_verdict: str) -> dict[str, dict]:
+    """Generic loader: scan jsonl audit files and build a
+    {src_path: fingerprint} index for records matching `want_verdict`
+    under the CURRENT algorithm."""
     index: dict[str, dict] = {}
-    for path in sorted(glob.glob(f"{AUDIT_DIR}/passed-*.jsonl")):
+    for path in sorted(glob.glob(f"{AUDIT_DIR}/{glob_pattern}")):
         with open(path) as f:
             for line in f:
                 try:
                     rec = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                if rec.get("verdict") != "pass":
+                if rec.get("verdict") != want_verdict:
                     continue
                 if rec.get("algorithm") != ALGORITHM:
                     continue
@@ -110,6 +107,23 @@ def load_passed_index() -> dict[str, dict]:
                 if src and fp:
                     index[src] = fp
     return index
+
+
+def load_passed_index() -> dict[str, dict]:
+    """{src_path: fingerprint} of files that already passed under the
+    current algorithm. The validator skips these unless DRY_RUN is off
+    and the prior pass needs replay."""
+    return _load_verdict_index("passed-*.jsonl", "pass")
+
+
+def load_failed_index() -> dict[str, dict]:
+    """{src_path: fingerprint} of files that already failed under the
+    current algorithm. These are skipped silently on subsequent runs
+    until their on-disk state changes — without this, a handful of
+    known-bad transcodes (e.g. Black Clover S1, encoder regression)
+    eat most of the cluster CPU re-failing the same files every loop
+    iteration."""
+    return _load_verdict_index("failed-*.jsonl", "fail")
 
 
 def in_shard(src: str) -> bool:
@@ -220,10 +234,12 @@ def append_audit(name: str, rec: dict) -> None:
 
 def run_once() -> dict:
     started = time.time()
-    counts = {"pass": 0, "pass_replayed": 0, "fail": 0,
+    counts = {"pass": 0, "pass_replayed": 0, "fail": 0, "fail_cached": 0,
               "error_vmaf": 0, "error_duration": 0, "skipped_dry": 0}
     passed_index = load_passed_index()
-    log.info("loaded passed_index entries=%d", len(passed_index))
+    failed_index = load_failed_index()
+    log.info("loaded passed_index entries=%d failed_index entries=%d",
+             len(passed_index), len(failed_index))
     pool = list(candidates())
     log.info("candidates available=%d", len(pool))
     processed = 0
@@ -234,6 +250,17 @@ def run_once() -> dict:
         if time.time() - started >= MAX_RUNTIME_SECONDS:
             log.info("max_runtime reached, stopping")
             break
+        prior_fail = failed_index.get(pair["src"])
+        if prior_fail:
+            current_fp = {"src": fingerprint(pair["src"]), "out": fingerprint(pair["out"])}
+            if prior_fail == current_fp:
+                # Same files on disk as last time this failed: skip
+                # silently. If a fresh transcode lands (different mtime
+                # or size on `out`), the fingerprint mismatches and we
+                # re-validate.
+                counts["fail_cached"] += 1
+                continue
+            log.info("fingerprint changed since prior fail, re-validating %s", pair["src"])
         prior = passed_index.get(pair["src"])
         if prior:
             current_fp = {"src": fingerprint(pair["src"]), "out": fingerprint(pair["out"])}
@@ -262,7 +289,7 @@ def run_once() -> dict:
         rec = validate(pair)
         rec["seconds"] = round(time.time() - t0, 1)
         rec["dry_run"] = DRY_RUN
-        if rec["verdict"] == "pass":
+        if rec["verdict"] in ("pass", "fail"):
             rec["fingerprint"] = {
                 "src": fingerprint(pair["src"]),
                 "out": fingerprint(pair["out"]),
