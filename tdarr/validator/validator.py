@@ -240,7 +240,16 @@ def run_once() -> dict:
     failed_index = load_failed_index()
     log.info("loaded passed_index entries=%d failed_index entries=%d",
              len(passed_index), len(failed_index))
-    pool = list(candidates())
+    try:
+        pool = list(candidates())
+    except (urllib.error.URLError, ConnectionError, TimeoutError) as e:
+        # Tdarr server unreachable (pod rescheduling, node down, etc.).
+        # Don't crash — keep the pod Running so it picks up automatically
+        # when the API returns. The outer loop sleeps LOOP_SECONDS and
+        # retries. Previous behavior crashlooped, accumulating 150+
+        # restarts during a 12h orange-pi5 outage.
+        log.warning("tdarr API unreachable, skipping iteration: %s", e)
+        return counts
     log.info("candidates available=%d", len(pool))
     processed = 0
     for pair in pool:
