@@ -63,3 +63,30 @@ spec:
       name: homeassistant
 
 ---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: homeassistant
+  namespace: aya
+  annotations:
+    kubernetes.io/ingress.class: traefik
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: home-aya.${BASE_DOMAIN}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: homeassistant
+                port:
+                  number: 8123
+  tls:
+    - hosts:
+        - home-aya.${BASE_DOMAIN}
+      secretName: home-aya.${BASE_DOMAIN}
+
+---
