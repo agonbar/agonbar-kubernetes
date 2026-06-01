@@ -88,6 +88,8 @@ spec:
                   env:
                       - name: SLSKD_REMOTE_CONFIGURATION
                         value: 'true'
+                      - name: SLSKD_WEB_IP_ADDRESS
+                        value: '0.0.0.0'
                       - name: SLSKD_SHARED_DIR
                         value: /music
                       - name: SLSKD_USERNAME
