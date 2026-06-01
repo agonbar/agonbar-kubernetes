@@ -1,0 +1,122 @@
+---
+# node-autotaint
+#
+# Pragmatic homelab alternative to medik8s/node-healthcheck-operator.
+# Watches all nodes; for any node with Ready=Unknown/False for longer than
+# UNREADY_THRESHOLD_SECONDS, applies node.kubernetes.io/out-of-service=:NoExecute
+# so the CSI/attach-detach controllers force-detach RWO volumes and
+# Terminating pods get force-deleted. When a node returns to Ready=True,
+# the taint is removed.
+#
+# This is the "Layer 1" automation discussed in the runbook
+# `runbooks/node-out-of-service-taint.md`. Outgrowth path: replace with
+# NHC + SNR (see `runbooks/node-healthcheck-operator-migration.md`).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: node-autotaint
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: node-autotaint
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: node-autotaint
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: node-autotaint
+subjects:
+  - kind: ServiceAccount
+    name: node-autotaint
+    namespace: kube-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: node-autotaint-script
+  namespace: kube-system
+data:
+  reconcile.sh: |
+    #!/bin/sh
+    set -eu
+
+    TAINT_KEY="node.kubernetes.io/out-of-service"
+    UNREADY_THRESHOLD_SECONDS="${UNREADY_THRESHOLD_SECONDS:-300}"
+
+    NOW=$(date -u +%s)
+
+    kubectl get nodes -o json | jq -r '
+      .items[] |
+      . as $n |
+      ($n.spec.taints // [] | map(select(.key=="'"$TAINT_KEY"'")) | length) as $has_taint |
+      ($n.status.conditions[] | select(.type=="Ready")) as $cond |
+      "\($n.metadata.name)\t\($cond.status)\t\($cond.lastTransitionTime)\t\($has_taint)"
+    ' | while IFS="$(printf '\t')" read -r name status transition has_taint; do
+      transition_epoch=$(date -u -d "$transition" +%s 2>/dev/null || echo 0)
+      age=$((NOW - transition_epoch))
+
+      case "$status" in
+        True)
+          if [ "$has_taint" = "1" ]; then
+            echo "[recover] $name is Ready; removing $TAINT_KEY taint"
+            kubectl taint node "$name" "${TAINT_KEY}-" || true
+          fi
+          ;;
+        Unknown|False)
+          if [ "$age" -gt "$UNREADY_THRESHOLD_SECONDS" ] && [ "$has_taint" = "0" ]; then
+            echo "[evict] $name Ready=$status for ${age}s (> $UNREADY_THRESHOLD_SECONDS); applying $TAINT_KEY"
+            kubectl taint node "$name" "${TAINT_KEY}=:NoExecute" --overwrite || true
+          else
+            echo "[wait]  $name Ready=$status for ${age}s, taint_present=$has_taint"
+          fi
+          ;;
+      esac
+    done
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: node-autotaint
+  namespace: kube-system
+spec:
+  schedule: "*/2 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 600
+      template:
+        spec:
+          serviceAccountName: node-autotaint
+          restartPolicy: OnFailure
+          containers:
+            - name: reconcile
+              image: alpine/k8s:1.30.0
+              command: ["/bin/sh", "/script/reconcile.sh"]
+              env:
+                - name: UNREADY_THRESHOLD_SECONDS
+                  value: "300"
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  memory: 64Mi
+              volumeMounts:
+                - name: script
+                  mountPath: /script
+          volumes:
+            - name: script
+              configMap:
+                name: node-autotaint-script
+                defaultMode: 0555
