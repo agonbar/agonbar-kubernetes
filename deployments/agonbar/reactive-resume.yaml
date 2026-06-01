@@ -47,6 +47,8 @@ spec:
       - name: postgres-data
         persistentVolumeClaim:
           claimName: reactive-resume-postgres
+      nodeSelector:
+        kubernetes.io/hostname: ovh02
       imagePullSecrets:
         - name: dockerhub-secret
 
@@ -236,6 +238,8 @@ spec:
       - name: uploads
         persistentVolumeClaim:
           claimName: reactive-resume-uploads
+      nodeSelector:
+        kubernetes.io/hostname: ovh02
       imagePullSecrets:
         - name: dockerhub-secret
 
