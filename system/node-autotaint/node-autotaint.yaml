@@ -59,9 +59,8 @@ data:
       . as $n |
       ($n.spec.taints // [] | map(select(.key=="'"$TAINT_KEY"'")) | length) as $has_taint |
       ($n.status.conditions[] | select(.type=="Ready")) as $cond |
-      "\($n.metadata.name)\t\($cond.status)\t\($cond.lastTransitionTime)\t\($has_taint)"
-    ' | while IFS="$(printf '\t')" read -r name status transition has_taint; do
-      transition_epoch=$(date -u -d "$transition" +%s 2>/dev/null || echo 0)
+      "\($n.metadata.name)\t\($cond.status)\t\($cond.lastTransitionTime | fromdateiso8601)\t\($has_taint)"
+    ' | while IFS="$(printf '\t')" read -r name status transition_epoch has_taint; do
       age=$((NOW - transition_epoch))
 
       case "$status" in
