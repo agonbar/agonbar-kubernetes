@@ -41,6 +41,8 @@ spec:
             path: /docker/aya-homeassistant/
       nodeSelector:
         svccontroller.k3s.cattle.io/lbpool: aya
+      tolerations:
+        - {key: dedicated, operator: Equal, value: media, effect: NoSchedule}
 
 ---
 kind: Service
