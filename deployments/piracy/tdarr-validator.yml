@@ -39,6 +39,8 @@ spec:
       labels: {app: tdarr-validator, shard: "0"}
     spec:
       nodeSelector: {kubernetes.io/hostname: work-vm-00}
+      tolerations:
+        - {key: dedicated, operator: Equal, value: media, effect: NoSchedule}
       imagePullSecrets: [{name: ghcr-agonbar}]
       containers:
         - name: validator
@@ -87,6 +89,8 @@ spec:
       labels: {app: tdarr-validator, shard: "1"}
     spec:
       nodeSelector: {kubernetes.io/hostname: work-vm-01}
+      tolerations:
+        - {key: dedicated, operator: Equal, value: media, effect: NoSchedule}
       imagePullSecrets: [{name: ghcr-agonbar}]
       containers:
         - name: validator
@@ -134,6 +138,8 @@ spec:
       labels: {app: tdarr-validator, shard: "2"}
     spec:
       nodeSelector: {kubernetes.io/hostname: work-vm-02}
+      tolerations:
+        - {key: dedicated, operator: Equal, value: media, effect: NoSchedule}
       imagePullSecrets: [{name: ghcr-agonbar}]
       containers:
         - name: validator

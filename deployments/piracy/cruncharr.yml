@@ -83,6 +83,8 @@ spec:
             path: /mnt/SSD/torrents/
       nodeSelector:
         workload: media
+      tolerations:
+        - {key: dedicated, operator: Equal, value: media, effect: NoSchedule}
 ---
 apiVersion: v1
 kind: Service
