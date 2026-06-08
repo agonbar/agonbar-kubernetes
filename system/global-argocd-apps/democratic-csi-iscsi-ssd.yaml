@@ -40,6 +40,13 @@ spec:
           existingConfigSecret: democratic-csi-iscsi-ssd-driver-config
           config:
             driver: freenas-api-iscsi
+
+        node:
+          tolerations:
+            - key: dedicated
+              operator: Equal
+              value: media
+              effect: NoSchedule
   destination:
     name: in-cluster
     namespace: democratic-csi
