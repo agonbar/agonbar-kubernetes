@@ -72,6 +72,49 @@ const plugin = (file, librarySettings, inputs, otherArguments) => {
   }
   if (primaryVideoCodec !== 'h264') {
     response.infoLog += `Primary video codec is ${primaryVideoCodec}; only h264 sources are converted by this plugin. Skipping.\n`;
+    // Mark the file Not required directly in FileJSONDB so it doesn't sit
+    // in the Queued state until a worker happens to run the plugin chain
+    // again. Without this, every validator swap (or direct AV1 import
+    // from Sonarr/torrents) re-Queues the file on Tdarr's next library
+    // scan because decisionMaker.settingsPlugin:true bypasses the
+    // video_codec_names_exclude rule — that exclude switch only applies
+    // when the library is in Video mode, not Plugin mode. Mass re-queue
+    // can hit Tdarr's "staged file limit" warning and starve real h264
+    // work. Best-effort: errors are swallowed (worst case the file
+    // just stays Queued — same as before this branch existed).
+    try {
+      const http = require('http');
+      const apiKey = process.env.apiKey || '';
+      const serverIP = process.env.serverIP || 'tdarr.piracy.svc.cluster.local';
+      const serverPort = process.env.serverPort || '8266';
+      const body = JSON.stringify({
+        data: {
+          collection: 'FileJSONDB',
+          mode: 'update',
+          docID: file._id,
+          obj: { TranscodeDecisionMaker: 'Not required' },
+        },
+      });
+      const req = http.request({
+        hostname: serverIP,
+        port: parseInt(serverPort, 10),
+        path: '/api/v2/cruddb',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+          'x-api-key': apiKey,
+        },
+        timeout: 5000,
+      }, (res) => { res.on('data', () => {}); res.on('end', () => {}); });
+      req.on('error', () => {});
+      req.on('timeout', () => { req.destroy(); });
+      req.write(body);
+      req.end();
+      response.infoLog += `Marked ${file._id} as Not required in FileJSONDB.\n`;
+    } catch (e) {
+      response.infoLog += `cruddb update failed (best-effort, file remains Queued): ${e.message}\n`;
+    }
     return response;
   }
 
