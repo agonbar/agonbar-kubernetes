@@ -58,6 +58,7 @@ spec:
             - {name: VMAF_MIN, value: "95.0"}
             - {name: WINDOW_SECONDS, value: "30"}
             - {name: SHARD_COUNT, value: "3"}
+            - {name: SHARD_SALT, value: "20260614"}
             - {name: MAX_FILES, value: "500"}
             - {name: MAX_RUNTIME_SECONDS, value: "3600"}
             - {name: LOOP_SECONDS, value: "30"}
@@ -108,6 +109,7 @@ spec:
             - {name: VMAF_MIN, value: "95.0"}
             - {name: WINDOW_SECONDS, value: "30"}
             - {name: SHARD_COUNT, value: "3"}
+            - {name: SHARD_SALT, value: "20260614"}
             - {name: MAX_FILES, value: "500"}
             - {name: MAX_RUNTIME_SECONDS, value: "3600"}
             - {name: LOOP_SECONDS, value: "30"}
@@ -157,6 +159,7 @@ spec:
             - {name: VMAF_MIN, value: "95.0"}
             - {name: WINDOW_SECONDS, value: "30"}
             - {name: SHARD_COUNT, value: "3"}
+            - {name: SHARD_SALT, value: "20260614"}
             - {name: MAX_FILES, value: "500"}
             - {name: MAX_RUNTIME_SECONDS, value: "3600"}
             - {name: LOOP_SECONDS, value: "30"}

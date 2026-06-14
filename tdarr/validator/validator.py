@@ -52,10 +52,15 @@ MAX_RUNTIME_SECONDS = int(os.environ.get("MAX_RUNTIME_SECONDS", "21600"))  # 6h
 DRY_RUN = os.environ.get("DRY_RUN", "true").lower() == "true"
 FFMPEG = os.environ.get("FFMPEG", "ffmpeg")
 FFPROBE = os.environ.get("FFPROBE", "ffprobe")
-# Sharding: pod N of SHARD_COUNT processes files where sha1(src) % SHARD_COUNT == SHARD_INDEX.
+# Sharding: pod N of SHARD_COUNT processes files where sha1(SHARD_SALT+src) % SHARD_COUNT == SHARD_INDEX.
 # Disjoint sets across pods, stable across restarts, no coordinator needed.
+# SHARD_SALT bumps the bucket mapping when distribution becomes uneven — set to
+# a fresh value across all shards to redistribute the unprocessed queue. The
+# pass/fail indexes glob across all shards (passed-*.jsonl), so files that were
+# already validated under the old salt remain skipped after the salt change.
 SHARD_INDEX = int(os.environ.get("SHARD_INDEX", "0"))
 SHARD_COUNT = int(os.environ.get("SHARD_COUNT", "1"))
+SHARD_SALT = os.environ.get("SHARD_SALT", "")
 # When >0, run forever: each iteration re-lists candidates and processes a batch
 # bounded by MAX_FILES + MAX_RUNTIME_SECONDS, then sleeps LOOP_SECONDS.
 LOOP_SECONDS = int(os.environ.get("LOOP_SECONDS", "0"))
@@ -129,7 +134,7 @@ def load_failed_index() -> dict[str, dict]:
 def in_shard(src: str) -> bool:
     if SHARD_COUNT <= 1:
         return True
-    h = int(hashlib.sha1(src.encode()).hexdigest(), 16)
+    h = int(hashlib.sha1((SHARD_SALT + src).encode()).hexdigest(), 16)
     return h % SHARD_COUNT == SHARD_INDEX
 
 
