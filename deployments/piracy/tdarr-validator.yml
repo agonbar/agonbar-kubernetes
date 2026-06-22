@@ -30,7 +30,12 @@ metadata:
   namespace: piracy
   labels: {app: tdarr-validator, shard: "0"}
 spec:
-  replicas: 1
+  # Scaled to 0: work-vm-00 (its pinned node) is offline / in use for other
+  # work. The sweep runs on 2 shards (validator-1 SHARD_INDEX=0, validator-2
+  # SHARD_INDEX=1, SHARD_COUNT=2) across work-vm-01/02 meanwhile. Restore to
+  # replicas=1 + SHARD_COUNT=3 on all shards (validator-1 idx=1, validator-2
+  # idx=2) when work-vm-00 returns.
+  replicas: 0
   strategy: {type: Recreate}
   selector:
     matchLabels: {app: tdarr-validator, shard: "0"}
@@ -108,7 +113,7 @@ spec:
             - {name: AUDIT_DIR, value: /media/tdarr-validator}
             - {name: VMAF_MIN, value: "95.0"}
             - {name: WINDOW_SECONDS, value: "30"}
-            - {name: SHARD_COUNT, value: "3"}
+            - {name: SHARD_COUNT, value: "2"}
             - {name: SHARD_SALT, value: "20260614"}
             - {name: MAX_FILES, value: "500"}
             - {name: MAX_RUNTIME_SECONDS, value: "3600"}
@@ -158,13 +163,13 @@ spec:
             - {name: AUDIT_DIR, value: /media/tdarr-validator}
             - {name: VMAF_MIN, value: "95.0"}
             - {name: WINDOW_SECONDS, value: "30"}
-            - {name: SHARD_COUNT, value: "3"}
+            - {name: SHARD_COUNT, value: "2"}
             - {name: SHARD_SALT, value: "20260614"}
             - {name: MAX_FILES, value: "500"}
             - {name: MAX_RUNTIME_SECONDS, value: "3600"}
             - {name: LOOP_SECONDS, value: "30"}
             - {name: DRY_RUN, value: "false"}
-            - {name: SHARD_INDEX, value: "2"}
+            - {name: SHARD_INDEX, value: "0"}
           volumeMounts:
             - {name: media, mountPath: /media}
           resources:
