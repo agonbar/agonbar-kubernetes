@@ -15,9 +15,11 @@
 # flannel-iface=tailscale0). Endpoints (not ExternalName) so Traefik keeps the
 # real backend IP and ExternalName-via-Ingress restrictions don't apply.
 #
-# REQUIRES: work-vm-00 (100.72.0.8) up and serving herdr-web; and a public DNS
-# record herdr.${BASE_DOMAIN} -> the cluster's public ingress IP (same as
-# home./argocd.) so the HTTP-01 challenge can complete. WebSocket (/ws) and SSE
+# Backend target is currently work-vm-01 (100.72.0.46) because the vm-00
+# front-door is DOWN; verified reachable from a cluster pod (HTTP 200). Repoint
+# to 100.72.0.8 when vm-00 is back for fleet aggregation. DNS needs nothing — a
+# wildcard *.${BASE_DOMAIN} already resolves herdr.* to the public ingress, so
+# the HTTP-01 cert issued automatically. WebSocket (/ws) and SSE
 # (/api/events) pass through k3s Traefik without extra config.
 apiVersion: v1
 kind: Service
@@ -38,7 +40,7 @@ metadata:
   namespace: lamg
 subsets:
   - addresses:
-      - ip: 100.72.0.8        # work-vm-00 — fleet front-door / aggregator (tailnet)
+      - ip: 100.72.0.46       # work-vm-01 — live peer w/ the real agents (vm-00 front-door is DOWN; repoint to 100.72.0.8 when back)
     ports:
       - name: http
         port: 8787
