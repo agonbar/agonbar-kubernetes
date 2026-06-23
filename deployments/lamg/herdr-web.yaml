@@ -1,0 +1,70 @@
+# herdr-web — TLS entry point via the lamg cluster's Traefik.
+#
+# herdr-web runs on the work-vm fleet (HTTP, tailnet only). This fronts the
+# fleet's front-door / aggregator (work-vm-00) with a real Let's Encrypt cert so
+# it's reachable at https://herdr.${BASE_DOMAIN} — which also makes the PWA
+# installable on Android (a trusted cert is required for service workers).
+#
+# Exposure: PUBLIC, password-gated only (deliberate choice). The herdr-web HMAC
+# password is the only gate, and the fleet spawns `claude --permission-mode
+# bypassPermissions` — so treat this URL as sensitive. To lock it down later,
+# add a Traefik ipAllowList middleware (tailnet 100.64.0.0/10) or basic-auth.
+#
+# Backend: a selector-less Service + a manually-managed Endpoints object pointing
+# at the front-door's tailnet IP (cluster nodes route to 100.72.0.x via
+# flannel-iface=tailscale0). Endpoints (not ExternalName) so Traefik keeps the
+# real backend IP and ExternalName-via-Ingress restrictions don't apply.
+#
+# REQUIRES: work-vm-00 (100.72.0.8) up and serving herdr-web; and a public DNS
+# record herdr.${BASE_DOMAIN} -> the cluster's public ingress IP (same as
+# home./argocd.) so the HTTP-01 challenge can complete. WebSocket (/ws) and SSE
+# (/api/events) pass through k3s Traefik without extra config.
+apiVersion: v1
+kind: Service
+metadata:
+  name: herdr-web
+  namespace: lamg
+spec:
+  ports:
+    - name: http
+      port: 8787
+      targetPort: 8787
+      protocol: TCP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: herdr-web
+  namespace: lamg
+subsets:
+  - addresses:
+      - ip: 100.72.0.8        # work-vm-00 — fleet front-door / aggregator (tailnet)
+    ports:
+      - name: http
+        port: 8787
+        protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: herdr-web
+  namespace: lamg
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: herdr.${BASE_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: herdr-web
+                port:
+                  number: 8787
+  tls:
+    - secretName: herdr.${BASE_DOMAIN}
+      hosts:
+        - herdr.${BASE_DOMAIN}
