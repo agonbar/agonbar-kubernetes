@@ -1,0 +1,88 @@
+# Authentik proxy outpost for herdr, running in lamg (the embedded outpost lives
+# in the sensei GKE cluster and isn't reachable from here). It connects out to
+# https://authentik.senseivision.ai with its outpost token (SealedSecret
+# herdr-outpost) and serves the forward-auth endpoint that Traefik calls.
+# Authentik object: outpost "herdr-lamg" → proxy provider "herdr" (forward_single,
+# external_host https://herdr.adriangonzalezbarbosa.eu). Image tag tracks the
+# Authentik server version (2025.10.x).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: herdr-outpost
+  namespace: lamg
+  labels:
+    app: herdr-outpost
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: herdr-outpost
+  template:
+    metadata:
+      labels:
+        app: herdr-outpost
+    spec:
+      containers:
+        - name: proxy
+          image: ghcr.io/goauthentik/proxy:2025.10.2
+          ports:
+            - containerPort: 9000
+              name: http
+          env:
+            - name: AUTHENTIK_HOST
+              value: https://authentik.senseivision.ai
+            - name: AUTHENTIK_INSECURE
+              value: "false"
+            - name: AUTHENTIK_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: herdr-outpost
+                  key: token
+          readinessProbe:
+            httpGet:
+              path: /outpost.goauthentik.io/ping
+              port: 9000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /outpost.goauthentik.io/ping
+              port: 9000
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: herdr-outpost
+  namespace: lamg
+spec:
+  selector:
+    app: herdr-outpost
+  ports:
+    - name: http
+      port: 9000
+      targetPort: 9000
+---
+# Traefik forward-auth → the local outpost. Gates the herdr app route.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: herdr-authentik
+  namespace: lamg
+spec:
+  forwardAuth:
+    address: http://herdr-outpost.lamg.svc.cluster.local:9000/outpost.goauthentik.io/auth/traefik
+    trustForwardHeader: true
+    authResponseHeaders:
+      - X-authentik-username
+      - X-authentik-groups
+      - X-authentik-email
+      - X-authentik-name
+      - X-authentik-uid

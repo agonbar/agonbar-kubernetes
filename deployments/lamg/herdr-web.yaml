@@ -1,26 +1,21 @@
-# herdr-web — TLS entry point via the lamg cluster's Traefik.
+# herdr-web — TLS entry via the lamg cluster's Traefik, gated by Authentik
+# (sensei IdP) forward-auth for passkey/TOTP login.
 #
-# herdr-web runs on the work-vm fleet (HTTP, tailnet only). This fronts the
-# fleet's front-door / aggregator (work-vm-00) with a real Let's Encrypt cert so
-# it's reachable at https://herdr.${BASE_DOMAIN} — which also makes the PWA
-# installable on Android (a trusted cert is required for service workers).
+# Auth happens at the proxy layer (a real trust boundary), NOT inside the app:
+# the `herdr-authentik` forwardAuth middleware (see herdr-outpost.yaml) calls a
+# local Authentik proxy outpost; unauthenticated requests are redirected to
+# https://authentik.senseivision.ai to log in (passkey or password+TOTP, from
+# Bitwarden), then back. Access is restricted to the Authentik `herdr` group.
 #
-# Exposure: PUBLIC, password-gated only (deliberate choice). The herdr-web HMAC
-# password is the only gate, and the fleet spawns `claude --permission-mode
-# bypassPermissions` — so treat this URL as sensitive. To lock it down later,
-# add a Traefik ipAllowList middleware (tailnet 100.64.0.0/10) or basic-auth.
+# Two routes on the same host: /outpost.goauthentik.io/ → the outpost (the auth
+# callback/static, NO middleware), everything else → herdr-web (WITH the
+# middleware). This needs Traefik IngressRoute (per-route middleware), so TLS is
+# provisioned by an explicit cert-manager Certificate instead of the ingress
+# annotation.
 #
-# Backend: a selector-less Service + a manually-managed Endpoints object pointing
-# at the front-door's tailnet IP (cluster nodes route to 100.72.0.x via
-# flannel-iface=tailscale0). Endpoints (not ExternalName) so Traefik keeps the
-# real backend IP and ExternalName-via-Ingress restrictions don't apply.
-#
-# Backend target is currently work-vm-01 (100.72.0.46) because the vm-00
-# front-door is DOWN; verified reachable from a cluster pod (HTTP 200). Repoint
-# to 100.72.0.8 when vm-00 is back for fleet aggregation. DNS needs nothing — a
-# wildcard *.${BASE_DOMAIN} already resolves herdr.* to the public ingress, so
-# the HTTP-01 cert issued automatically. WebSocket (/ws) and SSE
-# (/api/events) pass through k3s Traefik without extra config.
+# Backend: selector-less Service + manual Endpoints → the herdr-web front-door
+# over the tailnet (currently work-vm-01 100.72.0.46; vm-00 is down — repoint to
+# 100.72.0.8 when it's back for fleet aggregation).
 apiVersion: v1
 kind: Service
 metadata:
@@ -40,48 +35,49 @@ metadata:
   namespace: lamg
 subsets:
   - addresses:
-      - ip: 100.72.0.46       # work-vm-01 — live peer w/ the real agents (vm-00 front-door is DOWN; repoint to 100.72.0.8 when back)
+      - ip: 100.72.0.46       # work-vm-01 (vm-00 front-door is DOWN; repoint to 100.72.0.8 when back)
     ports:
       - name: http
         port: 8787
         protocol: TCP
 ---
-apiVersion: networking.k8s.io/v1
-kind: Ingress
+apiVersion: cert-manager.io/v1
+kind: Certificate
 metadata:
-  name: herdr-web
+  name: herdr.${BASE_DOMAIN}
   namespace: lamg
-  annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-    # basic-auth gate in front of herdr's own password (same pattern as yavoo).
-    # Ref format: <namespace>-<middleware-name>@kubernetescrd.
-    traefik.ingress.kubernetes.io/router.middlewares: lamg-herdr-authsecret@kubernetescrd
 spec:
-  ingressClassName: traefik
-  rules:
-    - host: herdr.${BASE_DOMAIN}
-      http:
-        paths:
-          - pathType: Prefix
-            path: /
-            backend:
-              service:
-                name: herdr-web
-                port:
-                  number: 8787
-  tls:
-    - secretName: herdr.${BASE_DOMAIN}
-      hosts:
-        - herdr.${BASE_DOMAIN}
+  secretName: herdr.${BASE_DOMAIN}
+  dnsNames:
+    - herdr.${BASE_DOMAIN}
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
 ---
-# basic-auth (htpasswd in the SealedSecret herdr-authsecret). Works regardless
-# of client source IP — unlike an ipAllowList, which is unreliable here because
-# Traefik runs externalTrafficPolicy=Cluster (SNAT hides the real client IP).
 apiVersion: traefik.io/v1alpha1
-kind: Middleware
+kind: IngressRoute
 metadata:
-  name: herdr-authsecret
+  name: herdr
   namespace: lamg
 spec:
-  basicAuth:
-    secret: herdr-authsecret
+  entryPoints:
+    - websecure
+  routes:
+    # Authentik outpost endpoints (auth start / callback / static) — no auth.
+    - kind: Rule
+      match: Host(`herdr.${BASE_DOMAIN}`) && PathPrefix(`/outpost.goauthentik.io/`)
+      priority: 20
+      services:
+        - name: herdr-outpost
+          port: 9000
+    # The app — gated by the Authentik forward-auth middleware.
+    - kind: Rule
+      match: Host(`herdr.${BASE_DOMAIN}`)
+      priority: 10
+      middlewares:
+        - name: herdr-authentik
+      services:
+        - name: herdr-web
+          port: 8787
+  tls:
+    secretName: herdr.${BASE_DOMAIN}
