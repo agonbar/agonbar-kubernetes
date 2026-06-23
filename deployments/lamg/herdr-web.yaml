@@ -53,6 +53,9 @@ metadata:
   namespace: lamg
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
+    # basic-auth gate in front of herdr's own password (same pattern as yavoo).
+    # Ref format: <namespace>-<middleware-name>@kubernetescrd.
+    traefik.ingress.kubernetes.io/router.middlewares: lamg-herdr-authsecret@kubernetescrd
 spec:
   ingressClassName: traefik
   rules:
@@ -70,3 +73,15 @@ spec:
     - secretName: herdr.${BASE_DOMAIN}
       hosts:
         - herdr.${BASE_DOMAIN}
+---
+# basic-auth (htpasswd in the SealedSecret herdr-authsecret). Works regardless
+# of client source IP — unlike an ipAllowList, which is unreliable here because
+# Traefik runs externalTrafficPolicy=Cluster (SNAT hides the real client IP).
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: herdr-authsecret
+  namespace: lamg
+spec:
+  basicAuth:
+    secret: herdr-authsecret
