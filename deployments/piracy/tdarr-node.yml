@@ -93,8 +93,13 @@ spec:
                           memory: 1Gi
                           cpu: 1000m
                       limits:
-                          memory: 100Gi
-                          cpu: '12'
+                          # Capped to fit the 18Gi/16cpu work-vm-* media nodes. The prior
+                          # 100Gi/12 limit was fiction: Tdarr's parallel ffmpeg transcodes
+                          # exhausted real node RAM, causing node-level OOM resets that took
+                          # down cruncharr (colocated) and corrupted its SQLite DB. An 8Gi
+                          # cgroup cap contains Tdarr to a cgroup-OOM instead of nuking the node.
+                          memory: 8Gi
+                          cpu: '6'
                 # vmaf-sidecar: at startup, copies static-ffmpeg / ffprobe /
                 # vmaf-window into the shared /sidecar emptyDir, then idles.
                 # When the plugin shells out to /sidecar/bin/vmaf-window from
