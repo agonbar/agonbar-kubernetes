@@ -131,6 +131,19 @@ def load_failed_index() -> dict[str, dict]:
     return _load_verdict_index("failed-*.jsonl", "fail")
 
 
+def load_errored_index() -> dict[str, dict]:
+    """{src_path: fingerprint} of files that errored on the duration
+    gate (src shorter than 30s — samples/extras tdarr transcoded but
+    that VMAF can't meaningfully score). Duration is a stable property
+    of the file, so this is terminal: skip on subsequent runs until the
+    file changes on disk. Without this the short files never enter
+    passed/failed indexes and get re-listed + re-probed every loop
+    forever, pinning the candidate count and burning CPU. Only
+    error_duration is cached — error_vmaf can be transient (resource
+    pressure) and is left to retry."""
+    return _load_verdict_index("errors-*.jsonl", "error_duration")
+
+
 def in_shard(src: str) -> bool:
     if SHARD_COUNT <= 1:
         return True
@@ -240,11 +253,13 @@ def append_audit(name: str, rec: dict) -> None:
 def run_once() -> dict:
     started = time.time()
     counts = {"pass": 0, "pass_replayed": 0, "fail": 0, "fail_cached": 0,
-              "error_vmaf": 0, "error_duration": 0, "skipped_dry": 0}
+              "error_vmaf": 0, "error_duration": 0, "error_duration_cached": 0,
+              "skipped_dry": 0}
     passed_index = load_passed_index()
     failed_index = load_failed_index()
-    log.info("loaded passed_index entries=%d failed_index entries=%d",
-             len(passed_index), len(failed_index))
+    errored_index = load_errored_index()
+    log.info("loaded passed_index entries=%d failed_index entries=%d errored_index entries=%d",
+             len(passed_index), len(failed_index), len(errored_index))
     try:
         pool = list(candidates())
     except (urllib.error.URLError, ConnectionError, TimeoutError) as e:
@@ -275,6 +290,15 @@ def run_once() -> dict:
                 counts["fail_cached"] += 1
                 continue
             log.info("fingerprint changed since prior fail, re-validating %s", pair["src"])
+        prior_err = errored_index.get(pair["src"])
+        if prior_err:
+            current_fp = {"src": fingerprint(pair["src"]), "out": fingerprint(pair["out"])}
+            if prior_err == current_fp:
+                # Same short file as last time: skip silently. A re-transcode
+                # (different out fingerprint) re-validates.
+                counts["error_duration_cached"] += 1
+                continue
+            log.info("fingerprint changed since prior error_duration, re-validating %s", pair["src"])
         prior = passed_index.get(pair["src"])
         if prior:
             current_fp = {"src": fingerprint(pair["src"]), "out": fingerprint(pair["out"])}
@@ -303,7 +327,7 @@ def run_once() -> dict:
         rec = validate(pair)
         rec["seconds"] = round(time.time() - t0, 1)
         rec["dry_run"] = DRY_RUN
-        if rec["verdict"] in ("pass", "fail"):
+        if rec["verdict"] in ("pass", "fail", "error_duration"):
             rec["fingerprint"] = {
                 "src": fingerprint(pair["src"]),
                 "out": fingerprint(pair["out"]),
