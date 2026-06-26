@@ -38,76 +38,17 @@ spec:
                 exit 0
               fi
 
-              echo "[iscsi-fsck] Filesystem is READ-ONLY. Starting repair..."
-
-              # Install required tools
-              apk add --no-cache e2fsprogs util-linux 2>/dev/null
-
-              # Find the block device from host's /proc/1/mounts (mounted at /host-proc-mounts)
-              DEVICE=$(grep " ${MOUNTPOINT} " /proc/mounts | awk '{print $1}' | head -1)
-
-              if [ -z "${DEVICE}" ]; then
-                echo "[iscsi-fsck] ERROR: Could not find block device for ${MOUNTPOINT} in host mounts."
-                echo "[iscsi-fsck] Host mount table (iscsi/sd entries):"
-                grep -E "iscsi|/dev/sd|democratic-csi" /host-proc-mounts || true
-                exit 1
-              fi
-
-              echo "[iscsi-fsck] Found device: ${DEVICE}"
-
-              # Remount read-write first (may work if the FS was just briefly errored)
-              echo "[iscsi-fsck] Attempting remount rw..."
-              if mount -o remount,rw "${MOUNTPOINT}" 2>/dev/null; then
-                echo "[iscsi-fsck] Remount rw succeeded!"
-                if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
-                  rm -f "${MOUNTPOINT}/.rw-test"
-                  echo "[iscsi-fsck] Filesystem is now writable. Done."
-                  exit 0
-                fi
-              fi
-
-              echo "[iscsi-fsck] Simple remount failed. Running e2fsck..."
-
-              # Find the CSI globalmount path on the host to unmount before fsck
-              GLOBAL_MOUNT=$(grep "${DEVICE} " /host-proc-mounts | grep globalmount | awk '{print $2}' | head -1)
-              if [ -z "${GLOBAL_MOUNT}" ]; then
-                GLOBAL_MOUNT=$(grep "^${DEVICE} " /host-proc-mounts | awk '{print $2}' | head -1)
-              fi
-
-              if [ -n "${GLOBAL_MOUNT}" ]; then
-                echo "[iscsi-fsck] Unmounting ${GLOBAL_MOUNT} for fsck..."
-                umount -l "${GLOBAL_MOUNT}" || {
-                  echo "[iscsi-fsck] WARNING: umount failed, trying to fsck anyway..."
-                }
-              fi
-
-              echo "[iscsi-fsck] Running e2fsck on ${DEVICE}..."
-              e2fsck -y -f "${DEVICE}" || {
-                FSCK_EXIT=$?
-                # e2fsck exits 1 for corrected errors, 2 for reboot needed — both ok for us
-                if [ $FSCK_EXIT -gt 2 ]; then
-                  echo "[iscsi-fsck] e2fsck failed with exit code ${FSCK_EXIT}."
-                  exit 1
-                fi
-              }
-
-              echo "[iscsi-fsck] e2fsck complete. Remounting ${GLOBAL_MOUNT}..."
-              if [ -n "${GLOBAL_MOUNT}" ]; then
-                mount "${DEVICE}" "${GLOBAL_MOUNT}" || {
-                  echo "[iscsi-fsck] Mount failed after fsck. Exiting with error to trigger pod restart."
-                  exit 1
-                }
-              fi
-
-              # Verify filesystem is now writable
-              if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+              echo "[iscsi-fsck] Filesystem is READ-ONLY."
+              echo "[iscsi-fsck] Attempting a single safe remount,rw (no fsck)..."
+              if mount -o remount,rw "${MOUNTPOINT}" 2>/dev/null && touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
                 rm -f "${MOUNTPOINT}/.rw-test"
-                echo "[iscsi-fsck] SUCCESS: Filesystem repaired and writable."
+                echo "[iscsi-fsck] remount,rw succeeded — filesystem writable. Done."
                 exit 0
-              else
-                echo "[iscsi-fsck] FAILED: Filesystem still not writable after repair."
-                exit 1
               fi
+              echo "[iscsi-fsck] STILL READ-ONLY. The RO state lives in the node-level CSI globalmount and cannot be repaired from inside the pod."
+              echo "[iscsi-fsck] DO NOT run e2fsck on the mounted device — it corrupts the filesystem."
+              echo "[iscsi-fsck] Recovery: scale this Deployment to 0, wait for the VolumeAttachment to detach, then scale back to 1 (forces a clean iSCSI re-attach that clears RO)."
+              exit 1
           volumeMounts:
             - name: config
               mountPath: /config
