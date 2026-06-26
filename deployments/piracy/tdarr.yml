@@ -8,7 +8,7 @@ metadata:
 spec:
     strategy:
         type: Recreate
-    replicas: 0 # temporarily stopped for SQLite DB recovery + LAN migration
+    replicas: 1
     selector:
         matchLabels:
             app: tdarr
@@ -195,6 +195,35 @@ spec:
           hosts:
               - tdarr.${BASE_DOMAIN}
 ---
+# Migrated off the Tailscale iSCSI portal (100.72.0.41) onto the wired-LAN driver
+# (truenas-iscsi-ssd-lan -> 192.168.0.29). Statically bound to the retained zvol.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: tdarr-config-lan
+spec:
+  capacity:
+    storage: 2Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: truenas-iscsi-ssd-lan
+  claimRef:
+    namespace: piracy
+    name: tdarr-config
+  csi:
+    driver: org.democratic-csi.truenas-iscsi-ssd-lan
+    fsType: ext4
+    volumeHandle: pvc-3713c714-4ec1-4954-a15e-78aaada850eb
+    volumeAttributes:
+      node_attach_driver: iscsi
+      portal: "192.168.0.29:3260"
+      portals: ""
+      interface: ""
+      iqn: "iqn.2005-10.org.freenas.ctl:csi-pvc-3713c714-4ec1-4954-a15e-78aaada850eb-k8s"
+      lun: "0"
+      provisioner_driver: freenas-api-iscsi
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -203,10 +232,40 @@ metadata:
 spec:
     accessModes:
         - ReadWriteOnce
-    storageClassName: truenas-iscsi-ssd
+    storageClassName: truenas-iscsi-ssd-lan
+    volumeName: tdarr-config-lan
     resources:
         requests:
             storage: 2Gi
+---
+# Migrated off the Tailscale iSCSI portal (100.72.0.41) onto the wired-LAN driver
+# (truenas-iscsi-ssd-lan -> 192.168.0.29). Statically bound to the retained zvol.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: tdarr-server-lan
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: truenas-iscsi-ssd-lan
+  claimRef:
+    namespace: piracy
+    name: tdarr-server
+  csi:
+    driver: org.democratic-csi.truenas-iscsi-ssd-lan
+    fsType: ext4
+    volumeHandle: pvc-572e2195-5b02-4cea-81df-642b53feae81
+    volumeAttributes:
+      node_attach_driver: iscsi
+      portal: "192.168.0.29:3260"
+      portals: ""
+      interface: ""
+      iqn: "iqn.2005-10.org.freenas.ctl:csi-pvc-572e2195-5b02-4cea-81df-642b53feae81-k8s"
+      lun: "0"
+      provisioner_driver: freenas-api-iscsi
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -216,7 +275,8 @@ metadata:
 spec:
     accessModes:
         - ReadWriteOnce
-    storageClassName: truenas-iscsi-ssd
+    storageClassName: truenas-iscsi-ssd-lan
+    volumeName: tdarr-server-lan
     resources:
         requests:
             storage: 5Gi
