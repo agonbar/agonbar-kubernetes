@@ -165,6 +165,7 @@ spec:
                       path: /proc/1/mounts
             nodeSelector:
               svccontroller.k3s.cattle.io/lbpool: lamg
+              kubernetes.io/hostname: orange-pi5
 ---
 apiVersion: v1
 kind: Service

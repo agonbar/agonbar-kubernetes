@@ -196,6 +196,35 @@ spec:
           hosts:
               - anisub.${BASE_DOMAIN}
 ---
+# Migrated off the Tailscale iSCSI portal (100.72.0.41) onto the wired-LAN driver
+# (truenas-iscsi-ssd-lan -> 192.168.0.29). Statically bound to the retained zvol.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: anisub-data-lan
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: truenas-iscsi-ssd-lan
+  claimRef:
+    namespace: piracy
+    name: anisub-data
+  csi:
+    driver: org.democratic-csi.truenas-iscsi-ssd-lan
+    fsType: ext4
+    volumeHandle: pvc-0f59dafc-214f-49e7-93e4-bf22f56190ec
+    volumeAttributes:
+      node_attach_driver: iscsi
+      portal: "192.168.0.29:3260"
+      portals: ""
+      interface: ""
+      iqn: "iqn.2005-10.org.freenas.ctl:csi-pvc-0f59dafc-214f-49e7-93e4-bf22f56190ec-k8s"
+      lun: "0"
+      provisioner_driver: freenas-api-iscsi
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -204,7 +233,8 @@ metadata:
 spec:
     accessModes:
         - ReadWriteOnce
-    storageClassName: truenas-iscsi-ssd
+    storageClassName: truenas-iscsi-ssd-lan
+    volumeName: anisub-data-lan
     resources:
         requests:
             storage: 1Gi

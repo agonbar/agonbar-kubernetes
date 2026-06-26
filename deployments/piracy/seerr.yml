@@ -103,6 +103,35 @@ spec:
           hosts:
               - seerr.${BASE_DOMAIN}
 ---
+# Migrated off the Tailscale iSCSI portal (100.72.0.41) onto the wired-LAN driver
+# (truenas-iscsi-ssd-lan -> 192.168.0.29). Statically bound to the retained zvol.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: seerr-config-lan
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: truenas-iscsi-ssd-lan
+  claimRef:
+    namespace: piracy
+    name: seerr-config
+  csi:
+    driver: org.democratic-csi.truenas-iscsi-ssd-lan
+    fsType: ext4
+    volumeHandle: pvc-d4bba15c-8249-4349-b71d-48c8298f8e52
+    volumeAttributes:
+      node_attach_driver: iscsi
+      portal: "192.168.0.29:3260"
+      portals: ""
+      interface: ""
+      iqn: "iqn.2005-10.org.freenas.ctl:csi-pvc-d4bba15c-8249-4349-b71d-48c8298f8e52-k8s"
+      lun: "0"
+      provisioner_driver: freenas-api-iscsi
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -111,7 +140,8 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: truenas-iscsi-ssd
+  storageClassName: truenas-iscsi-ssd-lan
+  volumeName: seerr-config-lan
   resources:
     requests:
       storage: 5Gi
