@@ -8,7 +8,7 @@ metadata:
 spec:
     strategy:
         type: Recreate
-    replicas: 0
+    replicas: 1
     selector:
         matchLabels:
             app: tachidesk # <--- change this to match label on the pod
@@ -71,6 +71,11 @@ spec:
                   volumeMounts:
                       - name: data
                         mountPath: /home/suwayomi/.local/share/Tachidesk
+                      # Shared manga library = a subdir of the media NFS export.
+                      # Set Suwayomi's downloadsPath to /media/manga in the web UI
+                      # so raws land where mokuro-ocr can read them.
+                      - name: manga
+                        mountPath: /media
                   startupProbe:
                       httpGet:
                           path: /api/v1/settings/about
@@ -106,6 +111,10 @@ spec:
                 - name: host-proc-mounts
                   hostPath:
                       path: /proc/1/mounts
+                - name: manga
+                  nfs:
+                      server: 192.168.0.29
+                      path: /mnt/RAID/docker/media
             nodeSelector:
               svccontroller.k3s.cattle.io/lbpool: lamg
 
