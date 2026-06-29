@@ -21,14 +21,43 @@ data:
     cors:
       enabled: true
       credentials: true
-      allowed_headers:
-        - "*"
+      # With credentials:true the CORS spec forbids "*" for methods/headers —
+      # hacdias/webdav then emits NO Access-Control-Allow-* headers and the
+      # reader's preflight fails. Must enumerate explicitly (WebDAV verbs +
+      # the headers the reader sends).
       allowed_hosts:
         - https://mokuro.${BASE_DOMAIN}
       allowed_methods:
-        - "*"
+        - GET
+        - HEAD
+        - POST
+        - PUT
+        - DELETE
+        - OPTIONS
+        - PROPFIND
+        - PROPPATCH
+        - MKCOL
+        - COPY
+        - MOVE
+        - LOCK
+        - UNLOCK
+      allowed_headers:
+        - Authorization
+        - Content-Type
+        - Depth
+        - Overwrite
+        - Destination
+        - If
+        - Lock-Token
+        - X-Requested-With
+        - Accept
+        - Origin
       exposed_headers:
-        - "*"
+        - Content-Length
+        - Content-Type
+        - ETag
+        - Last-Modified
+        - DAV
     users:
       - username: "{env}WEBDAV_USERNAME"
         password: "{env}WEBDAV_PASSWORD"
