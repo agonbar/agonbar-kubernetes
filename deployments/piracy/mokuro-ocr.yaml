@@ -42,6 +42,8 @@ spec:
               operator: Equal
               value: media
               effect: NoSchedule
+          imagePullSecrets:
+            - name: ghcr-agonbar
           containers:
             - name: mokuro-ocr
               image: ghcr.io/agonbar/mokuro-ocr:latest

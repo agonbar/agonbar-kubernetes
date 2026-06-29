@@ -23,6 +23,8 @@ spec:
       enableServiceLinks: false
       nodeSelector:
         svccontroller.k3s.cattle.io/lbpool: lamg
+      imagePullSecrets:
+        - name: ghcr-agonbar
       containers:
         - name: mokuro-reader
           image: ghcr.io/agonbar/mokuro-reader:latest
