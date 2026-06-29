@@ -1,0 +1,75 @@
+# mokuro-ocr: nightly batch OCR of the raw-manga library with kha-white/mokuro.
+#
+# mokuro is a CLI, not a server. The custom image (dedicated repo, anisub
+# pattern) bakes the manga-ocr model so no model download happens at runtime.
+# Its entrypoint walks ${MANGA_DIR}/<source>/<title>/ and runs
+#   mokuro --parent_dir <title> --disable_confirmation --disable_html --ignore_errors
+# treating each Suwayomi per-chapter folder as a mokuro "volume". OCR is a
+# one-time cost per chapter (cached in _ocr/ + the sibling .mokuro file), so
+# re-runs skip already-processed chapters and the job is idempotent.
+#
+# CPU-only: the cluster has no NVIDIA runtime, so this pins to the amd64
+# work-vm media nodes (Ryzen 7700) — the only place the torch/manga-ocr wheels
+# run cleanly. ~5-10 s/page, ~20-30 min per ~200-page volume; fine for batch.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mokuro-ocr
+  namespace: piracy
+  labels:
+    app: mokuro-ocr
+spec:
+  schedule: "0 4 * * *"
+  timeZone: Europe/Madrid
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 86400
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app: mokuro-ocr
+        spec:
+          restartPolicy: OnFailure
+          enableServiceLinks: false
+          nodeSelector:
+            workload: media
+          tolerations:
+            - key: dedicated
+              operator: Equal
+              value: media
+              effect: NoSchedule
+          containers:
+            - name: mokuro-ocr
+              image: ghcr.io/agonbar/mokuro-ocr:latest
+              imagePullPolicy: Always
+              env:
+                - name: TZ
+                  value: Europe/Madrid
+                # Suwayomi download root inside the NFS share (downloadsPath=/manga
+                # -> chapters land under /manga/mangas/<source>/<title>/...).
+                - name: MANGA_DIR
+                  value: /manga/mangas
+                - name: OMP_NUM_THREADS
+                  value: "8"
+                - name: MKL_NUM_THREADS
+                  value: "8"
+              volumeMounts:
+                - name: manga
+                  mountPath: /manga
+              resources:
+                requests:
+                  memory: 1Gi
+                  cpu: "1"
+                limits:
+                  memory: 6Gi
+                  cpu: "6"
+          volumes:
+            # Media nodes reach TrueNAS over Tailscale (same pattern as tdarr-node).
+            - name: manga
+              nfs:
+                server: 100.72.0.41
+                path: /mnt/RAID/docker/manga

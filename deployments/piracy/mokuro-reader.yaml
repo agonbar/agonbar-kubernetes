@@ -1,0 +1,91 @@
+# mokuro-reader: client-side SvelteKit PWA (Gnathonic/mokuro-reader) served as a
+# static SPA by nginx. Volumes are imported into the browser (IndexedDB) or
+# synced from the mokuro-webdav server; nothing is read from disk server-side.
+# Custom image built from a dedicated repo (anisub pattern): the upstream fork
+# uses adapter-auto, so the image swaps in adapter-static + SPA fallback.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mokuro-reader
+  namespace: piracy
+  labels:
+    app: mokuro-reader
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mokuro-reader
+  template:
+    metadata:
+      labels:
+        app: mokuro-reader
+    spec:
+      enableServiceLinks: false
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+      containers:
+        - name: mokuro-reader
+          image: ghcr.io/agonbar/mokuro-reader:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+              protocol: TCP
+          resources:
+            requests:
+              memory: 32Mi
+              cpu: 10m
+            limits:
+              memory: 128Mi
+              cpu: 200m
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mokuro-reader
+  namespace: piracy
+spec:
+  type: ClusterIP
+  selector:
+    app: mokuro-reader
+  ports:
+    - name: web
+      protocol: TCP
+      port: 80
+      targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mokuro-reader-https
+  namespace: piracy
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: mokuro.${BASE_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: mokuro-reader
+                port:
+                  number: 80
+  tls:
+    - secretName: mokuro.${BASE_DOMAIN}
+      hosts:
+        - mokuro.${BASE_DOMAIN}
