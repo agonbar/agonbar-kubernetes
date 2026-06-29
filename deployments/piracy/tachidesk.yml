@@ -71,10 +71,11 @@ spec:
                   volumeMounts:
                       - name: data
                         mountPath: /home/suwayomi/.local/share/Tachidesk
-                      # Shared manga library on NFS. Set Suwayomi's downloadsPath
-                      # to /manga in the web UI so raws land here for mokuro-ocr.
+                      # Shared manga library = a subdir of the media NFS export.
+                      # Set Suwayomi's downloadsPath to /media/manga in the web UI
+                      # so raws land where mokuro-ocr can read them.
                       - name: manga
-                        mountPath: /manga
+                        mountPath: /media
                   startupProbe:
                       httpGet:
                           path: /api/v1/settings/about
@@ -113,7 +114,7 @@ spec:
                 - name: manga
                   nfs:
                       server: 192.168.0.29
-                      path: /mnt/RAID/docker/manga
+                      path: /mnt/RAID/docker/media
             nodeSelector:
               svccontroller.k3s.cattle.io/lbpool: lamg
 

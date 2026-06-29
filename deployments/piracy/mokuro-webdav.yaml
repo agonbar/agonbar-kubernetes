@@ -16,7 +16,7 @@ data:
   config.yml: |
     address: 0.0.0.0
     port: 6065
-    directory: /data
+    directory: /media/manga
     permissions: CRUD
     cors:
       enabled: true
@@ -53,6 +53,15 @@ spec:
       enableServiceLinks: false
       nodeSelector:
         svccontroller.k3s.cattle.io/lbpool: lamg
+      initContainers:
+        # Ensure the manga subdir exists (webdav errors if `directory` is missing)
+        # and is writable by Suwayomi (uid 1000) which also writes here.
+        - name: ensure-dir
+          image: busybox:latest
+          command: ["sh", "-c", "mkdir -p /media/manga && chmod 0777 /media/manga"]
+          volumeMounts:
+            - name: manga
+              mountPath: /media
       containers:
         - name: webdav
           image: ghcr.io/hacdias/webdav:latest
@@ -79,7 +88,7 @@ spec:
               mountPath: /config
               readOnly: true
             - name: manga
-              mountPath: /data
+              mountPath: /media
           resources:
             requests:
               memory: 32Mi
@@ -94,7 +103,7 @@ spec:
         - name: manga
           nfs:
             server: 192.168.0.29
-            path: /mnt/RAID/docker/manga
+            path: /mnt/RAID/docker/media
 ---
 apiVersion: v1
 kind: Service

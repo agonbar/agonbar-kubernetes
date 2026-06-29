@@ -51,17 +51,17 @@ spec:
               env:
                 - name: TZ
                   value: Europe/Madrid
-                # Suwayomi download root inside the NFS share (downloadsPath=/manga
-                # -> chapters land under /manga/mangas/<source>/<title>/...).
+                # Suwayomi downloadsPath=/media/manga -> chapters land under
+                # /media/manga/mangas/<source>/<title>/...
                 - name: MANGA_DIR
-                  value: /manga/mangas
+                  value: /media/manga/mangas
                 - name: OMP_NUM_THREADS
                   value: "8"
                 - name: MKL_NUM_THREADS
                   value: "8"
               volumeMounts:
                 - name: manga
-                  mountPath: /manga
+                  mountPath: /media
               resources:
                 requests:
                   memory: 1Gi
@@ -70,8 +70,8 @@ spec:
                   memory: 6Gi
                   cpu: "6"
           volumes:
-            # Media nodes reach TrueNAS over Tailscale (same pattern as tdarr-node).
+            # Media nodes reach TrueNAS over Tailscale (same export+pattern as tdarr-node).
             - name: manga
               nfs:
                 server: 100.72.0.41
-                path: /mnt/RAID/docker/manga
+                path: /mnt/RAID/docker/media
