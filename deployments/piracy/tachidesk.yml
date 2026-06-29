@@ -80,9 +80,12 @@ spec:
                       httpGet:
                           path: /api/v1/settings/about
                           port: 4567
+                      # Suwayomi's JCEF/Chromium cold boot can take >5min on a
+                      # slow node after downtime; give it 10min before restarting
+                      # (it bound :4567 only after WebUI+JCEF init in testing).
                       periodSeconds: 10
                       timeoutSeconds: 5
-                      failureThreshold: 30
+                      failureThreshold: 60
                   livenessProbe:
                       httpGet:
                           path: /api/v1/settings/about
