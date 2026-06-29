@@ -18,46 +18,11 @@ data:
     port: 6065
     directory: /media/manga
     permissions: CRUD
+    # CORS handled at the Traefik ingress (Middleware mokuro-webdav-cors):
+    # hacdias/webdav did not emit preflight Allow-Methods/Allow-Headers for
+    # WebDAV verbs. Disabled here to avoid duplicate Access-Control-* headers.
     cors:
-      enabled: true
-      credentials: true
-      # With credentials:true the CORS spec forbids "*" for methods/headers —
-      # hacdias/webdav then emits NO Access-Control-Allow-* headers and the
-      # reader's preflight fails. Must enumerate explicitly (WebDAV verbs +
-      # the headers the reader sends).
-      allowed_hosts:
-        - https://mokuro.${BASE_DOMAIN}
-      allowed_methods:
-        - GET
-        - HEAD
-        - POST
-        - PUT
-        - DELETE
-        - OPTIONS
-        - PROPFIND
-        - PROPPATCH
-        - MKCOL
-        - COPY
-        - MOVE
-        - LOCK
-        - UNLOCK
-      allowed_headers:
-        - Authorization
-        - Content-Type
-        - Depth
-        - Overwrite
-        - Destination
-        - If
-        - Lock-Token
-        - X-Requested-With
-        - Accept
-        - Origin
-      exposed_headers:
-        - Content-Length
-        - Content-Type
-        - ETag
-        - Last-Modified
-        - DAV
+      enabled: false
     users:
       - username: "{env}WEBDAV_USERNAME"
         password: "{env}WEBDAV_PASSWORD"
@@ -156,6 +121,7 @@ metadata:
   namespace: piracy
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.middlewares: piracy-mokuro-webdav-cors@kubernetescrd
 spec:
   ingressClassName: traefik
   rules:
@@ -173,3 +139,50 @@ spec:
     - secretName: manga-dav.${BASE_DOMAIN}
       hosts:
         - manga-dav.${BASE_DOMAIN}
+---
+# CORS for the client-side mokuro-reader (cross-origin to the WebDAV host).
+# Traefik handles the preflight OPTIONS directly and adds the headers to real
+# requests — reliable for WebDAV verbs, unlike hacdias/webdav's own CORS.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: mokuro-webdav-cors
+  namespace: piracy
+spec:
+  headers:
+    accessControlAllowOriginList:
+      - https://mokuro.${BASE_DOMAIN}
+    accessControlAllowCredentials: true
+    accessControlAllowMethods:
+      - GET
+      - HEAD
+      - POST
+      - PUT
+      - DELETE
+      - OPTIONS
+      - PROPFIND
+      - PROPPATCH
+      - MKCOL
+      - COPY
+      - MOVE
+      - LOCK
+      - UNLOCK
+    accessControlAllowHeaders:
+      - Authorization
+      - Content-Type
+      - Depth
+      - Overwrite
+      - Destination
+      - If
+      - Lock-Token
+      - X-Requested-With
+      - Accept
+      - Origin
+    accessControlExposeHeaders:
+      - Content-Length
+      - Content-Type
+      - ETag
+      - Last-Modified
+      - DAV
+    accessControlMaxAge: 86400
+    addVaryHeader: true
