@@ -217,8 +217,11 @@ data:
 
     # agonbar namespace
     backup_pvc agonbar homarr-appdata
+    backup_pvc agonbar minio-data
     backup_pvc agonbar paperless-redis
     backup_pvc agonbar paperless-data
+    backup_pvc agonbar reactive-resume-postgres
+    backup_pvc agonbar reactive-resume-uploads
 
     # dawarich namespace
     backup_pvc dawarich dawarich-db-data
@@ -231,6 +234,14 @@ data:
     # immich namespace
     backup_pvc immich immich-db-data
 
+    # knowledge namespace
+    backup_pvc knowledge vault-data
+    backup_pvc knowledge vault-state
+
+    # trek namespace
+    backup_pvc trek trek-data
+    backup_pvc trek trek-uploads
+
     # lamg namespace
     backup_pvc lamg homeassistant-config
     backup_pvc lamg influxdb-data
@@ -240,6 +251,7 @@ data:
     backup_pvc lamg zigbee2mqtt-config
 
     # piracy namespace
+    backup_pvc piracy anisub-data
     backup_pvc piracy bazarr-config
     backup_pvc piracy cruncharr-config
     backup_pvc piracy emulerr-config
@@ -255,7 +267,8 @@ data:
     backup_pvc piracy sonarr-config
     backup_pvc piracy soularr-config
     backup_pvc piracy tachidesk-data
-    backup_pvc piracy transmission-config
+    backup_pvc piracy tdarr-config
+    backup_pvc piracy tdarr-server
 
     echo "========================================="
     if [ "$FAILED" -eq 1 ]; then
