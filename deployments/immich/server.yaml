@@ -21,7 +21,7 @@ spec:
         app: server 
     spec:
       containers:
-        - image: ghcr.io/immich-app/immich-server:v2.7.5
+        - image: ghcr.io/immich-app/immich-server:v3.0.1
           name: server 
           # command: ["/bin/sh"]
           # args: ["./start-server.sh"]
@@ -51,13 +51,6 @@ spec:
               value: "6379"
             - name: LOG_LEVEL
               value: "log"
-            - name: TYPESENSE_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: immich
-                  key: typesenseApiKey
-            - name: REVERSE_GEOCODING_PRECISION
-              value: "1"
             - name: IMMICH_PORT
               value: "2283"
           ports:
