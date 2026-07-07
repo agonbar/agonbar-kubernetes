@@ -2,13 +2,13 @@
 
 ## Context
 
-This cluster uses democratic-csi with TrueNAS iSCSI for persistent storage. All 29 PVCs use `truenas-iscsi-ssd` on a single SSD.
+This cluster uses democratic-csi with TrueNAS iSCSI for persistent storage. All 39 PVCs use `truenas-iscsi-ssd` on a single SSD.
 
 A daily CronJob (`pvc-backup` in namespace `backup`) snapshots all SSD PVCs and rsyncs them to NFS on the RAID at `/mnt/RAID/docker/backups-iscsi/`. It also retains the last 7 VolumeSnapshots per PVC for quick restores.
 
 ### Backup infrastructure files
 - `system/snapshots/backup.yaml` — CronJob, RBAC, backup script
-- `system/snapshots/restore.yaml` — Pre-built restore Jobs (one per PVC, 29 total)
+- `system/snapshots/restore.yaml` — Pre-built restore Jobs (one per PVC, 39 total)
 - `system/snapshots/snapshot-controller.yaml` — VolumeSnapshot controller
 - `system/snapshots/crd-*.yaml` — VolumeSnapshot CRDs
 - `system/global-argocd-apps/democratic-csi-iscsi-ssd.yaml` — CSI driver + snapshot class
@@ -21,27 +21,37 @@ A daily CronJob (`pvc-backup` in namespace `backup`) snapshots all SSD PVCs and 
 - Scrutiny/InfluxDB have NO ArgoCD app — must be applied manually with `kubectl apply`
 - `bootstrap` ArgoCD app has NO auto-sync — needs manual sync trigger
 
-### All 29 iSCSI PVCs (all on `truenas-iscsi-ssd`)
+### All 39 iSCSI PVCs (on `truenas-iscsi-ssd` / `truenas-iscsi-ssd-lan`)
+
+Snapshots use the `truenas-iscsi-ssd` VolumeSnapshotClass for both storage classes
+(same democratic-csi driver).
 
 | Namespace | PVC | Size | Deployment File | ArgoCD |
 |-----------|-----|------|-----------------|--------|
 | agonbar | homarr-appdata | 5Gi | deployments/agonbar/homarr.yaml | yes |
+| agonbar | minio-data | 10Gi | deployments/agonbar/minio.yaml | yes |
 | agonbar | paperless-redis | 1Gi | deployments/agonbar/paperless.yaml | yes |
 | agonbar | paperless-data | 5Gi | deployments/agonbar/paperless.yaml | yes |
+| agonbar | reactive-resume-postgres | 2Gi | deployments/agonbar/reactive-resume.yaml | yes |
+| agonbar | reactive-resume-uploads | 5Gi | deployments/agonbar/reactive-resume.yaml | yes |
 | dawarich | dawarich-db-data | 5Gi | deployments/dawarich/postgres.yaml | yes |
 | games | enshrouded-data | 10Gi | deployments/games/enshrouded.yaml | yes |
 | games | factorio-data | 10Gi | deployments/games/factorio.yaml | yes |
 | games | palworld-data | 10Gi | deployments/games/palworld.yaml | yes |
 | immich | immich-db-data | 5Gi | deployments/immich/postgre.yaml | yes |
+| knowledge | vault-data | 1Gi | deployments/knowledge/pvc.yaml | yes |
+| knowledge | vault-state | 1Gi | deployments/knowledge/pvc.yaml | yes |
 | lamg | homeassistant-config | 15Gi | deployments/lamg/homeassistant.yaml | yes |
 | lamg | influxdb-data | 5Gi | deployments/scrutiny/influxdb.yaml | **NO** |
 | lamg | plex-config | 30Gi | deployments/lamg/plex.yaml | yes |
 | lamg | scrutiny-config | 1Gi | deployments/scrutiny/master-web.yaml | **NO** |
 | lamg | vscode-config | 5Gi | deployments/lamg/vscode.yaml | yes |
 | lamg | zigbee2mqtt-config | 1Gi | deployments/lamg/zigbee2mqtt.yaml | yes |
+| piracy | anisub-data | 1Gi | deployments/piracy/anisub.yml | yes |
 | piracy | bazarr-config | 5Gi | deployments/piracy/bazarr.yaml | yes |
 | piracy | cruncharr-config | 2Gi | deployments/piracy/cruncharr.yml | yes |
 | piracy | emulerr-config | 5Gi | deployments/piracy/emulerr.yml | yes |
+| piracy | houndarr-data | 5Gi | deployments/piracy/houndarr.yml | yes |
 | piracy | jellyfin-config | 10Gi | deployments/piracy/jellyfin.yml | yes |
 | piracy | lidarr-config | 5Gi | deployments/piracy/lidarr.yml | yes |
 | piracy | prowlarr-config | 5Gi | deployments/piracy/prowlarr.yml | yes |
@@ -53,7 +63,10 @@ A daily CronJob (`pvc-backup` in namespace `backup`) snapshots all SSD PVCs and 
 | piracy | sonarr-config | 5Gi | deployments/piracy/sonarr.yml | yes |
 | piracy | soularr-config | 1Gi | deployments/piracy/soularr.yml | yes |
 | piracy | tachidesk-data | 5Gi | deployments/piracy/tachidesk.yml | yes |
-| piracy | transmission-config | 2Gi | deployments/piracy/transmission.yml | yes |
+| piracy | tdarr-config | 2Gi | deployments/piracy/tdarr.yml | yes |
+| piracy | tdarr-server | 5Gi | deployments/piracy/tdarr.yml | yes |
+| trek | trek-data | 5Gi | deployments/trek/app.yaml | yes |
+| trek | trek-uploads | 20Gi | deployments/trek/app.yaml | yes |
 
 ---
 
@@ -147,7 +160,7 @@ kubectl --context lamg apply -f deployments/scrutiny/influxdb.yaml
 
 ## Scenario B: Full Restore from NFS/RAID Backup (SSD died / replaced)
 
-Use this when the SSD failed and was replaced. All 29 iSCSI PVCs on the SSD are gone and need to be recreated from the rsync backups on the RAID.
+Use this when the SSD failed and was replaced. All 39 iSCSI PVCs on the SSD are gone and need to be recreated from the rsync backups on the RAID.
 
 ### Prerequisites
 
@@ -168,7 +181,7 @@ Use this when the SSD failed and was replaced. All 29 iSCSI PVCs on the SSD are 
 
 Alternatively, disable auto-sync temporarily:
 ```bash
-for app in agonbar dawarich games immich piracy lamg; do
+for app in agonbar dawarich games immich knowledge piracy trek lamg; do
   kubectl --context lamg -n argocd patch application "$app" \
     -p '{"spec":{"syncPolicy":{"automated":null}}}' --type=merge
 done
@@ -214,7 +227,6 @@ kubectl --context lamg scale deployment/slskd -n piracy --replicas=0
 kubectl --context lamg scale deployment/sonarr -n piracy --replicas=0
 kubectl --context lamg scale deployment/soularr -n piracy --replicas=0
 kubectl --context lamg scale deployment/tachidesk -n piracy --replicas=0
-kubectl --context lamg scale deployment/transmission -n piracy --replicas=0
 ```
 
 ### Step 2: Delete old PVCs (if they exist in Pending/Lost state)
@@ -224,12 +236,14 @@ kubectl --context lamg scale deployment/transmission -n piracy --replicas=0
 kubectl --context lamg get pvc --all-namespaces | grep truenas-iscsi-ssd
 
 # Delete all iSCSI PVCs
-kubectl --context lamg delete pvc homarr-appdata paperless-redis paperless-data -n agonbar --ignore-not-found
+kubectl --context lamg delete pvc homarr-appdata minio-data paperless-redis paperless-data reactive-resume-postgres reactive-resume-uploads -n agonbar --ignore-not-found
 kubectl --context lamg delete pvc dawarich-db-data -n dawarich --ignore-not-found
 kubectl --context lamg delete pvc enshrouded-data factorio-data palworld-data -n games --ignore-not-found
 kubectl --context lamg delete pvc immich-db-data -n immich --ignore-not-found
+kubectl --context lamg delete pvc vault-data vault-state -n knowledge --ignore-not-found
 kubectl --context lamg delete pvc homeassistant-config influxdb-data plex-config scrutiny-config vscode-config zigbee2mqtt-config -n lamg --ignore-not-found
-kubectl --context lamg delete pvc bazarr-config cruncharr-config emulerr-config jellyfin-config lidarr-config prowlarr-config qbittorrent-config qui-config radarr-config seerr-config slskd-config sonarr-config soularr-config tachidesk-data transmission-config -n piracy --ignore-not-found
+kubectl --context lamg delete pvc anisub-data bazarr-config cruncharr-config emulerr-config houndarr-data jellyfin-config lidarr-config prowlarr-config qbittorrent-config qui-config radarr-config seerr-config slskd-config sonarr-config soularr-config tachidesk-data tdarr-config tdarr-server -n piracy --ignore-not-found
+kubectl --context lamg delete pvc trek-data trek-uploads -n trek --ignore-not-found
 ```
 
 ### Step 3: Recreate empty PVCs
@@ -238,7 +252,7 @@ Apply the deployment files which contain PVC definitions. ArgoCD handles this fo
 
 If ArgoCD auto-sync was disabled, re-enable and sync:
 ```bash
-for app in agonbar dawarich games immich piracy lamg; do
+for app in agonbar dawarich games immich knowledge piracy trek lamg; do
   kubectl --context lamg -n argocd patch application "$app" \
     -p '{"spec":{"syncPolicy":{"automated":{"prune":true,"selfHeal":true}}}}' --type=merge
 done
@@ -255,14 +269,14 @@ Wait for all PVCs to bind:
 kubectl --context lamg get pvc --all-namespaces | grep truenas-iscsi-ssd
 ```
 
-All 29 should show `Bound`. If any are stuck in `Pending`, check democratic-csi logs:
+All 39 should show `Bound`. If any are stuck in `Pending`, check democratic-csi logs:
 ```bash
 kubectl --context lamg logs -n democratic-csi -l app.kubernetes.io/name=democratic-csi --tail=50
 ```
 
 ### Step 4: Apply the restore jobs
 
-Apply `system/snapshots/restore.yaml` which contains one Job per PVC (29 total). Each job mounts the new empty PVC and the NFS backup, then rsyncs data back:
+Apply `system/snapshots/restore.yaml` which contains one Job per PVC (39 total). Each job mounts the new empty PVC and the NFS backup, then rsyncs data back:
 
 ```bash
 kubectl --context lamg apply -f system/snapshots/restore.yaml
@@ -290,7 +304,7 @@ done
 
 If you disabled ArgoCD auto-sync, re-enable it (if not done in step 3):
 ```bash
-for app in agonbar dawarich games immich piracy lamg; do
+for app in agonbar dawarich games immich knowledge piracy trek lamg; do
   kubectl --context lamg -n argocd patch application "$app" \
     -p '{"spec":{"syncPolicy":{"automated":{"prune":true,"selfHeal":true}}}}' --type=merge
 done
@@ -336,7 +350,6 @@ kubectl --context lamg scale deployment/slskd -n piracy --replicas=1
 kubectl --context lamg scale deployment/sonarr -n piracy --replicas=1
 kubectl --context lamg scale deployment/soularr -n piracy --replicas=1
 kubectl --context lamg scale deployment/tachidesk -n piracy --replicas=1
-kubectl --context lamg scale deployment/transmission -n piracy --replicas=1
 ```
 
 ### Step 6: Clean up restore jobs
@@ -351,7 +364,7 @@ kubectl --context lamg delete -f system/snapshots/restore.yaml
 # All pods running
 kubectl --context lamg get pods --all-namespaces | grep -v Completed | grep -v kube-system
 
-# All 29 PVCs bound
+# All 39 PVCs bound
 kubectl --context lamg get pvc --all-namespaces | grep truenas-iscsi-ssd
 ```
 
