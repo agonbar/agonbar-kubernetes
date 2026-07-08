@@ -14,8 +14,6 @@ spec:
     repoURL: 'https://github.com/agonbar/agonbar-kubernetes.git'
     path: system/tenants/tokkenno
     targetRevision: HEAD
-    directory:
-      recurse: false
   destination:
     namespace: default
     name: in-cluster
