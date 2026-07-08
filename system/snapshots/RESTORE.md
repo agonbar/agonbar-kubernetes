@@ -8,7 +8,7 @@ A daily CronJob (`pvc-backup` in namespace `backup`) snapshots all SSD PVCs and 
 
 ### Backup infrastructure files
 - `system/snapshots/backup.yaml` — CronJob, RBAC, backup script
-- `system/snapshots/restore.yaml` — Pre-built restore Jobs (one per PVC, 39 total)
+- `system/snapshots/restore/restore.yaml` — Pre-built restore Jobs (one per PVC, 39 total)
 - `system/snapshots/snapshot-controller.yaml` — VolumeSnapshot controller
 - `system/snapshots/crd-*.yaml` — VolumeSnapshot CRDs
 - `system/global-argocd-apps/democratic-csi-iscsi-ssd.yaml` — CSI driver + snapshot class
@@ -276,10 +276,10 @@ kubectl --context lamg logs -n democratic-csi -l app.kubernetes.io/name=democrat
 
 ### Step 4: Apply the restore jobs
 
-Apply `system/snapshots/restore.yaml` which contains one Job per PVC (39 total). Each job mounts the new empty PVC and the NFS backup, then rsyncs data back:
+Apply `system/snapshots/restore/restore.yaml` which contains one Job per PVC (39 total). Each job mounts the new empty PVC and the NFS backup, then rsyncs data back:
 
 ```bash
-kubectl --context lamg apply -f system/snapshots/restore.yaml
+kubectl --context lamg apply -f system/snapshots/restore/restore.yaml
 ```
 
 Monitor progress:
@@ -355,7 +355,7 @@ kubectl --context lamg scale deployment/tachidesk -n piracy --replicas=1
 ### Step 6: Clean up restore jobs
 
 ```bash
-kubectl --context lamg delete -f system/snapshots/restore.yaml
+kubectl --context lamg delete -f system/snapshots/restore/restore.yaml
 ```
 
 ### Step 7: Verify

@@ -1,7 +1,7 @@
 # Restore jobs: rsync data from NFS/RAID backup into iSCSI PVCs
-# Usage: kubectl --context lamg apply -f system/snapshots/restore.yaml
+# Usage: kubectl --context lamg apply -f system/snapshots/restore/restore.yaml
 # Prerequisites: all target PVCs must exist and be Bound, all deployments scaled to 0
-# Cleanup: kubectl --context lamg delete -f system/snapshots/restore.yaml
+# Cleanup: kubectl --context lamg delete -f system/snapshots/restore/restore.yaml
 # See RESTORE.md for full procedure
 # ============================================================
 # agonbar namespace (3 PVCs)
