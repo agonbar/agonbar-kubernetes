@@ -1,0 +1,37 @@
+# External dev sandbox for `tokkenno`: namespace + scoped RBAC + quota + netpol.
+# Plain directory (no envsubst plugin — no ${BASE_DOMAIN} in here). ArgoCD owns
+# the tenant's INFRA; the workloads the dev deploys inside `tokkenno` are NOT in
+# Git and are left untouched. CreateNamespace=false because namespace.yaml owns
+# the Namespace object.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tenant-tokkenno
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/agonbar/agonbar-kubernetes.git'
+    path: system/tenants/tokkenno
+    targetRevision: HEAD
+    directory:
+      recurse: false
+  destination:
+    namespace: default
+    name: in-cluster
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - PruneLast=true
+      - RespectIgnoreDifferences=true
+      - Validate=false
+      - PrunePropagationPolicy=foreground
+    retry:
+      limit: 5
+      backoff:
+        duration: 20s
+        factor: 2
+        maxDuration: 3m0s
