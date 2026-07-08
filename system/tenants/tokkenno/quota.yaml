@@ -1,0 +1,40 @@
+# Guardrails so an external tenant can't exhaust the cluster. Tune the numbers
+# to taste — these are modest homelab caps.
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: tokkenno-quota
+  namespace: tokkenno
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+    pods: "40"
+    persistentvolumeclaims: "10"
+    requests.storage: 50Gi
+    # No grabbing kube-vip LB IPs or opening NodePorts on every node.
+    services.loadbalancers: "0"
+    services.nodeports: "0"
+---
+# Default requests/limits so pods without explicit resources are still bounded,
+# and a per-container ceiling.
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: tokkenno-limits
+  namespace: tokkenno
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: 500m
+        memory: 512Mi
+      defaultRequest:
+        cpu: 100m
+        memory: 128Mi
+      max:
+        cpu: "4"
+        memory: 8Gi
