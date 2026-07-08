@@ -11,6 +11,10 @@ resources:
   - sealedsecrets.yaml
 
 patches:
+  - path: argocd-cm-patch.yml
+    target:
+      kind: ConfigMap
+      name: argocd-cm
   - path: argocd-cmd-params-cm-patch.yml
     target:
       kind: ConfigMap
