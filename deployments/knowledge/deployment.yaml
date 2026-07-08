@@ -22,6 +22,11 @@ spec:
       labels:
         app: vault-mcp
     spec:
+      # markdown-vault runs as PID 1 (Python) and does not reap the git
+      # subprocesses it orphans → zombie git leak (was 342 during the
+      # conflict-loop era). Sharing the PID namespace makes the pause
+      # container PID 1, which reaps them. [2026-07-08]
+      shareProcessNamespace: true
       serviceAccountName: vault-mcp
       nodeSelector:
         kubernetes.io/hostname: ovh02   # amd64, has spare room
