@@ -1,0 +1,65 @@
+---
+# tessera.${BASE_DOMAIN} serves the app, and /turn on the SAME origin hands out
+# the ephemeral TURN credentials — same-origin on purpose, so the browser never
+# needs CORS for it (turn-creds sends no CORS header by default).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tessera
+  namespace: tessera
+  annotations:
+    kubernetes.io/ingress.class: traefik
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: tessera.${BASE_DOMAIN}
+      http:
+        paths:
+          # Exact, so it out-prioritises the catch-all prefix below.
+          - path: /turn
+            pathType: Exact
+            backend:
+              service:
+                name: turn-creds
+                port:
+                  number: 8080
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 8080
+  tls:
+    - hosts:
+        - tessera.${BASE_DOMAIN}
+      secretName: tessera.${BASE_DOMAIN}
+---
+# The y-webrtc signaling websocket. Traefik upgrades ws/wss natively, so no
+# extra annotation is needed; the client dials wss://signal-tessera.${BASE_DOMAIN}.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: signaling
+  namespace: tessera
+  annotations:
+    kubernetes.io/ingress.class: traefik
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: signal-tessera.${BASE_DOMAIN}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: signaling
+                port:
+                  number: 4444
+  tls:
+    - hosts:
+        - signal-tessera.${BASE_DOMAIN}
+      secretName: signal-tessera.${BASE_DOMAIN}
