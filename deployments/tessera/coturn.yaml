@@ -1,0 +1,115 @@
+---
+# coturn — the TURN/STUN relay for Tessera's WebRTC peers.
+#
+# It MUST run on ovh02: that is the only node with a public IP (80.241.214.254),
+# and a TURN relay has to hand out reachable candidates. Traefik only proxies
+# 80/443 TCP, so this cannot sit behind the ingress — it uses hostNetwork and
+# binds the public interface directly. UDP is already open (INPUT policy ACCEPT).
+#
+# Auth is `use-auth-secret`: coturn recomputes the HMAC of the username it is
+# given, so the shared secret never leaves the cluster and the credentials the
+# browser holds expire on their own (minted by the turn-creds Deployment).
+#
+# The relay port range 50000-50200 deliberately avoids the ports already in use
+# on ovh02: rpc.mountd (49196) and tailscaled (41641).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coturn
+  namespace: tessera
+spec:
+  replicas: 1
+  # hostNetwork binds fixed ports, so a rolling update would fight itself.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: coturn
+  template:
+    metadata:
+      labels:
+        app: coturn
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        kubernetes.io/hostname: ovh02
+      containers:
+        - name: coturn
+          image: docker.io/coturn/coturn:4.10.0-alpine3.23
+          # `$TURN_SECRET` survives the ArgoCD envsubst plugin (it only expands
+          # $BASE_DOMAIN/$AMANDA_DOMAIN/$LETSENCRYPT_EMAIL) and is expanded here,
+          # at runtime, by the container's shell — never written to the manifest.
+          #
+          # The denied-peer-ip block is the important hardening: this pod is on the
+          # host network of the control-plane node, so without it anyone holding a
+          # (freely mintable) credential could relay traffic into the pod network,
+          # the tailnet, and both house LANs.
+          command:
+            - sh
+            - -c
+            - |
+              exec turnserver \
+                --log-file=stdout \
+                --listening-port=3478 \
+                --listening-ip=80.241.214.254 \
+                --relay-ip=80.241.214.254 \
+                --external-ip=80.241.214.254 \
+                --min-port=50000 \
+                --max-port=50200 \
+                --realm=turn.${BASE_DOMAIN} \
+                --use-auth-secret \
+                --static-auth-secret="$TURN_SECRET" \
+                --fingerprint \
+                --no-tls \
+                --no-dtls \
+                --no-cli \
+                --prod \
+                --no-multicast-peers \
+                --no-loopback-peers \
+                --user-quota=12 \
+                --total-quota=300 \
+                --max-bps=3000000 \
+                --denied-peer-ip=0.0.0.0-0.255.255.255 \
+                --denied-peer-ip=10.0.0.0-10.255.255.255 \
+                --denied-peer-ip=100.64.0.0-100.127.255.255 \
+                --denied-peer-ip=127.0.0.0-127.255.255.255 \
+                --denied-peer-ip=169.254.0.0-169.254.255.255 \
+                --denied-peer-ip=172.16.0.0-172.31.255.255 \
+                --denied-peer-ip=192.0.0.0-192.0.0.255 \
+                --denied-peer-ip=192.168.0.0-192.168.255.255 \
+                --denied-peer-ip=198.18.0.0-198.19.255.255 \
+                --denied-peer-ip=224.0.0.0-255.255.255.255 \
+                --denied-peer-ip=::1 \
+                --denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff \
+                --denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+          env:
+            - name: TURN_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: tessera-turn
+                  key: TURN_SECRET
+          ports:
+            - name: turn-udp
+              containerPort: 3478
+              protocol: UDP
+            - name: turn-tcp
+              containerPort: 3478
+              protocol: TCP
+          readinessProbe:
+            tcpSocket:
+              port: 3478
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          livenessProbe:
+            tcpSocket:
+              port: 3478
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: "1"
+              memory: 256Mi

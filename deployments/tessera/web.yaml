@@ -1,0 +1,51 @@
+---
+# The Tessera PWA, built and served as static files by nginx. The signaling URL
+# and the TURN-credentials path are baked in at image build time (Vite inlines
+# import.meta.env), so changing a relay host means rebuilding + bumping the tag.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: tessera
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: web
+          image: ghcr.io/agonbar/tessera-web:0.1.0
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /index.html
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: tessera
+spec:
+  selector:
+    app: web
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
