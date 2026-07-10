@@ -93,13 +93,19 @@ spec:
             - name: turn-tcp
               containerPort: 3478
               protocol: TCP
+          # coturn binds ONLY the public interface, but with hostNetwork the pod IP
+          # is the node's InternalIP (the tailnet address), which is what kubelet
+          # probes by default — it would get ECONNREFUSED forever. Probe the address
+          # coturn actually listens on.
           readinessProbe:
             tcpSocket:
+              host: 80.241.214.254
               port: 3478
             initialDelaySeconds: 5
             periodSeconds: 20
           livenessProbe:
             tcpSocket:
+              host: 80.241.214.254
               port: 3478
             initialDelaySeconds: 15
             periodSeconds: 30
