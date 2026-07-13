@@ -126,6 +126,55 @@ spec:
       hosts:
         - cruncharr.${BASE_DOMAIN}
 ---
+# Config volume: an iSCSI zvol on the TrueNAS box (192.168.0.29 on the LAN,
+# 100.72.0.41 over the tailnet).
+#
+# This one CANNOT be migrated to truenas-iscsi-ssd-lan the way every other PVC in
+# this namespace was. cruncharr is pinned to workload=media nodes (they're the
+# ones that reach the media NFS), and those nodes sit in the aya LAN: they have
+# no route to 192.168.0.29 (verified — TCP to the LAN portal times out, the
+# tailnet portal answers). That is also why the -lan CSI *node* DaemonSet only
+# schedules on lbpool=lamg nodes: the LAN portal is only usable from the LAN.
+# So this volume must keep using the tailnet portal.
+#
+# Statically bound with Retain, so the zvol can't be reclaimed by accident — it
+# used to be a dynamic PV with reclaimPolicy: Delete, one `kubectl delete pvc`
+# away from destroying the database.
+#
+# KNOWN FRAGILITY: iSCSI over a WireGuard tunnel drops on network blips
+# (`connection1:0: detected conn error (1022)`). In-flight writes then fail, ext4
+# aborts its journal and remounts the filesystem read-only, every SQLite write
+# returns "disk I/O error", and the download-queue breaker stops the queue after
+# 5 consecutive failures. This happened on 2026-07-11.
+# Recovery: restart the pod — the CSI re-attach runs `fsck -a`, which replays the
+# journal and clears the error state — then resume the queue from the dashboard.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: cruncharr-config-tailnet
+spec:
+  capacity:
+    storage: 2Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: truenas-iscsi-ssd
+  claimRef:
+    namespace: piracy
+    name: cruncharr-config
+  csi:
+    driver: org.democratic-csi.truenas-iscsi-ssd
+    fsType: ext4
+    volumeHandle: pvc-302fd00d-11ef-4af7-9a7d-b96a46ce4cf4
+    volumeAttributes:
+      node_attach_driver: iscsi
+      portal: "100.72.0.41:3260"
+      portals: ""
+      interface: ""
+      iqn: "iqn.2005-10.org.freenas.ctl:csi-pvc-302fd00d-11ef-4af7-9a7d-b96a46ce4cf4-k8s"
+      lun: "0"
+      provisioner_driver: freenas-api-iscsi
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -135,6 +184,7 @@ spec:
   accessModes:
     - ReadWriteOnce
   storageClassName: truenas-iscsi-ssd
+  volumeName: cruncharr-config-tailnet
   resources:
     requests:
       storage: 2Gi
