@@ -13,7 +13,7 @@ metadata:
 spec:
   replicas: 1
   strategy:
-    type: Recreate            # RWO PVCs — never two pods mounting at once
+    type: Recreate            # single hostPath dir — never two pods writing it at once
   selector:
     matchLabels:
       app: vault-mcp
@@ -29,14 +29,21 @@ spec:
       shareProcessNamespace: true
       serviceAccountName: vault-mcp
       nodeSelector:
-        kubernetes.io/hostname: ovh02   # amd64, has spare room
+        kubernetes.io/hostname: ovh02   # pinned: hostPath data lives on ovh02's local disk
       volumes:
+        # Local disk on ovh02. The data here is rebuildable — vault-data re-clones
+        # from gitea (managed git mode, source of truth) and state is a derived
+        # index — so it needs no networked/replicated storage. Moved off
+        # tailnet-iSCSI (nas02): a WAN blip dropped the iSCSI session, ext4 aborted
+        # its journal, and every write EIO'd until an offline fsck. [2026-07-17]
         - name: vault-data
-          persistentVolumeClaim:
-            claimName: vault-data
+          hostPath:
+            path: /docker/vault-mcp/vault
+            type: Directory
         - name: state
-          persistentVolumeClaim:
-            claimName: vault-state
+          hostPath:
+            path: /docker/vault-mcp/state
+            type: Directory
       containers:
         - name: vault-mcp
           image: ghcr.io/pvliesdonk/markdown-vault-mcp:latest   # TODO: pin a digest
@@ -108,15 +115,12 @@ spec:
               port: mcp
             periodSeconds: 30
           volumeMounts:
-            # subPath so the container sees a clean dir — a fresh ext4/iSCSI PVC
-            # has a lost+found at its root, which makes managed git mode refuse
-            # SOURCE_DIR ("must be empty or a git repository").
+            # hostPath dirs are already clean (no lost+found like a fresh iSCSI
+            # PVC root had), so no subPath needed — mount them directly.
             - name: vault-data
               mountPath: /data/vault
-              subPath: vault
             - name: state
               mountPath: /data/state
-              subPath: state
           resources:
             requests:
               cpu: 50m
