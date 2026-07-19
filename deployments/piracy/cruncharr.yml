@@ -85,6 +85,16 @@ spec:
         workload: media
       tolerations:
         - {key: dedicated, operator: Equal, value: media, effect: NoSchedule}
+        # Tolerate the node disk-pressure taint so a transient node-disk spike
+        # doesn't strand cruncharr as Pending for hours. On 2026-07-19 all three
+        # workload=media nodes hit DiskPressure at once (partly from cruncharr's
+        # own shaka-packager coredumps piling up in /var/lib/systemd/coredump),
+        # kubelet tainted them, and this pod — which only tolerated dedicated=media
+        # — had nowhere to schedule for 30h. tdarr already tolerates it.
+        # NOTE: this only helps once node disk recovers enough for the democratic-csi
+        # node-plugin (which is NOT disk-pressure-tolerant) to re-register; the real
+        # mitigation is capping coredump retention so cruncharr stops filling nodes.
+        - {key: node.kubernetes.io/disk-pressure, operator: Exists, effect: NoSchedule}
 ---
 apiVersion: v1
 kind: Service
