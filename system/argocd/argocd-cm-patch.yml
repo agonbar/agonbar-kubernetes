@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+data:
+  # This cluster changes rarely; poll Git hourly instead of every 3m to cut
+  # apiserver/kine load on ovh02. Manual refresh (argocd.argoproj.io/refresh)
+  # or a webhook still triggers immediate syncs.
+  timeout.reconciliation: 1h

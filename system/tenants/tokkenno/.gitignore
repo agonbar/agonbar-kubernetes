@@ -1,0 +1,5 @@
+# Never commit the dev's credentials.
+kubeconfig-*.yaml
+*.key
+*.crt
+*.csr

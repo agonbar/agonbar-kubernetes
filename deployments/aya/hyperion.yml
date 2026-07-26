@@ -6,7 +6,7 @@ metadata:
     labels:
         app: hyperion # <--- change this to match label on the pod
 spec:
-    replicas: 1
+    replicas: 0
     selector:
         matchLabels:
             app: hyperion # <--- change this to match label on the pod

@@ -1,0 +1,59 @@
+# Network-level isolation for the tenant. Only enforced if k3s was NOT started
+# with --disable-network-policy (k3s ships an embedded netpol controller). RBAC
+# isolation holds regardless; these just stop pod-to-pod snooping across tenants.
+---
+# INGRESS: tokkenno pods are reachable only from (a) their own namespace and
+# (b) the traefik namespace, so Ingress routing still works. Everyone else is
+# denied.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tokkenno-ingress-isolation
+  namespace: tokkenno
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}                     # same namespace
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: traefik        # ingress controller
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cert-manager   # ACME HTTP-01 self-check
+---
+# EGRESS: allow DNS + same-namespace + the public internet, but block reaching
+# any other pod/service in the cluster (so the dev can't curl your internal
+# services). Internet = everything except the k3s pod/service CIDRs.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tokkenno-egress-isolation
+  namespace: tokkenno
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    # DNS to CoreDNS in kube-system
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Same namespace (pods can talk to each other)
+    - to:
+        - podSelector: {}
+    # Internet, minus the cluster's own pod/service CIDRs
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.42.0.0/16   # pod CIDR
+              - 10.43.0.0/16   # service CIDR

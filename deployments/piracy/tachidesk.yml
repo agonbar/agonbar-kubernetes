@@ -8,7 +8,7 @@ metadata:
 spec:
     strategy:
         type: Recreate
-    replicas: 0
+    replicas: 1
     selector:
         matchLabels:
             app: tachidesk # <--- change this to match label on the pod
@@ -39,37 +39,16 @@ spec:
                           echo "[iscsi-fsck] Filesystem is writable. Nothing to do."
                           exit 0
                         fi
-                        echo "[iscsi-fsck] Filesystem is READ-ONLY. Starting repair..."
-                        apk add --no-cache e2fsprogs util-linux 2>/dev/null
-                        DEVICE=$(grep " ${MOUNTPOINT} " /proc/mounts | awk '{print $1}' | head -1)
-                        if [ -z "${DEVICE}" ]; then
-                          echo "[iscsi-fsck] ERROR: Could not find block device for ${MOUNTPOINT}."
-                          grep -E "iscsi|/dev/sd|democratic-csi" /host-proc-mounts || true
-                          exit 1
-                        fi
-                        echo "[iscsi-fsck] Found device: ${DEVICE}"
-                        if mount -o remount,rw "${MOUNTPOINT}" 2>/dev/null; then
-                          if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
-                            rm -f "${MOUNTPOINT}/.rw-test"
-                            echo "[iscsi-fsck] Remount rw succeeded."
-                            exit 0
-                          fi
-                        fi
-                        echo "[iscsi-fsck] Running e2fsck on ${DEVICE}..."
-                        GLOBAL_MOUNT=$(grep "^${DEVICE} " /host-proc-mounts | awk '{print $2}' | head -1)
-                        if [ -n "${GLOBAL_MOUNT}" ]; then
-                          umount -l "${GLOBAL_MOUNT}" || true
-                        fi
-                        e2fsck -y -f "${DEVICE}" || true
-                        if [ -n "${GLOBAL_MOUNT}" ]; then
-                          mount "${DEVICE}" "${GLOBAL_MOUNT}" || { echo "[iscsi-fsck] Mount failed."; exit 1; }
-                        fi
-                        if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                        echo "[iscsi-fsck] Filesystem is READ-ONLY."
+                        echo "[iscsi-fsck] Attempting a single safe remount,rw (no fsck)..."
+                        if mount -o remount,rw "${MOUNTPOINT}" 2>/dev/null && touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
                           rm -f "${MOUNTPOINT}/.rw-test"
-                          echo "[iscsi-fsck] SUCCESS: Filesystem repaired."
+                          echo "[iscsi-fsck] remount,rw succeeded — filesystem writable. Done."
                           exit 0
                         fi
-                        echo "[iscsi-fsck] FAILED: Still read-only after repair."
+                        echo "[iscsi-fsck] STILL READ-ONLY. The RO state lives in the node-level CSI globalmount and cannot be repaired from inside the pod."
+                        echo "[iscsi-fsck] DO NOT run e2fsck on the mounted device — it corrupts the filesystem."
+                        echo "[iscsi-fsck] Recovery: scale this Deployment to 0, wait for the VolumeAttachment to detach, then scale back to 1 (forces a clean iSCSI re-attach that clears RO)."
                         exit 1
                   volumeMounts:
                       - name: data
@@ -84,7 +63,9 @@ spec:
                         mountPath: /home/suwayomi/.local/share/Tachidesk
             containers:
                 - name: tachidesk
-                  image: ghcr.io/suwayomi/tachidesk:stable
+                  # Pinned for GitOps reproducibility (was floating :stable).
+                  # Bump deliberately; v2.x->v2.y runs SQLite migrations on boot.
+                  image: ghcr.io/suwayomi/tachidesk:v2.2.2100
                   imagePullPolicy: IfNotPresent
                   ports:
                       - containerPort: 4567
@@ -92,34 +73,47 @@ spec:
                   volumeMounts:
                       - name: data
                         mountPath: /home/suwayomi/.local/share/Tachidesk
+                      # Shared manga library = a subdir of the media NFS export.
+                      # Set Suwayomi's downloadsPath to /media/manga in the web UI
+                      # so raws land where mokuro-ocr can read them.
+                      - name: manga
+                        mountPath: /media
                   startupProbe:
                       httpGet:
-                          path: /api/v1/settings/about
+                          path: /
                           port: 4567
+                      # Suwayomi's JCEF/Chromium cold boot can take >5min on a
+                      # slow node after downtime; give it 10min before restarting
+                      # (it bound :4567 only after WebUI+JCEF init in testing).
                       periodSeconds: 10
                       timeoutSeconds: 5
-                      failureThreshold: 30
+                      failureThreshold: 60
                   livenessProbe:
                       httpGet:
-                          path: /api/v1/settings/about
+                          path: /
                           port: 4567
                       periodSeconds: 15
                       timeoutSeconds: 5
                       failureThreshold: 3
                   readinessProbe:
                       httpGet:
-                          path: /api/v1/settings/about
+                          path: /
                           port: 4567
                       periodSeconds: 10
                       timeoutSeconds: 5
                       failureThreshold: 3
                   resources:
                       requests:
-                          memory: 128Mi
-                          cpu: 100m
+                          memory: 512Mi
+                          cpu: 250m
                       limits:
-                          memory: 1Gi
-                          cpu: 100m
+                          # Was 100m — far too tight: Suwayomi + its embedded
+                          # JCEF/Chromium got CPU-throttled to a crawl (cgroup
+                          # throttled_time ~1223s), making JCEF boot take ~9min
+                          # and WebUI GraphQL queries 13-24s ("loading forever"
+                          # on the Extensions page). Allow bursting to 2 cores.
+                          memory: 2Gi
+                          cpu: "2"
             volumes:
                 - name: data
                   persistentVolumeClaim:
@@ -127,6 +121,10 @@ spec:
                 - name: host-proc-mounts
                   hostPath:
                       path: /proc/1/mounts
+                - name: manga
+                  nfs:
+                      server: 192.168.0.29
+                      path: /mnt/RAID/docker/media
             nodeSelector:
               svccontroller.k3s.cattle.io/lbpool: lamg
 
@@ -175,6 +173,35 @@ spec:
       hosts:
         - tachidesk.${BASE_DOMAIN}
 ---
+# Migrated off the Tailscale iSCSI portal (100.72.0.41) onto the wired-LAN driver
+# (truenas-iscsi-ssd-lan -> 192.168.0.29). Statically bound to the retained zvol.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: tachidesk-data-lan
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: truenas-iscsi-ssd-lan
+  claimRef:
+    namespace: piracy
+    name: tachidesk-data
+  csi:
+    driver: org.democratic-csi.truenas-iscsi-ssd-lan
+    fsType: ext4
+    volumeHandle: pvc-3c8c1195-7c93-458e-9f88-9e1a3602b97d
+    volumeAttributes:
+      node_attach_driver: iscsi
+      portal: "192.168.0.29:3260"
+      portals: ""
+      interface: ""
+      iqn: "iqn.2005-10.org.freenas.ctl:csi-pvc-3c8c1195-7c93-458e-9f88-9e1a3602b97d-k8s"
+      lun: "0"
+      provisioner_driver: freenas-api-iscsi
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -183,7 +210,8 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: truenas-iscsi-ssd
+  storageClassName: truenas-iscsi-ssd-lan
+  volumeName: tachidesk-data-lan
   resources:
     requests:
       storage: 5Gi

@@ -1,0 +1,50 @@
+# Access for the external dev `tokkenno`.
+#
+# Identity = X509 client cert with CN=tokkenno (see README.md). All grants are
+# namespaced to `tokkenno` EXCEPT the tiny cluster-scoped "get my own namespace"
+# helper below, so this user cannot see or touch anything else in the cluster:
+# no `get nodes`, no listing other namespaces, no cluster resources.
+---
+# Full control INSIDE the tokkenno namespace (deployments, services, ingress,
+# secrets, configmaps, SAs, PVCs...). Uses the built-in `admin` ClusterRole via
+# a RoleBinding, so it only applies to this one namespace. RBAC escalation
+# prevention still blocks binding roles more powerful than `admin` itself.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: tokkenno-admin
+  namespace: tokkenno
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: admin
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: tokkenno
+---
+# Cluster-scoped, but restricted to `get` on the single namespace `tokkenno`
+# (no list/watch, no other names). This just makes `kubectl get ns tokkenno`
+# and `kubectl config`-style discovery work without exposing the namespace list.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: tenant-tokkenno-ns-get
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get"]
+    resourceNames: ["tokkenno"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: tenant-tokkenno-ns-get
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: tenant-tokkenno-ns-get
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: tokkenno

@@ -9,4 +9,5 @@ kubeseal --context lamg -f ./deployments/lamg/secrets.yaml -o yaml --scope clust
 kubeseal --context lamg -f ./deployments/yavoo/secrets.yaml -o yaml --scope cluster-wide > ./deployments/yavoo/sealedsecrets.yaml
 kubeseal --context lamg -f ./deployments/piracy/secrets.yaml -o yaml --scope cluster-wide > ./deployments/piracy/sealedsecrets.yaml
 kubeseal --context lamg -f ./deployments/knowledge/secrets.yaml -o yaml --scope cluster-wide > ./deployments/knowledge/sealedsecrets.yaml
+kubeseal --context lamg -f ./deployments/trek/secrets.yaml -o yaml --scope cluster-wide > ./deployments/trek/sealedsecrets.yaml
 kubeseal --context lamg -f ./system/democratic-csi/secrets.yaml -o yaml --scope cluster-wide > ./system/democratic-csi/sealedsecrets.yaml
