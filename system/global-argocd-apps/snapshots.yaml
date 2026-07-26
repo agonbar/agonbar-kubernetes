@@ -1,0 +1,39 @@
+# Manages the PVC backup/snapshot infrastructure: snapshot-controller, the
+# VolumeSnapshot CRDs, and the daily pvc-backup CronJob (namespace `backup`).
+# selfHeal ensures the snapshot-controller can't silently drift to 0 replicas.
+#
+# Source is a NON-recursive directory (no plugin), so `system/snapshots/restore/`
+# is deliberately excluded: restore.yaml holds 39 Jobs that rsync backups over
+# live PVCs and must ONLY be applied by hand during a disaster restore.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: snapshots
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/agonbar/agonbar-kubernetes.git'
+    path: system/snapshots
+    targetRevision: HEAD
+    directory:
+      recurse: false
+  destination:
+    namespace: kube-system
+    name: in-cluster
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - PruneLast=true
+      - RespectIgnoreDifferences=true
+      - Validate=false
+      - PrunePropagationPolicy=foreground
+    retry:
+      limit: 5
+      backoff:
+        duration: 20s
+        factor: 2
+        maxDuration: 3m0s

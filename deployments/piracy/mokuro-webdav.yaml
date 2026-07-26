@@ -1,0 +1,188 @@
+# mokuro-webdav: WebDAV front to the shared manga NFS library so the
+# client-side mokuro-reader can auto-sync OCR'd volumes (the reader has no
+# server backend; it pulls/pushes via WebDAV/GDrive/MEGA). Read-write so the
+# reader can sync reading progress/profiles back. Behind Traefik TLS.
+#
+# CORS: the reader SPA (mokuro.${BASE_DOMAIN}) calls this from a different
+# origin, so cross-origin WebDAV methods are allowed for that host only.
+# Credentials come from the SealedSecret `mokuro-webdav` (sealed out-of-band
+# against the lamg context — see deploy notes), referenced via {env} in config.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mokuro-webdav-config
+  namespace: piracy
+data:
+  config.yml: |
+    address: 0.0.0.0
+    port: 6065
+    directory: /media/manga
+    permissions: CRUD
+    # CORS handled at the Traefik ingress (Middleware mokuro-webdav-cors):
+    # hacdias/webdav did not emit preflight Allow-Methods/Allow-Headers for
+    # WebDAV verbs. Disabled here to avoid duplicate Access-Control-* headers.
+    cors:
+      enabled: false
+    users:
+      - username: "{env}WEBDAV_USERNAME"
+        password: "{env}WEBDAV_PASSWORD"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mokuro-webdav
+  namespace: piracy
+  labels:
+    app: mokuro-webdav
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mokuro-webdav
+  template:
+    metadata:
+      labels:
+        app: mokuro-webdav
+    spec:
+      enableServiceLinks: false
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+      initContainers:
+        # Ensure the manga subdir exists (webdav errors if `directory` is missing)
+        # and is writable by Suwayomi (uid 1000) which also writes here.
+        - name: ensure-dir
+          image: busybox:latest
+          command: ["sh", "-c", "mkdir -p /media/manga && chmod 0777 /media/manga"]
+          volumeMounts:
+            - name: manga
+              mountPath: /media
+      containers:
+        - name: webdav
+          image: ghcr.io/hacdias/webdav:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - -c
+            - /config/config.yml
+          ports:
+            - containerPort: 6065
+              protocol: TCP
+          env:
+            - name: WEBDAV_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mokuro-webdav
+                  key: username
+            - name: WEBDAV_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mokuro-webdav
+                  key: password
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: manga
+              mountPath: /media
+          resources:
+            requests:
+              memory: 32Mi
+              cpu: 10m
+            limits:
+              memory: 256Mi
+              cpu: 500m
+      volumes:
+        - name: config
+          configMap:
+            name: mokuro-webdav-config
+        - name: manga
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/media
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mokuro-webdav
+  namespace: piracy
+spec:
+  type: ClusterIP
+  selector:
+    app: mokuro-webdav
+  ports:
+    - name: webdav
+      protocol: TCP
+      port: 6065
+      targetPort: 6065
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mokuro-webdav-https
+  namespace: piracy
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.middlewares: piracy-mokuro-webdav-cors@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: manga-dav.${BASE_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: mokuro-webdav
+                port:
+                  number: 6065
+  tls:
+    - secretName: manga-dav.${BASE_DOMAIN}
+      hosts:
+        - manga-dav.${BASE_DOMAIN}
+---
+# CORS for the client-side mokuro-reader (cross-origin to the WebDAV host).
+# Traefik handles the preflight OPTIONS directly and adds the headers to real
+# requests — reliable for WebDAV verbs, unlike hacdias/webdav's own CORS.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: mokuro-webdav-cors
+  namespace: piracy
+spec:
+  headers:
+    accessControlAllowOriginList:
+      - https://mokuro.${BASE_DOMAIN}
+    accessControlAllowCredentials: true
+    accessControlAllowMethods:
+      - GET
+      - HEAD
+      - POST
+      - PUT
+      - DELETE
+      - OPTIONS
+      - PROPFIND
+      - PROPPATCH
+      - MKCOL
+      - COPY
+      - MOVE
+      - LOCK
+      - UNLOCK
+    accessControlAllowHeaders:
+      - Authorization
+      - Content-Type
+      - Depth
+      - Overwrite
+      - Destination
+      - If
+      - Lock-Token
+      - X-Requested-With
+      - Accept
+      - Origin
+    accessControlExposeHeaders:
+      - Content-Length
+      - Content-Type
+      - ETag
+      - Last-Modified
+      - DAV
+    accessControlMaxAge: 86400
+    addVaryHeader: true

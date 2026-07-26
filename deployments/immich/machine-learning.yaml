@@ -21,7 +21,7 @@ spec:
         app: machine-learning 
     spec:
       containers:
-        - image: ghcr.io/immich-app/immich-machine-learning:v2.7.5
+        - image: ghcr.io/immich-app/immich-machine-learning:v3.0.1
           name: machine-learning 
           env:
             - name: DB_HOSTNAME
@@ -45,13 +45,6 @@ spec:
               value: "redis"
             - name: LOG_LEVEL
               value: "simple"
-            - name: TYPESENSE_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: immich
-                  key: typesenseApiKey
-            - name: REVERSE_GEOCODING_PRECISION
-              value: "1"
             - name: MACHINE_LEARNING_PORT
               value: "3003"
           ports:

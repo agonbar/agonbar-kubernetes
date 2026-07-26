@@ -4,15 +4,17 @@
 # Each pod registers as ${HOSTNAME}-pod (downward API) so the server sees
 # them as distinct nodes. CPU limit is ~80% of an 8c/16t Ryzen 7 7700.
 #
-# The pod contains TWO containers:
-#   tdarr-node     — upstream worker, untouched (so tdarr_node version
-#                    bumps flow through without a re-build on our side).
-#   vmaf-sidecar   — our image; publishes a libvmaf-capable ffmpeg +
-#                    the vmaf-window CLI into the pod-shared /sidecar
-#                    emptyDir. The Tdarr_Plugin_anime_av1_vmaf_gate
-#                    plugin shells out to /sidecar/bin/vmaf-window
-#                    after the AV1 transcode produces its output.
-#                    See tdarr/docs/DESIGN-vmaf-sidecar.md.
+# Single container: tdarr-node — upstream worker, untouched (so tdarr_node
+# version bumps flow through without a re-build on our side).
+#
+# VMAF quality gating is NOT done here. The inline-plugin approach
+# (Tdarr_Plugin_anime_av1_vmaf_gate + a vmaf-sidecar publishing a
+# libvmaf ffmpeg into a shared emptyDir) was rejected 2026-04-30 — Tdarr
+# runs post-proc plugins synchronously on the server event loop, so a
+# multi-minute VMAF run blocked the loop and the kubelet liveness probe
+# killed the pod mid-validation. Gating moved out-of-band to the
+# tdarr-validator Deployment (its own image carries ffmpeg+libvmaf).
+# The vmaf-sidecar was removed 2026-06-25 as dead weight.
 #
 # GPU note: NVENC/NVDEC is NOT enabled. The cluster has no NVIDIA
 # container runtime configured (k3s/containerd default runtime + no
@@ -86,8 +88,6 @@ spec:
                         mountPath: /app/configs
                       - name: media
                         mountPath: /media
-                      - name: sidecar
-                        mountPath: /sidecar
                   resources:
                       requests:
                           memory: 1Gi
@@ -100,30 +100,8 @@ spec:
                           # cgroup cap contains Tdarr to a cgroup-OOM instead of nuking the node.
                           memory: 8Gi
                           cpu: '6'
-                # vmaf-sidecar: at startup, copies static-ffmpeg / ffprobe /
-                # vmaf-window into the shared /sidecar emptyDir, then idles.
-                # When the plugin shells out to /sidecar/bin/vmaf-window from
-                # the tdarr-node container, the resulting ffmpeg runs INSIDE
-                # the tdarr-node container's cgroup (the exec'er) — so the
-                # sidecar's resource limits only need to cover the file copy
-                # and the sleep. Keep it tiny.
-                - name: vmaf-sidecar
-                  image: ghcr.io/agonbar/tdarr-vmaf-sidecar:latest
-                  imagePullPolicy: Always
-                  volumeMounts:
-                      - name: sidecar
-                        mountPath: /sidecar
-                  resources:
-                      requests:
-                          memory: 32Mi
-                          cpu: 10m
-                      limits:
-                          memory: 128Mi
-                          cpu: 100m
             volumes:
                 - name: configs
-                  emptyDir: {}
-                - name: sidecar
                   emptyDir: {}
                 # Library cache lives on the same NFS share as /media so the
                 # server pod's cacheCopyService can see the post-transcode

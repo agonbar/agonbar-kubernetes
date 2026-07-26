@@ -1,0 +1,82 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: democratic-csi-iscsi-ssd-lan
+  namespace: argocd
+spec:
+  project: default
+  source:
+    chart: democratic-csi
+    repoURL: https://democratic-csi.github.io/charts/
+    targetRevision: 0.14.7
+    helm:
+      releaseName: democratic-csi-iscsi-ssd-lan
+      valuesObject:
+        csiDriver:
+          # LAN-path twin of org.democratic-csi.truenas-iscsi-ssd.
+          # Same TrueNAS (nas02) + same datasets, but the iSCSI data path and API
+          # go over the wired LAN (192.168.0.29) instead of Tailscale (100.72.0.41).
+          # Use for config PVCs whose pods are firmly pinned to lamg-LAN nodes.
+          name: "org.democratic-csi.truenas-iscsi-ssd-lan"
+
+        storageClasses:
+          - name: truenas-iscsi-ssd-lan
+            defaultClass: false
+            reclaimPolicy: Delete
+            volumeBindingMode: Immediate
+            allowVolumeExpansion: true
+            parameters:
+              fsType: ext4
+            mountOptions: []
+            secrets:
+              provisioner-secret:
+              controller-publish-secret:
+              node-stage-secret:
+              node-publish-secret:
+              controller-expand-secret:
+
+        volumeSnapshotClasses:
+          - name: truenas-iscsi-ssd-lan
+            deletionPolicy: Delete
+            parameters: {}
+
+        driver:
+          existingConfigSecret: democratic-csi-iscsi-ssd-lan-driver-config
+          config:
+            driver: freenas-api-iscsi
+
+        # The LAN driver only works from lamg-LAN nodes (they have a wired route to
+        # nas02 at 192.168.0.29). Pin both the controller (makes the TrueNAS API call)
+        # and the node plugin to lamg — also enforces that LAN volumes can only mount
+        # on lamg nodes, which is exactly the intended invariant.
+        controller:
+          nodeSelector:
+            svccontroller.k3s.cattle.io/lbpool: lamg
+
+        node:
+          nodeSelector:
+            svccontroller.k3s.cattle.io/lbpool: lamg
+          tolerations:
+            - key: dedicated
+              operator: Equal
+              value: media
+              effect: NoSchedule
+  destination:
+    name: in-cluster
+    namespace: democratic-csi
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+      - RespectIgnoreDifferences=true
+      - Validate=false
+      - PrunePropagationPolicy=foreground
+    retry:
+      limit: 5
+      backoff:
+        duration: 20s
+        factor: 2
+        maxDuration: 3m0s

@@ -1,0 +1,117 @@
+---
+# The y-webrtc signaling server. It only brokers WebRTC offers/answers between
+# peers in a room — it never sees the Y.Doc, and it relays no media. Pinned to
+# the exact y-webrtc version the client bundles, so the protocol cannot drift.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: signaling
+  namespace: tessera
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: signaling
+  template:
+    metadata:
+      labels:
+        app: signaling
+    spec:
+      containers:
+        - name: signaling
+          image: ghcr.io/agonbar/tessera-relay:0.1.0
+          env:
+            - name: PORT
+              value: "4444"
+          ports:
+            - name: http
+              containerPort: 4444
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 4444
+            initialDelaySeconds: 3
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 10m
+              memory: 48Mi
+            limits:
+              cpu: 500m
+              memory: 192Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: signaling
+  namespace: tessera
+spec:
+  selector:
+    app: signaling
+  ports:
+    - name: http
+      port: 4444
+      targetPort: 4444
+---
+# Mints the ephemeral TURN credentials the browser uses. Shares coturn's HMAC
+# secret; the secret itself never reaches a client.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: turn-creds
+  namespace: tessera
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: turn-creds
+  template:
+    metadata:
+      labels:
+        app: turn-creds
+    spec:
+      containers:
+        - name: turn-creds
+          image: ghcr.io/agonbar/tessera-relay:0.1.0
+          command: ["node", "/app/turn-creds.js"]
+          env:
+            - name: PORT
+              value: "8080"
+            - name: TURN_TTL
+              value: "43200"
+            - name: TURN_URLS
+              value: "turn:turn.${BASE_DOMAIN}:3478?transport=udp,turn:turn.${BASE_DOMAIN}:3478?transport=tcp"
+            - name: TURN_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: tessera-turn
+                  key: TURN_SECRET
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: turn-creds
+  namespace: tessera
+spec:
+  selector:
+    app: turn-creds
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
