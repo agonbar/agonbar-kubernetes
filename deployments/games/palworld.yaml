@@ -13,7 +13,7 @@ metadata:
 spec:
   strategy:
     type: Recreate
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app: palworld
@@ -53,7 +53,7 @@ spec:
             - name: TZ
               value: "Europe/Madrid"
             - name: PUBLIC_IP
-              value: "80.241.214.25"
+              value: "80.241.214.254"
           ports:
             - containerPort: 8211
               name: steamport
@@ -68,13 +68,16 @@ spec:
             requests:
               cpu: 5m
               memory: 30Mi
+            limits:
+              cpu: "4"
+              memory: 8Gi
       volumes:
         - name: palworld
           persistentVolumeClaim:
             claimName: palworld-data
       nodeSelector:
         kubernetes.io/arch: amd64
-        svccontroller.k3s.cattle.io/lbpool: lamg
+        kubernetes.io/hostname: ovh02
 ---
 kind: Service
 apiVersion: v1
@@ -105,7 +108,7 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: truenas-iscsi-ssd
+  storageClassName: local-path
   resources:
     requests:
       storage: 10Gi
