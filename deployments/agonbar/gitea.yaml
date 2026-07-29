@@ -21,7 +21,7 @@ spec:
         app: gitea
     spec:
       containers:
-        - image: codeberg.org/forgejo/forgejo:14.0
+        - image: codeberg.org/forgejo/forgejo:16.0.1
           name: forgejo
           env:
             - name: USER_UID
