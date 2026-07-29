@@ -18,16 +18,21 @@ spec:
             containers:
                 - name: pihole-ha
                   # https://hub.docker.com/r/pihole/pihole/tags
-                  image: pihole/pihole:2024.07.0
+                  image: pihole/pihole:2026.07.2
                   imagePullPolicy: IfNotPresent
                   env:
                       - name: TZ
                         value: "Europe/Madrid"
-                      - name: WEBPASSWORD
+                      # Pi-hole v6 renamed WEBPASSWORD -> FTLCONF_webserver_api_password.
+                      - name: FTLCONF_webserver_api_password
                         valueFrom:
                           secretKeyRef:
                             name: aya
                             key: piholePassword
+                      # No persistent volume: pin the upstream so DNS resolves
+                      # deterministically after every restart (v5 used 8.8.8.8).
+                      - name: FTLCONF_dns_upstreams
+                        value: "8.8.8.8"
                   ports:
                       - containerPort: 53
                         protocol: TCP
