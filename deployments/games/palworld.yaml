@@ -23,9 +23,16 @@ spec:
         app: palworld
     spec:
       containers:
-        - image: thijsvanloef/palworld-server-docker:v1.4.5
+        - image: thijsvanloef/palworld-server-docker:v2.7.1
           name: palworld
           env:
+            # v2.0 switched the wrapper's control backend from RCON to the REST
+            # API (default). Enable it so broadcasts/graceful-stop keep working.
+            # Port 8212/TCP is cluster-internal only — never expose it.
+            - name: REST_API_ENABLED
+              value: "true"
+            - name: REST_API_PORT
+              value: "8212"
             - name: PUID
               value: "1000"
             - name: PGID
@@ -61,6 +68,10 @@ spec:
             - containerPort: 27015
               name: gameport
               protocol: UDP
+            # REST API (v2.x wrapper backend) — internal only, not in the Service.
+            - containerPort: 8212
+              name: restapi
+              protocol: TCP
           volumeMounts:
             - mountPath: /palworld
               name: palworld
