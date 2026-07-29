@@ -21,8 +21,15 @@ spec:
         app: mqtt
     spec:
       containers:
-        - image: emqx/emqx:5.8.0
+        - image: emqx/emqx:6.2.2
           name: mqtt
+          env:
+            # EMQX 6.0 changed the default authorization.no_match from allow to
+            # deny. With no authorizers configured, anonymous clients (HA,
+            # zigbee2mqtt, milight-hub) would connect but every pub/sub would be
+            # denied silently. Restore the permissive 5.x behaviour.
+            - name: EMQX_AUTHORIZATION__NO_MATCH
+              value: "allow"
           ports:
             - containerPort: 1883
               name: mqtt
