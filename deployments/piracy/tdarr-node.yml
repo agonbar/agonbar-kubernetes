@@ -51,7 +51,7 @@ spec:
                 - name: ghcr-agonbar
             containers:
                 - name: tdarr-node
-                  image: ghcr.io/haveagitgat/tdarr_node:2.70.01
+                  image: ghcr.io/haveagitgat/tdarr_node:2.81.01
                   imagePullPolicy: IfNotPresent
                   env:
                       - name: TZ

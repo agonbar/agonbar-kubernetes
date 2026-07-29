@@ -21,7 +21,7 @@ spec:
         app: server 
     spec:
       containers:
-        - image: ghcr.io/immich-app/immich-server:v3.0.1
+        - image: ghcr.io/immich-app/immich-server:v3.0.3
           name: server 
           # command: ["/bin/sh"]
           # args: ["./start-server.sh"]
