@@ -65,7 +65,7 @@ spec:
                 - name: tachidesk
                   # Pinned for GitOps reproducibility (was floating :stable).
                   # Bump deliberately; v2.x->v2.y runs SQLite migrations on boot.
-                  image: ghcr.io/suwayomi/tachidesk:v2.2.2100
+                  image: ghcr.io/suwayomi/tachidesk:v2.3.2243
                   imagePullPolicy: IfNotPresent
                   ports:
                       - containerPort: 4567
