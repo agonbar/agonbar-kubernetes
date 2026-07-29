@@ -17,6 +17,10 @@ rules:
   - apiGroups: [""]
     resources: ["endpoints"]
     verbs: ["get", "list", "watch"]
+  # kube-vip v1.0+ uses EndpointSlices as the default endpoint source.
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list", "watch"]
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -61,7 +65,7 @@ spec:
           operator: Exists
       containers:
         - name: kube-vip
-          image: ghcr.io/kube-vip/kube-vip:v0.8.9
+          image: ghcr.io/kube-vip/kube-vip:v1.2.2
           args: ["manager"]
           env:
             # ARP mode — announce VIP via gratuitous ARP on the LAN
@@ -70,7 +74,9 @@ spec:
             # The floating virtual IP on the lamg LAN
             - name: address
               value: "192.168.0.26"
-            - name: vip_cidr
+            # v1.x removed vip_cidr; the equivalent is vip_subnet (validated at
+            # runtime since v1.2.0). Same value.
+            - name: vip_subnet
               value: "32"
             # Enable control-plane VIP mode (used here as a generic static VIP)
             # This does NOT interfere with the actual control plane on ovh02
