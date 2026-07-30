@@ -1,0 +1,80 @@
+# NetBird routing peer for the lamg cluster.
+#
+# One netbird client pod, pinned to ovh02 (the public VPS control-plane node,
+# always-on, no house-LAN dependency — same node the vault-mcp runs on). It
+# enrolls into the sensei NetBird tenant (mgmt at netbird.senseivision.ai) with
+# a reusable setup key and auto-joins the NetBird group `lamg-router`.
+#
+# The NetBird management side (created via the mgmt API, not GitOps — lives in
+# the mgmt DB like the gke-prd/sensei-ovh networks) wires it up:
+#   - Network `lamg`, router = peer_groups:[lamg-router], masquerade on.
+#   - Resource `vault-mcp` = host 10.43.39.15/32 (the vault-mcp ClusterIP),
+#     assigned to group `lamg-vault`.
+#   - Policy `adrian-to-lamg-vault`: src group `adrian` -> dst `lamg-vault`,
+#     tcp/8000. NetBird is default-deny, so ONLY adrian's own peers reach it.
+#
+# Coexists with the Headscale path (the vault-mcp tailscale sidecar +
+# autogroup:self) — this is additive, nothing on the Headscale side changes.
+#
+# The setup key Secret `netbird-setup-key` is created out-of-band (kubectl),
+# NOT in git — mirrors the vault-mcp hand-created secrets. Recreate with:
+#   kubectl -n netbird create secret generic netbird-setup-key \
+#     --from-literal=NB_SETUP_KEY=<key from mgmt API setup-key `lamg-router-key`>
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: netbird-router
+  namespace: netbird
+  labels:
+    app: netbird-router
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate            # single peer identity in the hostPath /etc/netbird state
+  selector:
+    matchLabels:
+      app: netbird-router
+  template:
+    metadata:
+      labels:
+        app: netbird-router
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: ovh02   # pinned: public VPS node, reaches the ClusterIP, always up
+      containers:
+        - name: netbird
+          image: netbirdio/netbird:0.76.0   # pinned to the management version
+          env:
+            - name: NB_MANAGEMENT_URL
+              value: https://netbird.senseivision.ai
+            - name: NB_HOSTNAME
+              value: lamg-vault-router
+            - name: NB_SETUP_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: netbird-setup-key
+                  key: NB_SETUP_KEY
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN     # kernel WireGuard + nftables route/masquerade + enable ip_forward
+          volumeMounts:
+            - name: nb-config
+              mountPath: /etc/netbird     # persist the peer key/identity across restarts
+            - name: tun
+              mountPath: /dev/net/tun
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+      volumes:
+        - name: nb-config
+          hostPath:
+            path: /docker/netbird-router/etc
+            type: DirectoryOrCreate
+        - name: tun
+          hostPath:
+            path: /dev/net/tun
+            type: CharDevice
