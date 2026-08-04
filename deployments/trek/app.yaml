@@ -11,7 +11,7 @@ metadata:
     keel.sh/match-tag: "true"
     keel.sh/trigger: poll
 spec:
-  # SQLite on an iSCSI RWO PVC — single writer only, never two pods at once.
+  # SQLite on an ovh02-local hostPath — single writer only, never two pods at once.
   strategy:
     type: Recreate
   replicas: 1
@@ -23,9 +23,11 @@ spec:
       labels:
         app: trek
     spec:
-      # Pin to the lamg house for TrueNAS/iSCSI storage locality.
+      # Pinned to ovh02 (VPS) so TREK + its local SQLite keep working during a
+      # home-network / nas02 outage. DB + uploads live on ovh02-local hostPath,
+      # NOT iSCSI (the SQLite corrupted on iSCSI before — recovery artifacts found).
       nodeSelector:
-        svccontroller.k3s.cattle.io/lbpool: lamg
+        kubernetes.io/hostname: ovh02
       securityContext:
         fsGroup: 1000
       containers:
@@ -34,6 +36,11 @@ spec:
         env:
         - name: NODE_ENV
           value: "production"
+        # Give V8 real heap headroom. Without this Node caps old-space at ~256MB
+        # and SIGABRTs (exit 134) once a handful of leaked MCP sessions accumulate.
+        # Kept well under the 2Gi cgroup limit to leave room for native/buffers.
+        - name: NODE_OPTIONS
+          value: "--max-old-space-size=1280"
         - name: PORT
           value: "3000"
         - name: TZ
@@ -75,18 +82,23 @@ spec:
         resources:
           requests:
             cpu: 100m
-            memory: 256Mi
+            memory: 512Mi
           limits:
             cpu: "1"
-            memory: 512Mi
+            memory: 2Gi
       volumes:
       - name: data
-        persistentVolumeClaim:
-          claimName: trek-data
+        hostPath:
+          path: /docker/trek/data
+          type: DirectoryOrCreate
       - name: uploads
-        persistentVolumeClaim:
-          claimName: trek-uploads
+        hostPath:
+          path: /docker/trek/uploads
+          type: DirectoryOrCreate
 ---
+# RETAINED FOR ROLLBACK ONLY (2026-07-21) — TREK moved to ovh02-local hostPath.
+# These old iSCSI PVCs still hold the pre-migration SQLite; delete them once the
+# ovh02 migration is validated. The Deployment no longer references them.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -150,3 +162,77 @@ spec:
     - secretName: trek.${BASE_DOMAIN}
       hosts:
         - trek.${BASE_DOMAIN}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: trek-restarter
+  namespace: trek
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: trek-restarter
+  namespace: trek
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["trek"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: trek-restarter
+  namespace: trek
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: trek-restarter
+subjects:
+  - kind: ServiceAccount
+    name: trek-restarter
+    namespace: trek
+---
+# Nightly bounce to reset leaked MCP sessions. TREK's upstream image never
+# reclaims abandoned MCP sessions (server logs "Session sweep: cleaned 0" for
+# the pod's whole life), so each new Claude MCP client leaks a ~15MB session
+# and V8 eventually OOMs (exit 134). Memory headroom slows this; the restart
+# caps it so accumulation never reaches the heap ceiling. Recreate strategy =
+# a ~10s gap at 04:00, when nobody is planning trips.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: trek-restart
+  namespace: trek
+spec:
+  schedule: "0 4 * * *"
+  timeZone: Europe/Madrid
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          serviceAccountName: trek-restarter
+          restartPolicy: OnFailure
+          containers:
+            - name: kubectl
+              image: rancher/kubectl:v1.34.7
+              command:
+                - kubectl
+                - -n
+                - trek
+                - rollout
+                - restart
+                - deployment/trek
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 100m
+                  memory: 64Mi
