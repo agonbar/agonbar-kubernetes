@@ -40,6 +40,10 @@ spec:
             # vision (mmproj) + function-calling/tools capability in the UI.
             - name: OPENAI_MODEL_LIST
               value: "-all,+gemma-4-12B-it-qat-UD-Q4_K_XL.gguf=Gemma 4 12B (work-vm-00)<vision:fc>"
+            # New sessions default to the gemma model (otherwise LobeChat's
+            # built-in default label is shown even though gemma is what answers).
+            - name: DEFAULT_AGENT_CONFIG
+              value: "model=gemma-4-12B-it-qat-UD-Q4_K_XL.gguf;provider=openai"
             # Password gate for the public URL.
             - name: ACCESS_CODE
               valueFrom:
