@@ -73,8 +73,8 @@ spec:
       imagePullSecrets:
         - name: dockerhub-secret
       nodeSelector:
-        kubernetes.io/arch: amd64
-        svccontroller.k3s.cattle.io/lbpool: lamg
+        # Explicitly on ovh02 (the public OVH node) as requested.
+        kubernetes.io/hostname: ovh02
 
 ---
 kind: Service
