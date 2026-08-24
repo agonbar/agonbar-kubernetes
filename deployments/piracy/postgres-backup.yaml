@@ -1,0 +1,63 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: piracy-postgres-backup
+  namespace: piracy
+  labels:
+    app: piracy-postgres-backup
+spec:
+  # Daily 03:30 Europe/Madrid. Dumps every database off the Postgres on nas02
+  # and keeps 14 days on the NFS share.
+  #
+  # PGHOST is a 192.168.0.x LAN address, so this has to land on a home node --
+  # hence the lbpool selector. It used to pin kubernetes.io/hostname: nas00,
+  # which silently killed the backup when nas00 went NotReady on 2026-08-20:
+  # the pod could not schedule anywhere, and concurrencyPolicy Forbid meant the
+  # stuck Job blocked every later run. Nothing alerted; it was only spotted
+  # 4 days later. Pin to the pool, never to a single host.
+  schedule: "30 3 * * *"
+  timeZone: Europe/Madrid
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          nodeSelector:
+            svccontroller.k3s.cattle.io/lbpool: lamg
+          containers:
+            - name: pg-dump
+              image: postgres:17
+              imagePullPolicy: IfNotPresent
+              envFrom:
+                - secretRef:
+                    name: piracy-postgres-backup
+              command: ["/bin/bash", "-c"]
+              args:
+                - |
+                  set -euo pipefail
+                  ts="$(date +%Y%m%d-%H%M%S)"
+                  echo "globals -> /backups/globals-${ts}.sql"
+                  pg_dumpall -h "$PGHOST" -U "$PGUSER" -g -f "/backups/globals-${ts}.sql"
+                  for db in $(psql -h "$PGHOST" -U "$PGUSER" -d postgres -tAc "select datname from pg_database where datistemplate=false and datname<>'postgres'"); do
+                    out="/backups/${db}-${ts}.dump"
+                    for i in 1 2 3; do
+                      if pg_dump -h "$PGHOST" -U "$PGUSER" -d "$db" -Fc -f "$out" && [ -s "$out" ]; then break; fi
+                      echo "retry $db $i"; rm -f "$out"; sleep 10
+                      [ "$i" -eq 3 ] && { echo "FATAL dump $db"; exit 1; }
+                    done
+                    pg_restore --list "$out" >/dev/null 2>&1 || { echo "FATAL bad dump $db"; rm -f "$out"; exit 1; }
+                    echo "ok $db -> $out ($(du -h "$out" | cut -f1))"
+                  done
+                  find /backups -type f \( -name '*.dump' -o -name 'globals-*.sql' \) -mtime +14 -print -delete
+                  echo "=== current backups ==="; ls -lh /backups
+              volumeMounts:
+                - mountPath: /backups
+                  name: backups
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: piracy-pg-backups
