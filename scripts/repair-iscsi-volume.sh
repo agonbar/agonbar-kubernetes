@@ -90,13 +90,15 @@ spec:
 EOF
 until $K -n "$NS" get pod "$POD" --no-headers 2>/dev/null | grep -q Running; do sleep 4; done
 log "repair pod $POD running"
-$K -n "$NS" exec "$POD" -- sh -c 'apk add --no-cache e2fsprogs-extra util-linux >/dev/null 2>&1'
+# No package installs: `apk add` depends on the node's network, which on a flapping
+# node hangs forever inside kubectl exec (no timeout). alpine's busybox ships nsenter,
+# and the k3s host already has e2fsck/tune2fs/findmnt, so borrow those instead.
 
 # 4. unmount everywhere, then fsck
 RC=0
 i=0; for p in "${PVCS[@]}"; do
   log "repairing $p ..."
-  $K -n "$NS" exec "$POD" -- sh -c "
+  timeout 900 $K -n "$NS" exec "$POD" -- sh -c "
     set -e
     DEV=\$(grep ' /vol/$i ' /proc/mounts | cut -d' ' -f1)
     [ -n \"\$DEV\" ] || { echo 'FATAL: no device for /vol/$i'; exit 1; }
@@ -108,11 +110,11 @@ i=0; for p in "${PVCS[@]}"; do
     # refuse to fsck anything still mounted anywhere -- this is what corrupts filesystems
     if grep -q \"^\$DEV \" /proc/mounts; then echo 'FATAL: still mounted in container'; exit 1; fi
     if [ -n \"\$(nsenter -t 1 -m -- findmnt -rn -o TARGET --source \$DEV)\" ]; then echo 'FATAL: still mounted on host'; exit 1; fi
-    RC=0; e2fsck -fy \"\$DEV\" >/tmp/fsck.log 2>&1 || RC=\$?
-    echo \"  e2fsck exit=\$RC (0=limpio, 1=errores corregidos, >1=problema)\"
-    if [ \$RC -gt 1 ]; then cat /tmp/fsck.log; exit 1; fi
-    tail -3 /tmp/fsck.log | sed 's/^/    /'
-    tune2fs -l \"\$DEV\" | grep -E '^Filesystem state|^FS Error count' | sed 's/^/  /'
+    RC=0; OUT=\$(nsenter -t 1 -m -- e2fsck -fy \"\$DEV\" 2>&1) || RC=\$?
+    echo \"  e2fsck exit=\$RC (0=clean, 1=errors corrected, >1=trouble)\"
+    if [ \$RC -gt 1 ]; then echo \"\$OUT\"; exit 1; fi
+    echo \"\$OUT\" | tail -3 | sed 's/^/    /'
+    nsenter -t 1 -m -- tune2fs -l \"\$DEV\" | grep -E '^Filesystem state|^FS Error count' | sed 's/^/  /'
   " || { echo "  !! FAILED on $p"; RC=1; }
   i=$((i+1))
 done
