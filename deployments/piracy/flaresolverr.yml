@@ -54,24 +54,16 @@ spec:
                       limits:
                           memory: 1Gi
                           cpu: 1000m
-            # Stateless (no PVC, no NFS) and reached through a ClusterIP, so it is
-            # the one piracy workload that can live off the home nodes. Headless
-            # Chromium is the heaviest thing on orange-pi5, which carries ~46 pods
-            # on 8 ARM cores since nas00 died on 2026-08-20.
+            # Tried on ovh02 2026-08-24 to take load off orange-pi5, reverted the
+            # same day. The pod network between the home nodes and ovh02 is not
+            # reliable: hours after the move BOTH nas01 and orange-pi5 timed out
+            # reaching ovh02 pod IPs, so prowlarr lost its FlareSolverr and every
+            # Cloudflare-gated indexer started failing. Connectivity tested fine at
+            # the time of the move -- the link is intermittent, not simply down.
             #
-            # Prefer ovh02 (12 cores / 47GiB) rather than requiring it: a hard pin
-            # is what left piracy-postgres-backup Pending for 4 days when its node
-            # went away. If ovh02 is gone this falls back to a home node instead.
-            affinity:
-              nodeAffinity:
-                preferredDuringSchedulingIgnoredDuringExecution:
-                  - weight: 100
-                    preference:
-                      matchExpressions:
-                        - key: kubernetes.io/hostname
-                          operator: In
-                          values:
-                            - ovh02
+            # Keep it next to the thing that calls it until that link is fixed.
+            nodeSelector:
+              svccontroller.k3s.cattle.io/lbpool: lamg
 ---
 apiVersion: v1
 kind: Service
