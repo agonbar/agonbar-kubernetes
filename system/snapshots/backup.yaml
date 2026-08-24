@@ -56,6 +56,28 @@ data:
     TIMESTAMP=$(date +%Y%m%d-%H%M%S)
     FAILED=0
 
+    # Retention must run even when the backup fails: a PVC that errors every
+    # night (deleted PVC, snapshot never ready) would otherwise never be pruned
+    # and leaks snapshots forever.
+    enforce_retention() {
+      NS="$1"
+      PVC="$2"
+      echo "[${NS}/${PVC}] Enforcing snapshot retention (keep last 7)..."
+      SNAPS=$(kubectl get volumesnapshots -n "${NS}" \
+        --sort-by=.metadata.creationTimestamp \
+        -o jsonpath='{.items[?(@.spec.source.persistentVolumeClaimName=="'"${PVC}"'")].metadata.name}')
+      COUNT=0
+      TOTAL=0
+      for s in $SNAPS; do TOTAL=$((TOTAL + 1)); done
+      for s in $SNAPS; do
+        COUNT=$((COUNT + 1))
+        if [ $((TOTAL - COUNT)) -ge 7 ]; then
+          echo "[${NS}/${PVC}] Deleting old snapshot: ${s}"
+          kubectl delete volumesnapshot "${s}" -n "${NS}" 2>/dev/null || true
+        fi
+      done
+    }
+
     backup_pvc() {
       NS="$1"
       PVC="$2"
@@ -90,6 +112,7 @@ data:
         echo "[${NS}/${PVC}] ERROR: Snapshot not ready, skipping"
         kubectl delete volumesnapshot "${SNAP_NAME}" -n "${NS}" --ignore-not-found 2>/dev/null || true
         FAILED=1
+        enforce_retention "${NS}" "${PVC}"
         return
       fi
 
@@ -126,6 +149,7 @@ data:
         kubectl delete pvc "${TEMP_PVC}" -n "${NS}" --ignore-not-found 2>/dev/null || true
         kubectl delete volumesnapshot "${SNAP_NAME}" -n "${NS}" --ignore-not-found 2>/dev/null || true
         FAILED=1
+        enforce_retention "${NS}" "${PVC}"
         return
       fi
 
@@ -193,20 +217,7 @@ data:
       kubectl delete pvc "${TEMP_PVC}" -n "${NS}" --ignore-not-found 2>/dev/null || true
 
       # 9. retention: keep only last 7 snapshots per PVC, delete older ones
-      echo "[${NS}/${PVC}] Enforcing snapshot retention (keep last 7)..."
-      SNAPS=$(kubectl get volumesnapshots -n "${NS}" \
-        --sort-by=.metadata.creationTimestamp \
-        -o jsonpath='{.items[?(@.spec.source.persistentVolumeClaimName=="'"${PVC}"'")].metadata.name}')
-      COUNT=0
-      TOTAL=0
-      for s in $SNAPS; do TOTAL=$((TOTAL + 1)); done
-      for s in $SNAPS; do
-        COUNT=$((COUNT + 1))
-        if [ $((TOTAL - COUNT)) -ge 7 ]; then
-          echo "[${NS}/${PVC}] Deleting old snapshot: ${s}"
-          kubectl delete volumesnapshot "${s}" -n "${NS}" 2>/dev/null || true
-        fi
-      done
+      enforce_retention "${NS}" "${PVC}"
 
       echo "=== [${NS}/${PVC}] Backup finished ==="
     }
