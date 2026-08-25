@@ -1,0 +1,66 @@
+# palworld-data vive en local-path en ovh02, asi que el pvc-backup basado en
+# snapshots no le sirve (local-path no tiene snapshotter). Esto copia solo lo
+# que no se puede volver a descargar: las partidas (11 MiB) y la rotacion de
+# backups del propio contenedor (~300 MiB). Los 4,8 GiB de /palworld/Pal son
+# ficheros de Steam y se quedan fuera a proposito.
+#
+# El destino es la misma TrueNAS que usa pvc-backup, pero por su IP de la
+# tailnet (100.72.0.41) en vez de la de LAN (192.168.0.29), que ovh02 no
+# alcanza. /mnt/RAID/docker esta exportado a 100.72.0.0/16.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: palworld-backup
+  namespace: games
+spec:
+  schedule: "30 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 1800
+      template:
+        spec:
+          restartPolicy: Never
+          # el PVC es RWO y lo tiene montado el servidor, asi que hay que caer
+          # en el mismo nodo que el
+          nodeSelector:
+            kubernetes.io/hostname: ovh02
+          containers:
+            - name: rsync
+              image: alpine:latest
+              command:
+                - sh
+                - -c
+                - |
+                  set -e
+                  apk add --no-cache rsync
+                  DEST=/backup/games/palworld-data
+                  mkdir -p "${DEST}/Pal" "${DEST}/backups"
+                  rsync -a --delete /source/Pal/Saved/ "${DEST}/Pal/Saved/"
+                  rsync -a --delete /source/backups/ "${DEST}/backups/"
+                  du -sh "${DEST}"
+                  echo "Backup complete"
+              volumeMounts:
+                - name: source
+                  mountPath: /source
+                  readOnly: true
+                - name: backup
+                  mountPath: /backup
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: "1"
+                  memory: 128Mi
+          volumes:
+            - name: source
+              persistentVolumeClaim:
+                claimName: palworld-data
+            - name: backup
+              nfs:
+                server: 100.72.0.41
+                path: /mnt/RAID/docker/backups-iscsi
