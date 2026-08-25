@@ -337,10 +337,12 @@ spec:
             claimName: palworld-data
         - name: backup
           nfs:
-            server: 192.168.0.29
+            server: 100.72.0.41
             path: /mnt/RAID/docker/backups-iscsi
+      # palworld-data es local-path en ovh02: hay que restaurar ahi,
+      # y desde ovh02 la TrueNAS solo responde por la tailnet
       nodeSelector:
-        svccontroller.k3s.cattle.io/lbpool: lamg
+        kubernetes.io/hostname: ovh02
 # ============================================================
 # immich namespace (1 PVC)
 # ============================================================
