@@ -163,7 +163,7 @@ data:
       namespace: ${NS}
     spec:
       backoffLimit: 2
-      activeDeadlineSeconds: 1800
+      activeDeadlineSeconds: 5400
       template:
         spec:
           restartPolicy: Never
@@ -189,7 +189,7 @@ data:
                   cpu: 50m
                   memory: 64Mi
                 limits:
-                  cpu: 500m
+                  cpu: "2"
                   memory: 256Mi
           volumes:
             - name: source
@@ -206,7 +206,7 @@ data:
       # 7. wait for rsync job
       echo "[${NS}/${PVC}] Waiting for rsync to complete..."
       if ! kubectl wait "job/${JOB_NAME}" -n "${NS}" \
-        --for=condition=complete --timeout=1800s; then
+        --for=condition=complete --timeout=5400s; then
         echo "[${NS}/${PVC}] ERROR: Rsync job failed"
         FAILED=1
       fi
@@ -240,7 +240,8 @@ data:
     # games namespace
     backup_pvc games enshrouded-data
     backup_pvc games factorio-data
-    backup_pvc games palworld-data
+    # palworld-data vive en local-path en ovh02 (commit cfbbe3c): no hay
+    # snapshotter, y la NFS de backup solo es alcanzable desde la LAN.
 
     # immich namespace
     backup_pvc immich immich-db-data
@@ -301,6 +302,7 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
+      backoffLimit: 0
       activeDeadlineSeconds: 28800
       template:
         spec:
