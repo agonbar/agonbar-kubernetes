@@ -39,8 +39,17 @@ spec:
                   apk add --no-cache rsync
                   DEST=/backup/games/palworld-data
                   mkdir -p "${DEST}/Pal" "${DEST}/backups"
-                  rsync -a --delete /source/Pal/Saved/ "${DEST}/Pal/Saved/"
-                  rsync -a --delete /source/backups/ "${DEST}/backups/"
+                  # el servidor rota sus propios backups mientras copiamos, asi
+                  # que rsync sale con 24 (ficheros que desaparecieron al
+                  # recorrer el arbol). Eso no es un fallo de la copia.
+                  sync_dir() {
+                    rsync -a --delete "$1" "$2" && return 0
+                    rc=$?
+                    [ "$rc" -eq 24 ] && return 0
+                    return "$rc"
+                  }
+                  sync_dir /source/Pal/Saved/ "${DEST}/Pal/Saved/"
+                  sync_dir /source/backups/ "${DEST}/backups/"
                   du -sh "${DEST}"
                   echo "Backup complete"
               volumeMounts:
