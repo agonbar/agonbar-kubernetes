@@ -24,7 +24,16 @@ spec:
         app.vscode: "true"
     spec:
       initContainers:
-        - name: iscsi-fsck
+        # HA's /config is an iSCSI (ext4) RWO volume. After an unclean TrueNAS or
+        # network disconnect ext4 flips to read-only, and HA then fails to write
+        # its DB/config. This gate refuses to start HA on a read-only /config so
+        # the failure is visible instead of silently corrupting the recorder DB.
+        # It deliberately does NOT try to fsck: the block device is staged by
+        # kubelet at a host globalmount OUTSIDE this pod's mount namespace, so an
+        # in-pod umount/e2fsck can never work (the old version crashlooped here
+        # doing exactly that). The real repair is an offline e2fsck -fy; see
+        # scripts/repair-iscsi-volume.sh.
+        - name: config-writable-check
           image: alpine:latest
           imagePullPolicy: IfNotPresent
           securityContext:
@@ -34,76 +43,29 @@ spec:
             - -c
             - |
               set -e
-              MOUNTPOINT="/config"
-              echo "[iscsi-fsck] Checking filesystem at ${MOUNTPOINT}..."
-
-              if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
-                rm -f "${MOUNTPOINT}/.rw-test"
-                echo "[iscsi-fsck] Filesystem is writable. Nothing to do."
+              MP="/config"
+              if touch "${MP}/.rw-test" 2>/dev/null; then
+                rm -f "${MP}/.rw-test"
+                echo "[config-check] ${MP} is writable."
                 exit 0
               fi
 
-              echo "[iscsi-fsck] Filesystem is READ-ONLY. Starting repair..."
-              apk add --no-cache e2fsprogs util-linux 2>/dev/null
-
-              DEVICE=$(grep " ${MOUNTPOINT} " /proc/mounts | awk '{print $1}' | head -1)
-
-              if [ -z "${DEVICE}" ]; then
-                echo "[iscsi-fsck] ERROR: Could not find block device for ${MOUNTPOINT}."
-                echo "[iscsi-fsck] Host mount table (iscsi/sd entries):"
-                grep -E "iscsi|/dev/sd|democratic-csi" /host-proc-mounts || true
-                exit 1
-              fi
-
-              echo "[iscsi-fsck] Found device: ${DEVICE}"
-              echo "[iscsi-fsck] Attempting remount rw..."
-              if mount -o remount,rw "${MOUNTPOINT}" 2>/dev/null; then
-                if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
-                  rm -f "${MOUNTPOINT}/.rw-test"
-                  echo "[iscsi-fsck] Remount rw succeeded!"
-                  exit 0
-                fi
-              fi
-
-              echo "[iscsi-fsck] Simple remount failed. Running e2fsck..."
-              GLOBAL_MOUNT=$(grep "${DEVICE} " /host-proc-mounts | grep globalmount | awk '{print $2}' | head -1)
-              if [ -z "${GLOBAL_MOUNT}" ]; then
-                GLOBAL_MOUNT=$(grep "^${DEVICE} " /host-proc-mounts | awk '{print $2}' | head -1)
-              fi
-
-              if [ -n "${GLOBAL_MOUNT}" ]; then
-                echo "[iscsi-fsck] Unmounting ${GLOBAL_MOUNT} for fsck..."
-                umount -l "${GLOBAL_MOUNT}" || echo "[iscsi-fsck] WARNING: umount failed, trying to fsck anyway..."
-              fi
-
-              e2fsck -y -f "${DEVICE}" || {
-                FSCK_EXIT=$?
-                if [ $FSCK_EXIT -gt 2 ]; then
-                  echo "[iscsi-fsck] e2fsck failed with exit code ${FSCK_EXIT}."
-                  exit 1
-                fi
-              }
-
-              if [ -n "${GLOBAL_MOUNT}" ]; then
-                mount "${DEVICE}" "${GLOBAL_MOUNT}" || {
-                  echo "[iscsi-fsck] Mount failed after fsck. Triggering pod restart."
-                  exit 1
-                }
-              fi
-
-              if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
-                rm -f "${MOUNTPOINT}/.rw-test"
-                echo "[iscsi-fsck] SUCCESS: Filesystem repaired and writable."
+              echo "[config-check] ${MP} is READ-ONLY (ext4 likely flipped to ro after an unclean iSCSI disconnect). Trying remount,rw..."
+              mount -o remount,rw "${MP}" 2>/dev/null || true
+              if touch "${MP}/.rw-test" 2>/dev/null; then
+                rm -f "${MP}/.rw-test"
+                echo "[config-check] remount,rw recovered ${MP}."
                 exit 0
-              else
-                echo "[iscsi-fsck] FAILED: Filesystem still not writable after repair."
-                exit 1
               fi
+
+              echo "[config-check] STILL read-only. An in-pod fsck cannot repair the live staged mount."
+              echo "[config-check] The ext4 is likely 'clean with errors'; kubelet's fsck -a on re-stage will not fix that."
+              echo "[config-check] Run the offline repair from a workstation (quiesces, snapshots, e2fsck -fy):"
+              echo "[config-check]   scripts/repair-iscsi-volume.sh lamg deploy/homeassistant homeassistant-config"
+              exit 1
           volumeMounts:
             - name: config
               mountPath: /config
-            - name: host-proc-mounts
-              mountPath: /host-proc-mounts
       containers:
         - image: homeassistant/home-assistant:latest
           name: homeassistant
@@ -154,9 +116,6 @@ spec:
         - name: vscode-config
           persistentVolumeClaim:
             claimName: vscode-config
-        - name: host-proc-mounts
-          hostPath:
-            path: /proc/1/mounts
       nodeSelector:
         svccontroller.k3s.cattle.io/lbpool: lamg
       # nas00 is a 2-core/3GB box that flaps NodeNotReady under load; its RWO
