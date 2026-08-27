@@ -134,6 +134,41 @@ spec:
                       limits:
                           memory: 4Gi
                           cpu: 4000m
+                # JobReports are write-once diagnostic logs and Tdarr never
+                # prunes them. They had grown to 47.5k files / 2.9 GB on this
+                # 4.9 GB volume (87% full). A near-full /app/server is how the
+                # pod lost its SQLite DB to an ext4 errors=remount-ro twice —
+                # 2026-08-24 and again 2026-08-27 — and the failure is silent
+                # and total: every write is dropped, the API keeps answering
+                # from memory so nothing looks wrong, and meanwhile every job
+                # fails because the server cannot write its report (76 files
+                # went to "Transcode error" in cascade before it was spotted).
+                # 30 days is far more history than any diagnosis here has used;
+                # the ones that mattered were always hours old.
+                - name: jobreport-pruner
+                  image: alpine:latest
+                  command: ['/bin/sh', '-c']
+                  args:
+                      # No $(...) anywhere: kubelet expands $(FOO) in args, so
+                      # command substitution would be mangled before sh sees it.
+                      - |
+                        while true; do
+                          find /app/server/Tdarr/DB2/JobReports -name '*.txt' -mtime +30 -delete 2>/dev/null || true
+                          find /app/server/Tdarr/DB2/JobReports -mindepth 1 -type d -empty -delete 2>/dev/null || true
+                          echo '[jobreport-pruner] pruned reports older than 30d'
+                          df -h /app/server | tail -1
+                          sleep 86400
+                        done
+                  volumeMounts:
+                      - name: server
+                        mountPath: /app/server
+                  resources:
+                      requests:
+                          memory: 16Mi
+                          cpu: 10m
+                      limits:
+                          memory: 64Mi
+                          cpu: 100m
             volumes:
                 - name: config
                   persistentVolumeClaim:
