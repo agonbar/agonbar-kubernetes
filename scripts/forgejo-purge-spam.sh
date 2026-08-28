@@ -28,6 +28,11 @@ PARALLEL="${PARALLEL:-8}"
 # Accounts that predate the spam wave and must survive regardless of CUTOFF.
 KEEP="agonbar asdasd chismo martin francisco coinscrap-ci oscar alejandro amy luchipuchi test coinscrap tests"
 
+# Accounts that fall regardless of CUTOFF. These registered in 2025, before the
+# flood, but they are the same operation: disposable throwaway domains, one
+# keyword repository or none at all.
+DROP="mejoraburo seguroscolombia payavideo signicolor maxwarehouse boletosetnl nuevapasion brandwatch"
+
 pod() {
   kubectl --context "$CONTEXT" get pods -n "$NAMESPACE" -l "$SELECTOR" \
     --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}'
@@ -35,25 +40,31 @@ pod() {
 
 # Users are matched case-insensitively; Forgejo stores the canonical form in
 # lower_name, which is also what the admin API expects in the URL.
-keep_sql() {
+list_sql() {
   local first=1 name
-  for name in $KEEP; do
+  for name in $1; do
     [ $first -eq 1 ] && first=0 || printf ','
     printf "'%s'" "$name"
   done
 }
+keep_sql() { list_sql "$KEEP"; }
+drop_sql() { list_sql "$DROP"; }
 
 cmd_list() {
-  local p; p="$(pod)"
+  local p doomed kept
+  p="$(pod)"
   echo "pod=$p cutoff=$CUTOFF" >&2
+
+  # An account falls if it registered after CUTOFF or is named in DROP, unless
+  # KEEP protects it. KEEP wins over both, so a name in KEEP is never deleted.
+  doomed="(u.created_unix >= strftime('%s','$CUTOFF') OR u.lower_name IN ($(drop_sql)))
+          AND u.lower_name NOT IN ($(keep_sql))"
+  kept="NOT ($doomed)"
 
   kubectl --context "$CONTEXT" exec -i -n "$NAMESPACE" "$p" -- \
     sqlite3 "file:/data/gitea/gitea.db?mode=ro" <<SQL > "$CANDIDATES"
 .mode list
-SELECT lower_name FROM user
- WHERE created_unix >= strftime('%s','$CUTOFF')
-   AND lower_name NOT IN ($(keep_sql))
- ORDER BY id;
+SELECT u.lower_name FROM user u WHERE $doomed ORDER BY u.id;
 SQL
 
   local n; n=$(wc -l < "$CANDIDATES")
@@ -63,13 +74,10 @@ SQL
     sqlite3 "file:/data/gitea/gitea.db?mode=ro" <<SQL >&2
 .mode list
 SELECT 'usuarios totales:  ' || COUNT(*) FROM user WHERE type=0;
-SELECT 'se conservan:      ' || COUNT(*) FROM user
- WHERE created_unix < strftime('%s','$CUTOFF') OR lower_name IN ($(keep_sql));
+SELECT 'se conservan:      ' || COUNT(*) FROM user u WHERE $kept;
 SELECT 'repos totales:     ' || COUNT(*) FROM repository;
-SELECT 'repos que caen:    ' || COUNT(*) FROM repository r JOIN user u ON u.id=r.owner_id
- WHERE u.created_unix >= strftime('%s','$CUTOFF') AND u.lower_name NOT IN ($(keep_sql));
-SELECT 'repos que quedan:  ' || COUNT(*) FROM repository r JOIN user u ON u.id=r.owner_id
- WHERE u.created_unix < strftime('%s','$CUTOFF') OR u.lower_name IN ($(keep_sql));
+SELECT 'repos que caen:    ' || COUNT(*) FROM repository r JOIN user u ON u.id=r.owner_id WHERE $doomed;
+SELECT 'repos que quedan:  ' || COUNT(*) FROM repository r JOIN user u ON u.id=r.owner_id WHERE $kept;
 SQL
 }
 
