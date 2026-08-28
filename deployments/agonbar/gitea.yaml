@@ -21,13 +21,15 @@ spec:
         app: gitea
     spec:
       containers:
-        - image: codeberg.org/forgejo/forgejo:16.0.1
+        - image: codeberg.org/forgejo/forgejo:16.0.3
           name: forgejo
           env:
             - name: USER_UID
               value: '1000'
             - name: USER_GID
               value: '1000'
+            - name: FORGEJO__service__DISABLE_REGISTRATION
+              value: 'true'
           ports:
             - containerPort: 3000
               name: gitea
