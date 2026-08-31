@@ -106,7 +106,13 @@ spec:
                           # down cruncharr (colocated) and corrupted its SQLite DB. An 8Gi
                           # cgroup cap contains Tdarr to a cgroup-OOM instead of nuking the node.
                           memory: 8Gi
-                          cpu: '6'
+                          # 2026-09-01: 6 -> 12. The RAM cap above is what prevents the OOM
+                          # incident; CPU was throttling every node to ~40% while x265 could
+                          # use more. 12 = 75% of the 16-core work-vm-00/01/02. work-vm-03 has
+                          # only 12 cores (6c/12t i5), so there it is effectively uncapped —
+                          # acceptable because that node runs nothing but Tdarr; drop to 10 if
+                          # its kubelet starts missing heartbeats and the node flaps NotReady.
+                          cpu: '12'
                 # vmaf-sidecar: at startup, copies static-ffmpeg / ffprobe /
                 # vmaf-window into the shared /sidecar emptyDir, then idles.
                 # When the plugin shells out to /sidecar/bin/vmaf-window from
