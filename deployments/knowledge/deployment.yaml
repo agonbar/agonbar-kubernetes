@@ -127,13 +127,26 @@ spec:
               memory: 512Mi
             limits:
               memory: 2Gi  # bumped 2026-05-27 — was 1Gi, OOM-killed 6x in a day under vault-curator write bursts (embeddings/index)
-              # 2026-09-01: caught the server stuck in `in_flight:
-              # flush_dirty_embeddings` with dirty_embeddings=0 and queue_depth=0,
-              # burning ~2.4 cores with no requests in flight (one thread pegged,
-              # ~12 tokio workers idling at 13%). Uncapped, that is 20% of ovh02
-              # taken permanently by a task with nothing to do. The cap still
-              # leaves room for a real embedding rebuild, just slower.
-              cpu: "2"
+              # 2026-09-01, first read: looked like the server was stuck in
+              # `in_flight: flush_dirty_embeddings` with dirty_embeddings=0 and
+              # queue_depth=0, burning ~2.4 cores with nothing to do, so it was
+              # capped at 2.
+              #
+              # 2026-09-01, measured: that reading was wrong. It is not spinning,
+              # it is just slow. FastEmbed (BAAI/bge-small-en-v1.5, ONNX on CPU)
+              # does 0.3 chunks/s on a DEDICATED 2-core pod with zero contention,
+              # so a full rebuild of this vault (6033 chunks) is ~5.6 h. It logs
+              # nothing during the embedding phase and only persists at the very
+              # end, which is exactly what makes it look hung. Measured with a
+              # standalone pod; measuring from inside the busy pod only measures
+              # starvation. Thread oversubscription was ruled out: forcing
+              # OMP_NUM_THREADS=2 changed 219s to 217s over 20 chunks.
+              #
+              # Raised to 4 so a rebuild lands in ~2.8 h instead of ~5.6 h. Burst
+              # capacity, not steady draw: embeddings persist in /data/state
+              # (hostPath) and rebuild incrementally, so at rest this is idle.
+              # The node has 12 cores.
+              cpu: 4
         # Tailscale sidecar — shares the pod netns, so :8000 above becomes
         # reachable tailnet-wide at vault-mcp.senseizero.lan. Mirrors the
         # chino-prd pattern, minus tags (registers untagged under agonbar@).
