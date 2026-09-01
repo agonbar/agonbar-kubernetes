@@ -55,14 +55,29 @@ spec:
               mountPath: /var/lib/postgresql/data
           resources:
             requests:
-              cpu: 5m
-              memory: 30Mi
+              # Measured 2026-09-01: 8m CPU / 104Mi at rest. Same reason as the
+              # server: 5m/30Mi is not a request, it is a lie to the scheduler.
+              cpu: 50m
+              memory: 256Mi
       securityContext:
         fsGroup: 950
       volumes:
         - name: data
           persistentVolumeClaim:
             claimName: immich-db-data
+      # nas00 is 2 cores / 3.4Gi and flaps under load; homeassistant already
+      # keeps off it for the same reason. On 2026-09-01 immich landed there and
+      # saturated the node, which starved the democratic-csi node pods until
+      # every CSI driver deregistered and no volume on nas00 could mount.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: NotIn
+                    values:
+                      - nas00
       nodeSelector:
         svccontroller.k3s.cattle.io/lbpool: lamg
 
