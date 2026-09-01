@@ -20,6 +20,12 @@ rules:
   - apiGroups: ["snapshot.storage.k8s.io"]
     resources: ["volumesnapshots"]
     verbs: ["create", "delete", "get", "list", "watch"]
+  # Read-only: the script checks a VolumeSnapshotClass exists before using it,
+  # so a class typo or a driver that was never installed fails loudly instead of
+  # producing a snapshot nobody can restore.
+  - apiGroups: ["snapshot.storage.k8s.io"]
+    resources: ["volumesnapshotclasses"]
+    verbs: ["get", "list"]
   - apiGroups: ["batch"]
     resources: ["jobs"]
     verbs: ["create", "delete", "get", "list", "watch"]
