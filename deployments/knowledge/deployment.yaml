@@ -127,15 +127,6 @@ spec:
               memory: 512Mi
             limits:
               memory: 2Gi  # bumped 2026-05-27 — was 1Gi, OOM-killed 6x in a day under vault-curator write bursts (embeddings/index)
-              # 2026-09-01: was an undeclared 2 (drifted into the cluster, not in
-              # git — ArgoCD did not flag it because git never declared the field).
-              # Raised to 4: every write re-embeds the WHOLE note via FastEmbed,
-              # in-process and CPU-bound, so cost is O(note size). Rotating a
-              # 429 KB log.md pegged 2 cores for 30+ min and made the vault
-              # unusable meanwhile. Node has 12 cores. Embeddings persist under
-              # /data/state (hostPath) and rebuild incrementally via dirty
-              # tracking, so this is burst capacity, not a steady draw.
-              cpu: 4
               # 2026-09-01: caught the server stuck in `in_flight:
               # flush_dirty_embeddings` with dirty_embeddings=0 and queue_depth=0,
               # burning ~2.4 cores with no requests in flight (one thread pegged,
