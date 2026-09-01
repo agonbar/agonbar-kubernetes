@@ -49,8 +49,11 @@ spec:
           value: "https://trek.${BASE_DOMAIN}"
         - name: FORCE_HTTPS
           value: "true"
+        # Hop count, not a boolean. Upstream started validating this at boot
+        # (2026-09-01: "must be an integer"), and "true" crashlooped the pod.
+        # Traefik is the only proxy in front of the Service -- no CDN -- so 1.
         - name: TRUST_PROXY
-          value: "true"
+          value: "1"
         - name: COOKIE_SECURE
           value: "true"
         - name: ENCRYPTION_KEY
