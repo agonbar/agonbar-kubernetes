@@ -53,6 +53,13 @@ spec:
               value: "log"
             - name: IMMICH_PORT
               value: "2283"
+            # The ML Service in this namespace is called "machine-learning", but
+            # immich defaults to "http://immich-machine-learning:3003" (see
+            # server/dist/config.js). Without this the server logs "Machine
+            # learning server became unhealthy" and silently skips smart search
+            # and face detection.
+            - name: IMMICH_MACHINE_LEARNING_URL
+              value: "http://machine-learning.immich.svc.cluster.local:3003"
           ports:
             - containerPort: 2283
               name: server 
