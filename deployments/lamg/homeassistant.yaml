@@ -80,7 +80,11 @@ spec:
             requests:
               cpu: 5m
               memory: 30Mi
-        - image: ghcr.io/linuxserver/code-server
+        # Tag pinned explicitly because keel rewrites the image to
+        # ...:latest on every poll. Untagged here meant ArgoCD saw a permanent
+        # diff against a value keel would immediately put back -- the two would
+        # have fought each other forever once selfHeal came back on.
+        - image: ghcr.io/linuxserver/code-server:latest
           name: vscode
           env:
             - name: PUID
