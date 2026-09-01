@@ -1,0 +1,80 @@
+# Nightly bounce for vault-mcp, same shape as trek-restart.
+#
+# Two failure modes converge on "restart it and it is fine for a while":
+#   - the server gets stuck in `in_flight: flush_dirty_embeddings` with nothing
+#     dirty to flush, and spins CPU indefinitely (seen 2026-09-01, ~2.4 cores);
+#   - RSS settles ~1.5Gi against the 2Gi limit even at idle, so a write burst
+#     OOM-kills it (exit 137, 9 times in the 33 days before this was added).
+#
+# Neither is fixable from here -- both are upstream in markdown-vault-mcp, and
+# the liveness probe cannot see either one because :8000 keeps answering
+# normally throughout (tools/list still returns in ~4ms while it burns cores).
+# The bounce caps how long a stuck flush runs and resets the RSS baseline.
+# 04:00 because the vault is only touched from interactive sessions.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vault-mcp-restarter
+  namespace: knowledge
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: vault-mcp-restarter
+  namespace: knowledge
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["vault-mcp"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vault-mcp-restarter
+  namespace: knowledge
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: vault-mcp-restarter
+subjects:
+  - kind: ServiceAccount
+    name: vault-mcp-restarter
+    namespace: knowledge
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: vault-mcp-restart
+  namespace: knowledge
+spec:
+  schedule: "0 4 * * *"
+  timeZone: Europe/Madrid
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          serviceAccountName: vault-mcp-restarter
+          restartPolicy: OnFailure
+          containers:
+            - name: kubectl
+              image: rancher/kubectl:v1.34.7
+              command:
+                - kubectl
+                - -n
+                - knowledge
+                - rollout
+                - restart
+                - deployment/vault-mcp
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 100m
+                  memory: 64Mi
