@@ -13,6 +13,14 @@ spec:
       - {key: k3s-upgrade, operator: NotIn, values: ["disabled", "false"]}
       - {key: k3os.io/mode, operator: DoesNotExist}
       - {key: node-role.kubernetes.io/control-plane, operator: Exists}
+  # An upgrade job has to land on the node it is upgrading, so it must tolerate
+  # whatever that node is tainted with. Without this the agent plan was dead:
+  # the four work-vm nodes carry dedicated=media:NoSchedule, their job sat
+  # Pending forever, and concurrency: 1 meant it blocked every other node behind
+  # it. That is why the home nodes were still on 1.34 while the server had moved
+  # to 1.35, and why nas00 was found cordoned with no job to explain it.
+  tolerations:
+    - operator: Exists
   serviceAccountName: system-upgrade
   upgrade:
     image: rancher/k3s-upgrade
@@ -35,6 +43,14 @@ spec:
   prepare:
     args: ["prepare", "server-plan"]
     image: rancher/k3s-upgrade
+  # An upgrade job has to land on the node it is upgrading, so it must tolerate
+  # whatever that node is tainted with. Without this the agent plan was dead:
+  # the four work-vm nodes carry dedicated=media:NoSchedule, their job sat
+  # Pending forever, and concurrency: 1 meant it blocked every other node behind
+  # it. That is why the home nodes were still on 1.34 while the server had moved
+  # to 1.35, and why nas00 was found cordoned with no job to explain it.
+  tolerations:
+    - operator: Exists
   serviceAccountName: system-upgrade
   drain:
     force: true
