@@ -127,6 +127,13 @@ spec:
               memory: 512Mi
             limits:
               memory: 2Gi  # bumped 2026-05-27 — was 1Gi, OOM-killed 6x in a day under vault-curator write bursts (embeddings/index)
+              # 2026-09-01: caught the server stuck in `in_flight:
+              # flush_dirty_embeddings` with dirty_embeddings=0 and queue_depth=0,
+              # burning ~2.4 cores with no requests in flight (one thread pegged,
+              # ~12 tokio workers idling at 13%). Uncapped, that is 20% of ovh02
+              # taken permanently by a task with nothing to do. The cap still
+              # leaves room for a real embedding rebuild, just slower.
+              cpu: "2"
         # Tailscale sidecar — shares the pod netns, so :8000 above becomes
         # reachable tailnet-wide at vault-mcp.senseizero.lan. Mirrors the
         # chino-prd pattern, minus tags (registers untagged under agonbar@).
