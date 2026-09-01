@@ -16,8 +16,6 @@ spec:
     repoURL: 'https://github.com/agonbar/agonbar-kubernetes.git'
     path: system/snapshots
     targetRevision: HEAD
-    directory:
-      recurse: false
   destination:
     namespace: kube-system
     name: in-cluster
