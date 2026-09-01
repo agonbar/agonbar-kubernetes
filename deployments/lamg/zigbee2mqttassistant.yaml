@@ -21,7 +21,9 @@ spec:
         app: zigbee2mqttassistant
     spec:
       containers:
-        - image: carldebilly/zigbee2mqttassistant
+        # Same reason as code-server in homeassistant.yaml: keel manages this
+        # image, so pin the tag or the next keel update starts a sync fight.
+        - image: carldebilly/zigbee2mqttassistant:latest
           name: zigbee2mqttassistant
           ports:
             - containerPort: 80
