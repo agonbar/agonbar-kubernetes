@@ -238,10 +238,18 @@ data:
                 - sh
                 - -c
                 - |
+                  # set -e matters more than it looks: this used to end on
+                  # `echo "Backup complete"`, so the container exited 0 whatever
+                  # rsync did. lamg/plex-config reported a green backup every
+                  # night while its destination sat unchanged since 2026-07-30.
+                  set -e
                   apk add --no-cache rsync
                   mkdir -p "/backup/${NS}/${PVC}"
+                  set +e
                   rsync -av --delete ${RSYNC_EXCLUDES} /source/ "/backup/${NS}/${PVC}/"
-                  echo "Backup complete"
+                  RC=$?
+                  echo "rsync exit=${RC}"
+                  exit ${RC}
               volumeMounts:
                 - name: source
                   mountPath: /source
@@ -251,10 +259,12 @@ data:
               resources:
                 requests:
                   cpu: 50m
-                  memory: 64Mi
+                  memory: 128Mi
                 limits:
                   cpu: "2"
-                  memory: 256Mi
+                  # 256Mi was tight for a 165k-file tree; an OOM-killed rsync
+                  # was indistinguishable from a successful one before set -e.
+                  memory: 1Gi
           volumes:
             - name: source
               persistentVolumeClaim:
