@@ -69,13 +69,30 @@ spec:
               mountPath: /usr/src/app/upload
           resources:
             requests:
-              cpu: 5m
-              memory: 30Mi
+              # Measured 2026-09-01: 18m CPU / 647Mi at rest, and ~820m CPU
+              # while the geodata import runs at boot. The old 5m/30Mi made the
+              # scheduler treat this pod as free, which is how it landed on
+              # nas00 and pinned that box at 100% CPU with load 22.
+              cpu: 100m
+              memory: 768Mi
       volumes:
         - name: upload
           nfs:
             server: 192.168.0.29
             path: /mnt/RAID/docker/immich/upload
+      # nas00 is 2 cores / 3.4Gi and flaps under load; homeassistant already
+      # keeps off it for the same reason. On 2026-09-01 immich landed there and
+      # saturated the node, which starved the democratic-csi node pods until
+      # every CSI driver deregistered and no volume on nas00 could mount.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: NotIn
+                    values:
+                      - nas00
       nodeSelector:
         svccontroller.k3s.cattle.io/lbpool: lamg
 
