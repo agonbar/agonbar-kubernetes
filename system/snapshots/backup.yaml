@@ -123,6 +123,7 @@ data:
     backup_pvc() {
       NS="$1"
       PVC="$2"
+      COVERED="${COVERED} ${NS}/${PVC}"
       SNAP_NAME="backup-${PVC}-${TIMESTAMP}"
       TEMP_PVC="backup-temp-${PVC}"
       JOB_NAME="backup-rsync-${PVC}"
@@ -318,6 +319,7 @@ data:
     backup_local_path_pvc() {
       NS="$1"
       PVC="$2"
+      COVERED="${COVERED} ${NS}/${PVC}"
       JOB_NAME="backup-local-${PVC}"
 
       if [ -n "${BACKUP_ONLY}" ]; then
@@ -429,6 +431,45 @@ data:
       echo "=== [${NS}/${PVC}] Backup finished ==="
     }
 
+    # Cada PVC que algun pod esta montando y cuya clase admite copia tiene que haber
+    # pasado por una de las dos funciones de arriba. Esto existe porque el 2026-09-02
+    # se renombraron cinco volumenes en un dia y la lista se quedo atras tres veces
+    # (los cuatro `-lan`, houndarr, y el `-nfs` de home assistant). El patron siempre
+    # es el mismo: el PVC viejo sobrevive como rollback, se deja montar igual de bien,
+    # y el job copia datos congelados y da verde mientras el volumen vivo no se copia.
+    #
+    # Solo mira volumenes MONTADOS. Una app escalada a 0 a las 04:00 no se detecta,
+    # y al reves, 19 PVCs de la lista no tienen pod ahora mismo porque sus apps estan
+    # paradas: avisar de eso seria ruido todas las noches. El caso que importa, y el
+    # unico que este chequeo persigue, es migrar el volumen de algo que esta vivo.
+    COVERAGE_SKIP=""
+
+    check_coverage() {
+      echo "========================================="
+      echo "Coverage check"
+      CLASSES="$(kubectl get volumesnapshotclass -o jsonpath='{.items[*].metadata.name}') local-path"
+      MOUNTED=$(kubectl get pods -A --field-selector=status.phase=Running -o go-template='{{range .items}}{{$ns := .metadata.namespace}}{{range .spec.volumes}}{{if .persistentVolumeClaim}}{{$ns}}/{{.persistentVolumeClaim.claimName}}{{"\n"}}{{end}}{{end}}{{end}}' 2>/dev/null | sort -u)
+      PVC_CLASSES=$(kubectl get pvc -A -o go-template='{{range .items}}{{.metadata.namespace}}/{{.metadata.name}} {{.spec.storageClassName}}{{"\n"}}{{end}}' 2>/dev/null)
+      GAPS=""
+      for ref in ${MOUNTED}; do
+        case " ${COVERED} " in *" ${ref} "*) continue ;; esac
+        case " ${COVERAGE_SKIP} " in *" ${ref} "*) continue ;; esac
+        CLS=$(echo "${PVC_CLASSES}" | awk -v r="${ref}" '$1==r {print $2}')
+        [ -n "${CLS}" ] || continue
+        case " ${CLASSES} " in
+          *" ${CLS} "*) GAPS="${GAPS} ${ref}(${CLS})" ;;
+        esac
+      done
+      if [ -n "${GAPS}" ]; then
+        echo "ERROR: PVCs mounted by a running pod, backup-capable, and not covered:"
+        for g in ${GAPS}; do echo "  - ${g}"; done
+        echo "Add them to the list above, or to COVERAGE_SKIP with a reason."
+        FAILED=1
+      else
+        echo "All mounted backup-capable PVCs are covered."
+      fi
+    }
+
     echo "========================================="
     echo "PVC Backup Run - ${TIMESTAMP}"
     echo "========================================="
@@ -470,7 +511,11 @@ data:
     backup_pvc trek trek-uploads
 
     # lamg namespace
+    # Los dos a la vez mientras dura la migracion a NFS (170ca6b/e2ad12a): el
+    # deployment todavia monta el -lan. Quitar el -lan en cuanto apunte al -nfs;
+    # hasta entonces copiar los dos es inofensivo y no deja hueco en ningun momento.
     backup_pvc lamg homeassistant-config-lan
+    backup_pvc lamg homeassistant-config-nfs
     backup_pvc lamg influxdb-data
     backup_pvc lamg plex-config-lan
     backup_pvc lamg scrutiny-config
@@ -501,6 +546,10 @@ data:
     backup_pvc piracy tachidesk-data
     backup_pvc piracy tdarr-config
     backup_pvc piracy tdarr-server
+
+    # BACKUP_ONLY sirve para relanzar un volumen suelto, asi que ahi la cobertura
+    # no significa nada y el chequeo no aplica.
+    if [ -z "${BACKUP_ONLY}" ]; then check_coverage; fi
 
     echo "========================================="
     if [ "$FAILED" -eq 1 ]; then
