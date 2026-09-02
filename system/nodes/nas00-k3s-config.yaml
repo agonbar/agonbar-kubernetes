@@ -1,0 +1,21 @@
+# nas00 is 2 cores / 3.3Gi. Its Allocatable used to be the whole box, so the
+# scheduler believed ~3.2Gi was free while the DaemonSets alone (5x
+# democratic-csi, svclb, kube-vip, promtail) were already using ~1.4Gi and
+# requesting almost nothing. Pods kept piling on until load hit 39 and the CSI
+# driver was OOM-killed, taking every volume on the node with it.
+#
+# Measured 2026-09-02, cordoned, DaemonSets only: 628m CPU / 1409Mi in use.
+#
+# kube-reserved is deliberately oversized. It is meant for the kubernetes system
+# daemons, but here it also absorbs the DaemonSet footprint the scheduler cannot
+# see, because those charts request 0 and live in 5 separate upstream Helm
+# releases. Fixing the charts is the cleaner answer; this is the one lever that
+# does not depend on them. Re-measure with scripts/audit-pod-requests.sh nas00
+# if the DaemonSet set changes.
+kubelet-arg:
+  - "system-reserved=cpu=200m,memory=512Mi"
+  - "kube-reserved=cpu=300m,memory=1400Mi"
+  - "eviction-hard=memory.available<250Mi,nodefs.available<10%"
+  - "eviction-soft=memory.available<500Mi"
+  - "eviction-soft-grace-period=memory.available=1m30s"
+  - "eviction-max-pod-grace-period=60"
