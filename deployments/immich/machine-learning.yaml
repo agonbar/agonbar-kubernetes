@@ -58,8 +58,12 @@ spec:
               mountPath: /cache
           resources:
             requests:
-              cpu: 5m
-              memory: 30Mi
+              # Measured 2026-09-02: 3m CPU / 238Mi at rest. It is a model server,
+              # so it climbs past a core while inferring; this is sized for that,
+              # not for idle. The old 5m/30Mi was not a request, it was a lie to
+              # the scheduler, and it is why this landed on nas00 and starved it.
+              cpu: 100m
+              memory: 512Mi
       volumes:
         - name: upload
           nfs:
@@ -69,6 +73,20 @@ spec:
           nfs:
             server: 192.168.0.29
             path: /mnt/RAID/docker/immich/models
+      # nas00 is 2 cores / 3.4Gi and cannot host anything real. On 2026-09-02 this
+      # pod pushed it under the 250Mi eviction threshold; the kubelet evicted the
+      # democratic-csi iscsi-ssd-lan controller, home-assistant's volume flipped to
+      # read-only, and HA was down for three hours. Same reason as the affinity
+      # server and postgre already carry (6d20abb).
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: NotIn
+                    values:
+                      - nas00
       nodeSelector:
         svccontroller.k3s.cattle.io/lbpool: lamg
 
