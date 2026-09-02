@@ -34,7 +34,13 @@ spec:
               node-publish-secret:
               controller-expand-secret:
 
-        volumeSnapshotClasses: []
+        # The controller already runs external-snapshotter; without this class
+        # nothing can take a VolumeSnapshot of an NFS volume, so the nightly job
+        # could not cover them. Same shape as the iscsi classes.
+        volumeSnapshotClasses:
+          - name: truenas-nfs-ssd
+            deletionPolicy: Delete
+            parameters: {}
 
         driver:
           existingConfigSecret: democratic-csi-nfs-ssd-driver-config
