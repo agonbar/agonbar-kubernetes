@@ -76,6 +76,29 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /config
+          # startupProbe gates the other two so a slow boot is not mistaken
+          # for a dead app; /manifest.json is served without auth.
+          startupProbe:
+            httpGet:
+              path: /manifest.json
+              port: 8123
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /manifest.json
+              port: 8123
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /manifest.json
+              port: 8123
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
           resources:
             requests:
               cpu: 5m

@@ -67,6 +67,29 @@ spec:
           volumeMounts:
             - name: upload
               mountPath: /usr/src/app/upload
+          # startupProbe gates the other two so a slow boot is not mistaken
+          # for a dead app; /api/server/ping is served without auth.
+          startupProbe:
+            httpGet:
+              path: /api/server/ping
+              port: 2283
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /api/server/ping
+              port: 2283
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/server/ping
+              port: 2283
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
           resources:
             requests:
               # Measured 2026-09-01: 18m CPU / 647Mi at rest, and ~820m CPU
