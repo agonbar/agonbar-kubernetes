@@ -58,7 +58,7 @@ spec:
       volumes:
       - name: dawarich-db-data
         persistentVolumeClaim:
-          claimName: dawarich-db-data
+          claimName: dawarich-db-data-lan
       - name: dawarich-shared
         nfs:
           server: 192.168.0.29
@@ -77,6 +77,9 @@ spec:
      port: 5432
      targetPort: 5432
 ---
+# Rollback for the 2026-09-02 storage class migration: holds the datadir as it was
+# before the cutover. Nothing mounts it. Kept declared on purpose, because ArgoCD
+# prunes what leaves git. Delete this block once the -lan volume has proven itself.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -86,6 +89,25 @@ spec:
   accessModes:
     - ReadWriteOnce
   storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+# Moved off truenas-iscsi-ssd on 2026-09-02, the last volume still on it. That
+# class reaches nas02 over tailscale (portal 100.72.0.41:3260) and it was those
+# five sessions that dropped together at 11:28 and aborted the ext4 journals.
+# This one takes the LAN path to the same box. Copied while dawarich-db was at 0,
+# so the datadir copy is consistent; verified byte count and tree md5.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dawarich-db-data-lan
+  namespace: dawarich
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd-lan
   resources:
     requests:
       storage: 5Gi
