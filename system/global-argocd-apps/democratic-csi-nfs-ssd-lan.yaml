@@ -46,6 +46,24 @@ spec:
             deletionPolicy: Delete
             parameters: {}
 
+        # The LAN address is only routable from lamg nodes, so both the controller
+        # (which talks to the nas02 API) and the node plugin have to live there.
+        # Without this the controller lands on ovh02 and every probe times out.
+        # It also enforces that LAN volumes can only mount on lamg nodes, which is
+        # exactly the intended invariant.
+        controller:
+          nodeSelector:
+            svccontroller.k3s.cattle.io/lbpool: lamg
+
+        node:
+          nodeSelector:
+            svccontroller.k3s.cattle.io/lbpool: lamg
+          tolerations:
+            - key: dedicated
+              operator: Equal
+              value: media
+              effect: NoSchedule
+
         driver:
           existingConfigSecret: democratic-csi-nfs-ssd-lan-driver-config
           config:
