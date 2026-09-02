@@ -57,6 +57,10 @@ data:
     set -e
 
     NFS_SERVER="192.168.0.29"
+    # Misma maquina (nas02), la otra pata. Los volumenes local-path viven todos en
+    # ovh02, que no enruta a 192.168.0.29 en absoluto: el 2049 se rechaza desde
+    # alli y esta abierto en 100.72.0.41. Solo lo usa backup_local_path_pvc.
+    NFS_SERVER_TAILNET="100.72.0.41"
     NFS_BACKUP_PATH="/mnt/RAID/docker/backups-iscsi"
     TIMESTAMP=$(date +%Y%m%d-%H%M%S)
     FAILED=0
@@ -247,9 +251,16 @@ data:
                   mkdir -p "/backup/${NS}/${PVC}"
                   set +e
                   rsync -av --delete ${RSYNC_EXCLUDES} /source/ "/backup/${NS}/${PVC}/"
-                  RC=$?
-                  echo "rsync exit=${RC}"
-                  exit ${RC}
+                  # \$ escapado a proposito: este heredoc NO lleva comillas, asi
+                  # que sin la barra el shell de FUERA se come estas tres lineas al
+                  # generar el Job. Se generaba "RC=0 / echo rsync exit= / exit", y
+                  # `exit` sin argumento devuelve el codigo del `echo`, o sea 0.
+                  # El `set -e` de arriba no salva nada porque hay un `set +e`
+                  # justo antes del rsync. Resultado: el fallo que este bloque
+                  # dice haber arreglado seguia vivo, solo que una capa mas abajo.
+                  RC=\$?
+                  echo "rsync exit=\${RC}"
+                  exit \${RC}
               volumeMounts:
                 - name: source
                   mountPath: /source
@@ -296,6 +307,128 @@ data:
       echo "=== [${NS}/${PVC}] Backup finished ==="
     }
 
+    # local-path no tiene snapshotter CSI, asi que el baile de snapshot + PVC
+    # temporal de arriba no sirve. Estos volumenes son un directorio normal en un
+    # nodo concreto, asi que se copian montando la claim directamente: el PV de
+    # local-path lleva nodeAffinity, y eso clava el Job en el nodo que tiene los
+    # datos sin que haya que averiguar cual es.
+    #
+    # No hace falta parar la app: local-path es RWO por nodo, y el pod de la app y
+    # este Job conviven en la misma maquina.
+    backup_local_path_pvc() {
+      NS="$1"
+      PVC="$2"
+      JOB_NAME="backup-local-${PVC}"
+
+      if [ -n "${BACKUP_ONLY}" ]; then
+        case " ${BACKUP_ONLY} " in
+          *" ${NS}/${PVC} "*) ;;
+          *) return ;;
+        esac
+      fi
+
+      echo "=== [${NS}/${PVC}] Starting local-path backup ==="
+
+      # Si alguna vez vuelve a una clase CSI tiene que ir por backup_pvc, que si
+      # hace snapshot. Copiarlo aqui en silencio seria perder esa copia sin avisar.
+      SC=$(kubectl get pvc "${PVC}" -n "${NS}" -o jsonpath='{.spec.storageClassName}' 2>/dev/null)
+      if [ "${SC}" != "local-path" ]; then
+        echo "[${NS}/${PVC}] ERROR: expected local-path, got '${SC}'; use backup_pvc"
+        FAILED=1
+        return
+      fi
+
+      kubectl delete job "${JOB_NAME}" -n "${NS}" --ignore-not-found >/dev/null 2>&1 || true
+      cat <<LOCAL_EOF | kubectl apply -f -
+    apiVersion: batch/v1
+    kind: Job
+    metadata:
+      name: ${JOB_NAME}
+      namespace: ${NS}
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 3600
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: backup
+              image: alpine:latest
+              command:
+                - sh
+                - -c
+                - |
+                  set -e
+                  apk add --no-cache rsync sqlite
+                  DEST="/backup/${NS}/${PVC}"
+                  mkdir -p "\$DEST"
+                  set +e
+                  # Las SQLite se excluyen aqui y se copian abajo con sqlite3.
+                  # --delete no toca en destino lo que esta excluido, asi que los
+                  # .db que deja sqlite3 sobreviven a la pasada siguiente.
+                  rsync -av --delete --exclude='*.db' --exclude='*.db-wal' --exclude='*.db-shm' /source/ "\$DEST/"
+                  RC=\$?
+                  echo "rsync exit=\$RC"
+                  [ \$RC -eq 0 ] || exit \$RC
+                  # Copiar en crudo una SQLite viva con WAL da un fichero que
+                  # restaura como "malformed", que es justo el estado del que hubo
+                  # que sacar houndarr. El dot-command .backup si es consistente en
+                  # caliente (nada de backticks en este heredoc: lo ejecuta el shell
+                  # de fuera al generar el Job) y
+                  # ahorra tener que parar el servicio cada noche.
+                  for db in /source/*.db; do
+                    [ -e "\$db" ] || continue
+                    echo "sqlite backup: \$(basename "\$db")"
+                    sqlite3 "\$db" ".backup '\$DEST/\$(basename "\$db")'" || exit 1
+                  done
+                  exit 0
+              volumeMounts:
+                - name: source
+                  mountPath: /source
+                - name: backup
+                  mountPath: /backup
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  cpu: "1"
+                  memory: 1Gi
+          volumes:
+            - name: source
+              persistentVolumeClaim:
+                claimName: ${PVC}
+            - name: backup
+              nfs:
+                server: ${NFS_SERVER_TAILNET}
+                path: ${NFS_BACKUP_PATH}
+    LOCAL_EOF
+
+      # Sondeo en vez de `kubectl wait --for=condition=complete`: con backoffLimit 0
+      # un Job que falla en 30 s dejaria a wait esperando su timeout entero, y son
+      # tres volumenes. Aqui un fallo se ve en cuanto ocurre.
+      echo "[${NS}/${PVC}] Waiting for local-path backup..."
+      END=$(( $(date +%s) + 3660 ))
+      DONE=""
+      while [ "$(date +%s)" -lt "${END}" ]; do
+        CONDS=$(kubectl get job "${JOB_NAME}" -n "${NS}" \
+          -o jsonpath='{.status.conditions[?(@.status=="True")].type}' 2>/dev/null)
+        case "${CONDS}" in
+          *Complete*) DONE="ok"; break ;;
+          *Failed*)   DONE="fail"; break ;;
+        esac
+        sleep 10
+      done
+      if [ "${DONE}" != "ok" ]; then
+        echo "[${NS}/${PVC}] ERROR: local-path backup ${DONE:-timed out}"
+        kubectl logs "job/${JOB_NAME}" -n "${NS}" --tail=20 2>/dev/null || true
+        FAILED=1
+      fi
+
+      kubectl delete job "${JOB_NAME}" -n "${NS}" --ignore-not-found >/dev/null 2>&1 || true
+      echo "=== [${NS}/${PVC}] Backup finished ==="
+    }
+
     echo "========================================="
     echo "PVC Backup Run - ${TIMESTAMP}"
     echo "========================================="
@@ -314,8 +447,10 @@ data:
     # games namespace
     backup_pvc games enshrouded-data
     backup_pvc games factorio-data
-    # palworld-data vive en local-path en ovh02 (commit cfbbe3c): no hay
-    # snapshotter, y la NFS de backup solo es alcanzable desde la LAN.
+    # local-path: sin snapshotter CSI, van por backup_local_path_pvc. Los tres
+    # viven en ovh02 y hasta 2026-09-02 no tenian ninguna copia.
+    backup_local_path_pvc games palworld-data
+    backup_local_path_pvc games satisfactory-data
 
     # OJO: estos nombres son PVC concretos, no descubrimiento automatico. Al mover
     # un volumen de clase (2026-09-02: los cuatro `-lan`) hay que cambiarlos aqui
@@ -347,7 +482,12 @@ data:
     backup_pvc piracy bazarr-config
     backup_pvc piracy cruncharr-config
     backup_pvc piracy emulerr-config
-    backup_pvc piracy houndarr-data
+    # houndarr salio de iSCSI a local-path el 2026-09-02 (f2da258) porque su
+    # SQLite se corrompio dos veces. El PVC viejo `houndarr-data` sigue existiendo
+    # y ya no lo monta nadie: seguir copiandolo daria verde sobre datos congelados.
+    # Lo critico aqui no es solo houndarr.db, es houndarr.masterkey (44 bytes), que
+    # cifra las credenciales: sin el, restaurar la base de datos no sirve de nada.
+    backup_local_path_pvc piracy houndarr-data-local
     backup_pvc piracy jellyfin-config
     backup_pvc piracy lidarr-config
     backup_pvc piracy prowlarr-config
