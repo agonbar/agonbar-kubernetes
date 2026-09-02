@@ -11,7 +11,10 @@ metadata:
   name: zigbee2mqttassistant
   namespace: lamg
 spec:
-  replicas: 1
+  # Scaled to 0 on 2026-09-02. It is a read-only web UI over the zigbee2mqtt MQTT
+  # topics, so nothing depends on it being up. Set back to 1 to bring it back;
+  # note it still carries the 5m/30Mi token request flagged in c6d541a.
+  replicas: 0
   selector:
     matchLabels:
       app: zigbee2mqttassistant
