@@ -44,6 +44,29 @@ spec:
                       - name: tv
                         mountPath: /tv
                       # Si también tienes películas (Radarr), deberías añadir ese volumen aquí
+                  # startupProbe gates the other two so a slow boot is not mistaken
+                  # for a dead app; /api/system/ping is served without auth.
+                  startupProbe:
+                      httpGet:
+                          path: /api/system/ping
+                          port: 6767
+                      periodSeconds: 10
+                      timeoutSeconds: 5
+                      failureThreshold: 60
+                  readinessProbe:
+                      httpGet:
+                          path: /api/system/ping
+                          port: 6767
+                      periodSeconds: 10
+                      timeoutSeconds: 5
+                      failureThreshold: 3
+                  livenessProbe:
+                      httpGet:
+                          path: /api/system/ping
+                          port: 6767
+                      periodSeconds: 20
+                      timeoutSeconds: 5
+                      failureThreshold: 3
                   resources:
                       requests:
                           memory: 256Mi # Bazarr consume un poco más de RAM al indexar
