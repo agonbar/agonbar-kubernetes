@@ -69,11 +69,20 @@ spec:
                   volumeMounts:
                       - name: data
                         mountPath: /data
+                  # houndarr scans every *arr's wanted list before uvicorn binds the
+                  # port, so startup can take minutes. The startupProbe holds the
+                  # other two off until it serves; only then do they apply.
+                  startupProbe:
+                      httpGet:
+                          path: /api/health
+                          port: 8877
+                      periodSeconds: 10
+                      timeoutSeconds: 5
+                      failureThreshold: 60
                   readinessProbe:
                       httpGet:
                           path: /api/health
                           port: 8877
-                      initialDelaySeconds: 10
                       periodSeconds: 10
                       timeoutSeconds: 5
                       failureThreshold: 3
@@ -81,8 +90,7 @@ spec:
                       httpGet:
                           path: /api/health
                           port: 8877
-                      initialDelaySeconds: 30
-                      periodSeconds: 15
+                      periodSeconds: 20
                       timeoutSeconds: 5
                       failureThreshold: 3
                   resources:
