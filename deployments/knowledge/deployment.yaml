@@ -66,6 +66,26 @@ spec:
               value: /data/state/fastmcp
             - name: MARKDOWN_VAULT_MCP_READ_ONLY
               value: "false"
+            # --- operator instructions, injected into EVERY client session ---
+            # The server's own boilerplate promises "All write operations update
+            # the search index immediately". Measured 2026-09-02: false under a
+            # burst of writes — 14 edits across 5 notes left BOTH the FTS and the
+            # vector index behind, so corrected text was unfindable while `search`
+            # still served the stale version. A note in the vault can't fix that
+            # (you have to find the note first), but this text every client reads
+            # can. Full evidence: projects/knowledge-vault.md.
+            - name: MARKDOWN_VAULT_MCP_INSTRUCTIONS
+              value: >-
+                Personal knowledge vault (agonbar). READ THIS BEFORE TRUSTING
+                THE GENERIC TOOL TEXT BELOW: indexing is NOT immediate under a
+                burst of writes, despite what the boilerplate says. A write or
+                edit returning OK means the file changed, NOT that search can
+                find it. Verify every write with read, never with search. If you
+                must use search, first validate it with a positive control (a
+                phrase you know is indexed): an empty result is indistinguishable
+                from a missing note, an unwritten phrase, and a lagging index.
+                Check get_index_status (queue_depth, dirty_paths,
+                dirty_embeddings) whenever you depend on search being current.
             # --- auth: static bearer token gates the /mcp endpoint (covers BOTH the
             # tailnet path AND in-cluster ClusterIP/pod-IP reach; no app auth = any
             # lamg pod could read/write the vault otherwise). Clients send
