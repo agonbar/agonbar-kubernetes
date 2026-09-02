@@ -1,7 +1,11 @@
+# LAN twin of democratic-csi-nfs-ssd. Same nas02, same SSD/k8s/nfs datasets,
+# but reached over the wired LAN (192.168.0.29) instead of the tailscale
+# address. Mirrors what democratic-csi-iscsi-ssd-lan did for iSCSI after the
+# 2026-09-02 outage, where a tunnel stall aborted five ext4 journals at once.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: democratic-csi-nfs-ssd
+  name: democratic-csi-nfs-ssd-lan
   namespace: argocd
 spec:
   project: default
@@ -10,14 +14,14 @@ spec:
     repoURL: https://democratic-csi.github.io/charts/
     targetRevision: 0.14.7
     helm:
-      releaseName: democratic-csi-nfs-ssd
+      releaseName: democratic-csi-nfs-ssd-lan
       valuesObject:
         csiDriver:
-          name: "org.democratic-csi.truenas-nfs-ssd"
+          name: "org.democratic-csi.truenas-nfs-ssd-lan"
           fsGroupPolicy: File
 
         storageClasses:
-          - name: truenas-nfs-ssd
+          - name: truenas-nfs-ssd-lan
             defaultClass: false
             reclaimPolicy: Delete
             volumeBindingMode: Immediate
@@ -38,12 +42,12 @@ spec:
         # nothing can take a VolumeSnapshot of an NFS volume, so the nightly job
         # could not cover them. Same shape as the iscsi classes.
         volumeSnapshotClasses:
-          - name: truenas-nfs-ssd
+          - name: truenas-nfs-ssd-lan
             deletionPolicy: Delete
             parameters: {}
 
         driver:
-          existingConfigSecret: democratic-csi-nfs-ssd-driver-config
+          existingConfigSecret: democratic-csi-nfs-ssd-lan-driver-config
           config:
             driver: freenas-api-nfs
   destination:
