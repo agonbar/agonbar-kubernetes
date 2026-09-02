@@ -78,7 +78,7 @@ data:
     # not finish in 90 minutes, which failed the whole run every night.
     deadline_for() {
       case "$1/$2" in
-        lamg/plex-config) echo 18000 ;;
+        lamg/plex-config-lan) echo 18000 ;;
         *)                echo 5400 ;;
       esac
     }
@@ -87,7 +87,7 @@ data:
     # next start, so copying it nightly buys nothing and costs most of the files.
     excludes_for() {
       case "$1/$2" in
-        lamg/plex-config)
+        lamg/plex-config-lan)
           echo "--exclude=Cache --exclude='Crash Reports' --exclude=Logs --exclude=Diagnostics --exclude=Updates"
           ;;
         *) echo "" ;;
@@ -317,8 +317,14 @@ data:
     # palworld-data vive en local-path en ovh02 (commit cfbbe3c): no hay
     # snapshotter, y la NFS de backup solo es alcanzable desde la LAN.
 
+    # OJO: estos nombres son PVC concretos, no descubrimiento automatico. Al mover
+    # un volumen de clase (2026-09-02: los cuatro `-lan`) hay que cambiarlos aqui
+    # tambien. El PVC viejo sobrevive como rollback, asi que si no se toca esto el
+    # backup copia el volumen congelado y da verde. Y ojo con los `case` de
+    # deadline_for y excludes_for de arriba, que van por nombre.
+
     # immich namespace
-    backup_pvc immich immich-db-data
+    backup_pvc immich immich-db-data-lan
 
     # knowledge namespace
     backup_pvc knowledge vault-data
@@ -329,11 +335,11 @@ data:
     backup_pvc trek trek-uploads
 
     # lamg namespace
-    backup_pvc lamg homeassistant-config
+    backup_pvc lamg homeassistant-config-lan
     backup_pvc lamg influxdb-data
-    backup_pvc lamg plex-config
+    backup_pvc lamg plex-config-lan
     backup_pvc lamg scrutiny-config
-    backup_pvc lamg vscode-config
+    backup_pvc lamg vscode-config-lan
     backup_pvc lamg zigbee2mqtt-config
 
     # piracy namespace
