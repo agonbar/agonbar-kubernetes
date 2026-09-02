@@ -24,15 +24,12 @@ spec:
         app.vscode: "true"
     spec:
       initContainers:
-        # HA's /config is an iSCSI (ext4) RWO volume. After an unclean TrueNAS or
-        # network disconnect ext4 flips to read-only, and HA then fails to write
-        # its DB/config. This gate refuses to start HA on a read-only /config so
-        # the failure is visible instead of silently corrupting the recorder DB.
-        # It deliberately does NOT try to fsck: the block device is staged by
-        # kubelet at a host globalmount OUTSIDE this pod's mount namespace, so an
-        # in-pod umount/e2fsck can never work (the old version crashlooped here
-        # doing exactly that). The real repair is an offline e2fsck -fy; see
-        # scripts/repair-iscsi-volume.sh.
+        # /config is NFS since 2026-09-03, so the ext4-goes-read-only failure this
+        # gate was written for cannot happen any more: there is no block device and
+        # no client-side filesystem, nas02's ZFS keeps consistency locally. Kept
+        # because NFS has its own ways to end up unwritable (stale handle, full
+        # dataset, squashed root), and starting HA on an unwritable /config is how
+        # you corrupt .storage. It only ever checks; it never tries to repair.
         - name: config-writable-check
           image: alpine:latest
           imagePullPolicy: IfNotPresent
@@ -58,10 +55,9 @@ spec:
                 exit 0
               fi
 
-              echo "[config-check] STILL read-only. An in-pod fsck cannot repair the live staged mount."
-              echo "[config-check] The ext4 is likely 'clean with errors'; kubelet's fsck -a on re-stage will not fix that."
-              echo "[config-check] Run the offline repair from a workstation (quiesces, snapshots, e2fsck -fy):"
-              echo "[config-check]   scripts/repair-iscsi-volume.sh lamg deploy/homeassistant homeassistant-config-lan"
+              echo "[config-check] STILL not writable. On NFS this is not ext4 corruption:"
+              echo "[config-check]   check nas02 is reachable, the export is up, and SSD/k8s/nfs has free space."
+              echo "[config-check]   kubectl -n lamg get pvc homeassistant-config-nfs"
               exit 1
           volumeMounts:
             - name: config
@@ -139,7 +135,7 @@ spec:
       volumes:
         - name: config
           persistentVolumeClaim:
-            claimName: homeassistant-config-lan
+            claimName: homeassistant-config-nfs
         - name: vscode-config
           persistentVolumeClaim:
             claimName: vscode-config-lan
@@ -236,6 +232,12 @@ spec:
 # plex-config and immich-db-data aborted. The ten LAN sessions to the very same
 # target never blinked. Wrapping WireGuard around a disk on your own network
 # buys nothing and costs a filesystem every time the tunnel stalls.
+# Moved off iSCSI entirely on 2026-09-03. With the recorder in Postgres what is
+# left here is YAML and 2507 small JSON files under .storage, which is what NFS is
+# good at. And it takes the ext4 journal out of the network path: this volume went
+# read-only or corrupt four times (6-Aug twice, 24-Aug, 2-Sep). aya's HA has been
+# on NFS all along and is the only one that never corrupted.
+# Kept declared as the rollback; nothing mounts it. Copy was md5-verified.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -248,3 +250,17 @@ spec:
   resources:
     requests:
       storage: 30Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: homeassistant-config-nfs
+  namespace: lamg
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: truenas-nfs-ssd-lan
+  resources:
+    requests:
+      storage: 10Gi
