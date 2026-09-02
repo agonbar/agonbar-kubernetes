@@ -120,24 +120,32 @@ EOF
 until $K -n "$NS" get pod "$POD" --no-headers 2>/dev/null | grep -q Running; do sleep 4; done
 log "copy pod running"
 
-# 4. copy, then verify. tar rather than cp -a: of the two busybox ships, only tar
-# keeps hardlinks and sparse files, and app configs are full of both.
+# 4. copy, then verify.
 #
-# The counters use stat and find because busybox has neither `du --exclude` nor
-# `find -printf`. An earlier version used `du --exclude`, which busybox ignored:
-# both sides came back empty, empty equalled empty, and the check passed on a copy
-# it had never actually measured. Hence the explicit non-empty guard below.
+# rsync, not tar: a 13Gi claim takes an hour at the speed these volumes move, and
+# tar restarts from zero on every retry. rsync makes a second pass incremental,
+# which is what you want after a failed verification or a stale copy. --delete
+# keeps the destination an exact mirror when re-running.
+#
+# The counters use find and stat because busybox has neither `du --exclude` nor
+# `find -printf`. Two traps live here, both learned the hard way on 2026-09-02:
+# an earlier version used `du --exclude`, which busybox silently ignores, so both
+# sides returned empty, empty equalled empty and the check passed without ever
+# measuring anything. Then -print|xargs split Plex's "Application Support" paths
+# on the space and stat summed nothing. Hence -print0, and the non-empty guard.
+$K -n "$NS" exec "$POD" -- sh -c 'command -v rsync >/dev/null || apk add --no-cache rsync >/dev/null' \
+  || die "no rsync in the copy pod and apk could not install it"
 i=0; for p in "${PVCS[@]}"; do
   log "copying $p ..."
   timeout 5400 $K -n "$NS" exec "$POD" -- sh -c "
     set -e
-    cd /src/$i && tar cf - . | (cd /dst/$i && tar xpf -)
+    rsync -aHAX --delete --exclude=/lost+found /src/$i/ /dst/$i/
     sync
   " || die "copy of $p failed"
   $K -n "$NS" exec "$POD" -- sh -c "
     cnt(){ find \"\$1\" -mindepth 1 -path \"\$1/lost+found\" -prune -o -print | wc -l; }
-    siz(){ find \"\$1\" -mindepth 1 -path \"\$1/lost+found\" -prune -o -type f -print \
-             | xargs -r stat -c %s | awk '{s+=\$1} END{print s+0}'; }
+    siz(){ find \"\$1\" -mindepth 1 -path \"\$1/lost+found\" -prune -o -type f -print0 \
+             | xargs -0 -r stat -c %s | awk '{s+=\$1} END{print s+0}'; }
     SC=\$(cnt /src/$i); DC=\$(cnt /dst/$i); SS=\$(siz /src/$i); DS=\$(siz /dst/$i)
     echo \"  entries: src=\$SC dst=\$DC\"
     echo \"  bytes:   src=\$SS dst=\$DS\"
