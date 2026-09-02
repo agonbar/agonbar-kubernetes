@@ -243,7 +243,7 @@ data:
                 - -c
                 - |
                   # set -e matters more than it looks: this used to end on
-                  # `echo "Backup complete"`, so the container exited 0 whatever
+                  # echo "Backup complete", so the container exited 0 whatever
                   # rsync did. lamg/plex-config reported a green backup every
                   # night while its destination sat unchanged since 2026-07-30.
                   set -e
@@ -254,8 +254,8 @@ data:
                   # \$ escapado a proposito: este heredoc NO lleva comillas, asi
                   # que sin la barra el shell de FUERA se come estas tres lineas al
                   # generar el Job. Se generaba "RC=0 / echo rsync exit= / exit", y
-                  # `exit` sin argumento devuelve el codigo del `echo`, o sea 0.
-                  # El `set -e` de arriba no salva nada porque hay un `set +e`
+                  # exit sin argumento devuelve el codigo del echo, o sea 0.
+                  # El set -e de arriba no salva nada porque hay un set +e
                   # justo antes del rsync. Resultado: el fallo que este bloque
                   # dice haber arreglado seguia vivo, solo que una capa mas abajo.
                   RC=\$?
