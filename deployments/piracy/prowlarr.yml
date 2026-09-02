@@ -94,7 +94,7 @@ spec:
             volumes:
                 - name: config
                   persistentVolumeClaim:
-                      claimName: prowlarr-config
+                      claimName: prowlarr-config-nfs
                 - name: host-proc-mounts
                   hostPath:
                       path: /proc/1/mounts
@@ -180,6 +180,24 @@ spec:
     - ReadWriteOnce
   storageClassName: truenas-iscsi-ssd-lan
   volumeName: prowlarr-config-lan
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+# Moved off iSCSI on 2026-09-03. This app's database lives in the nas02 Postgres
+# now, so what is left here is config.xml, MediaCover and logs: no reason to keep
+# an ext4 journal on a network block device, which is what kept corrupting.
+# Old claim kept declared as the rollback.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prowlarr-config-nfs
+  namespace: piracy
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: truenas-nfs-ssd-lan
   resources:
     requests:
       storage: 5Gi
