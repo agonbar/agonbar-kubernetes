@@ -69,6 +69,22 @@ spec:
                   volumeMounts:
                       - name: data
                         mountPath: /data
+                  readinessProbe:
+                      httpGet:
+                          path: /api/health
+                          port: 8877
+                      initialDelaySeconds: 10
+                      periodSeconds: 10
+                      timeoutSeconds: 5
+                      failureThreshold: 3
+                  livenessProbe:
+                      httpGet:
+                          path: /api/health
+                          port: 8877
+                      initialDelaySeconds: 30
+                      periodSeconds: 15
+                      timeoutSeconds: 5
+                      failureThreshold: 3
                   resources:
                       requests:
                           memory: 128Mi
