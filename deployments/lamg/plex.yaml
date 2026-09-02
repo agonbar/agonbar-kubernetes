@@ -65,7 +65,7 @@ spec:
               echo "[config-check] STILL read-only. An in-pod fsck cannot repair the live staged mount."
               echo "[config-check] The ext4 is likely 'clean with errors'; kubelet's fsck -a on re-stage will not fix that."
               echo "[config-check] Run the offline repair from a workstation (quiesces, snapshots, e2fsck -fy):"
-              echo "[config-check]   scripts/repair-iscsi-volume.sh lamg deploy/plex plex-config"
+              echo "[config-check]   scripts/repair-iscsi-volume.sh lamg deploy/plex plex-config-lan"
               exit 1
           volumeMounts:
             - name: config
@@ -123,7 +123,7 @@ spec:
       volumes:
         - name: config
           persistentVolumeClaim:
-              claimName: plex-config
+              claimName: plex-config-lan
         - name: data
           nfs:
               server: 192.168.0.29
@@ -192,6 +192,9 @@ spec:
       hosts:
         - plex.${BASE_DOMAIN}
 ---
+# Rollback for the 2026-09-02 storage class migration: holds the data as it was
+# before the cutover. Nothing mounts it. Kept declared on purpose, because ArgoCD
+# prunes what leaves git. Delete this block once the -lan volume has proven itself.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -201,6 +204,24 @@ spec:
   accessModes:
     - ReadWriteOnce
   storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 30Gi
+
+---
+# Moved off truenas-iscsi-ssd on 2026-09-02, same reason as
+# homeassistant-config: that class reaches nas02 over tailscale and a 120s
+# tunnel stall aborts the ext4 journal. This one takes the LAN path to the
+# same box. See deployments/lamg/homeassistant.yaml for the full story.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: plex-config-lan
+  namespace: lamg
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd-lan
   resources:
     requests:
       storage: 30Gi
