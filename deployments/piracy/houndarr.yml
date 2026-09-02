@@ -103,12 +103,16 @@ spec:
             volumes:
                 - name: data
                   persistentVolumeClaim:
-                      claimName: houndarr-data
+                      claimName: houndarr-data-local
                 - name: host-proc-mounts
                   hostPath:
                       path: /proc/1/mounts
+            # SQLite over iSCSI is what corrupted this DB twice (24-ago y 02-sep).
+            # local-path keeps it on ovh02's own disk, so a TrueNAS or LAN hiccup
+            # cannot take the filesystem down mid-write. Pinned because local-path
+            # is node-local: the data only exists on ovh02.
             nodeSelector:
-                svccontroller.k3s.cattle.io/lbpool: lamg
+                kubernetes.io/hostname: ovh02
 ---
 apiVersion: v1
 kind: Service
@@ -189,6 +193,23 @@ spec:
     - ReadWriteOnce
   storageClassName: truenas-iscsi-ssd-lan
   volumeName: houndarr-data-lan
+  resources:
+    requests:
+      storage: 5Gi
+---
+# Migrated off truenas-iscsi-ssd-lan on 2026-09-02. That volume is only reachable
+# from the LAN (portal 192.168.0.29:3260), so it cannot follow houndarr to ovh02;
+# the data was copied through a tarball and md5-verified. The old PV/PVC above are
+# kept declared as a rollback and are no longer mounted by anything.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: houndarr-data-local
+  namespace: piracy
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
   resources:
     requests:
       storage: 5Gi
