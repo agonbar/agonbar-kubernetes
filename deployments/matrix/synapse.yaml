@@ -36,6 +36,29 @@ spec:
             - name: secret-volume
               readOnly: true
               mountPath: "/etc/secret-volume"
+          # startupProbe gates the other two so a slow boot is not mistaken
+          # for a dead app; /health is served without auth.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8008
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8008
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8008
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
           resources:
             requests:
               cpu: 5m
