@@ -172,7 +172,7 @@ spec:
             volumes:
                 - name: config
                   persistentVolumeClaim:
-                      claimName: tdarr-config
+                      claimName: tdarr-config-nfs
                 - name: server
                   persistentVolumeClaim:
                       claimName: tdarr-server
@@ -269,6 +269,23 @@ spec:
         - ReadWriteOnce
     storageClassName: truenas-iscsi-ssd-lan
     volumeName: tdarr-config-lan
+    resources:
+        requests:
+            storage: 2Gi
+
+---
+# Moved off iSCSI on 2026-09-03. tdarr keeps no database here, just a handful of
+# config files, so an ext4 journal on a network block device bought nothing and
+# cost a corruption risk. Old claim kept declared as the rollback.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: tdarr-config-nfs
+    namespace: piracy
+spec:
+    accessModes:
+        - ReadWriteMany
+    storageClassName: truenas-nfs-ssd-lan
     resources:
         requests:
             storage: 2Gi
