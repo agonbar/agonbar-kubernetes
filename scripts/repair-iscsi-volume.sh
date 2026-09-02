@@ -8,6 +8,25 @@
 #   ./repair-iscsi-volume.sh <namespace> <deployment/name> <pvc> [pvc...]
 #
 # Snapshots are left behind on purpose -- delete them once you are happy.
+#
+# LIMITATION: this cannot repair a volume that will not mount at all. It finds
+# the device by mounting the PVC in a privileged pod, so if the filesystem is far
+# enough gone that the kubelet reports `can't read superblock`, the repair pod
+# never leaves ContainerCreating and this script hangs waiting for it. Hit that
+# on lamg/vscode-config 2026-09-02. Fall back to attaching the LUN by hand:
+#
+#   IQN=$(kubectl get pv <pv> -o jsonpath='{.spec.csi.volumeAttributes.iqn}')
+#   PORTAL=$(kubectl get pv <pv> -o jsonpath='{.spec.csi.volumeAttributes.portal}')
+#   kubectl scale deploy/<x> --replicas=0     # and wait for the VolumeAttachment to clear
+#   ssh <node> sudo iscsiadm -m discovery -t sendtargets -p "$PORTAL"
+#   ssh <node> sudo iscsiadm -m node -T "$IQN" -p "$PORTAL" -l
+#   ssh <node> 'ls -l /dev/disk/by-path/ | grep <pvc-id>'    # -> /dev/sdX
+#   ssh <node> sudo e2fsck -fy /dev/sdX
+#   ssh <node> sudo iscsiadm -m node -T "$IQN" -p "$PORTAL" -u
+#
+# The superblock is usually fine in this case -- `dumpe2fs -h` reads it. What
+# mount chokes on is a journal with bad checksums, which e2fsck replays and
+# repairs. Check for `JBD2: Invalid checksum recovering data block` in its output.
 set -euo pipefail
 CTX=${CTX:-lamg}
 NS=$1; WL=$2; shift 2; PVCS=("$@")
