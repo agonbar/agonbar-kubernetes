@@ -11,6 +11,10 @@ metadata:
   name: homeassistant
   namespace: aya
 spec:
+  # HA refuses to start while another instance holds /config, so a rolling
+  # update deadlocks: the new pod exits 1 until the old one is gone.
+  strategy:
+    type: Recreate
   replicas: 1
   selector:
     matchLabels:
