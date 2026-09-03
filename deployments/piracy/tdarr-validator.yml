@@ -1,9 +1,23 @@
 # Continuous AV1 quality gate for the anime_health rollout.
 #
-# Three Deployments (tdarr-validator-{0,1,2}), one pinned to each
-# workload=media node. Each pod processes a disjoint shard of the
-# FileJSONDB candidates — sha1(src) % 3 == SHARD_INDEX — and loops
-# forever, re-listing candidates every LOOP_SECONDS.
+# Three Deployments (tdarr-validator-{0,1,2}), one per workload=media
+# node. Each pod processes a disjoint shard of the FileJSONDB candidates
+# — sha1(src) % SHARD_COUNT == SHARD_INDEX — and loops forever,
+# re-listing candidates every LOOP_SECONDS.
+#
+# ALL THREE ARE AT replicas=0. The pilot is over: /media/tv-pilot is
+# empty, the last audit file is from 2026-06-25, and the pods spent ten
+# weeks logging "candidates available=0" every 30s while reserving a CPU
+# each on the encoder nodes. The 4427 passed / 415 failed fingerprints
+# live on the NFS share and are read back by load_passed_index(), so
+# nothing is lost. Set replicas=1 on the shards you want when a new
+# batch starts landing in /media/tv-pilot; without that, a new pilot
+# transcodes unvalidated and nothing says so.
+#
+# Placement is by the workload=media label plus pod anti-affinity, so a
+# shard follows the encoder fleet instead of a hostname. The hostname
+# pins that used to be here died when work-vm-02 was rebuilt as
+# kubernetes-10 and left a shard Pending for weeks.
 #
 # Tdarr keeps `folderToFolderConversionDeleteSource: false` permanently
 # (sources in /media/tv/, AV1 outputs in /media/tv-pilot/). DRY_RUN is
@@ -15,7 +29,7 @@
 # concurrent NFS appends; load_passed_index() globs passed-*.jsonl so
 # every pod still sees every other shard's fingerprints.
 #
-# Per-shard config differs only in SHARD_INDEX + nodeSelector; the
+# Per-shard config now differs only in SHARD_INDEX; the
 # repetition is deliberate (each Deployment reads top-to-bottom in
 # isolation, no YAML anchor games across documents).
 #
@@ -30,12 +44,7 @@ metadata:
   namespace: piracy
   labels: {app: tdarr-validator, shard: "0"}
 spec:
-  # Scaled to 0. The sweep runs on 2 shards: validator-2 (idx 0) and
-  # validator-1 (idx 1), SHARD_COUNT=2. Both now live on the nodes that are
-  # staying; work-vm-01 is being emptied to hand its Proxmox back to Redytel.
-  # To go back to 3 shards, set replicas=1 here and SHARD_COUNT=3 on all three
-  # (validator-1 idx=1, validator-2 idx=2) on a node that is not work-vm-00,
-  # which already hosts validator-1.
+  # SHARD_COUNT=2 on the other two, so restoring this one needs it at 3.
   replicas: 0
   strategy: {type: Recreate}
   selector:
@@ -44,7 +53,13 @@ spec:
     metadata:
       labels: {app: tdarr-validator, shard: "0"}
     spec:
-      nodeSelector: {kubernetes.io/hostname: work-vm-00}
+      nodeSelector: {workload: media}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels: {app: tdarr-validator}
+              topologyKey: kubernetes.io/hostname
       tolerations:
         - {key: dedicated, operator: Equal, value: media, effect: NoSchedule}
       imagePullSecrets: [{name: ghcr-agonbar}]
@@ -87,7 +102,7 @@ metadata:
   namespace: piracy
   labels: {app: tdarr-validator, shard: "1"}
 spec:
-  replicas: 1
+  replicas: 0
   strategy: {type: Recreate}
   selector:
     matchLabels: {app: tdarr-validator, shard: "1"}
@@ -95,7 +110,13 @@ spec:
     metadata:
       labels: {app: tdarr-validator, shard: "1"}
     spec:
-      nodeSelector: {kubernetes.io/hostname: work-vm-00}
+      nodeSelector: {workload: media}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels: {app: tdarr-validator}
+              topologyKey: kubernetes.io/hostname
       tolerations:
         - {key: dedicated, operator: Equal, value: media, effect: NoSchedule}
       imagePullSecrets: [{name: ghcr-agonbar}]
@@ -137,7 +158,7 @@ metadata:
   namespace: piracy
   labels: {app: tdarr-validator, shard: "2"}
 spec:
-  replicas: 1
+  replicas: 0
   strategy: {type: Recreate}
   selector:
     matchLabels: {app: tdarr-validator, shard: "2"}
@@ -145,7 +166,13 @@ spec:
     metadata:
       labels: {app: tdarr-validator, shard: "2"}
     spec:
-      nodeSelector: {kubernetes.io/hostname: kubernetes-10}
+      nodeSelector: {workload: media}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels: {app: tdarr-validator}
+              topologyKey: kubernetes.io/hostname
       tolerations:
         - {key: dedicated, operator: Equal, value: media, effect: NoSchedule}
       imagePullSecrets: [{name: ghcr-agonbar}]
