@@ -39,11 +39,14 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: influxdb-data
+            claimName: influxdb-data-lan
       nodeSelector:
         svccontroller.k3s.cattle.io/lbpool: lamg
 
 ---
+# Rollback for the 2026-09-03 storage class migration. Nothing mounts it. Kept
+# declared on purpose, because ArgoCD prunes what leaves git. Delete once the
+# -lan volume has proven itself.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -53,6 +56,32 @@ spec:
   accessModes:
     - ReadWriteOnce
   storageClassName: truenas-iscsi-ssd
+  resources:
+    requests:
+      storage: 5Gi
+---
+# Moved off truenas-iscsi-ssd on 2026-09-03. Both classes point at the same
+# TrueNAS box: that one reaches it over tailscale, this one over the LAN. On
+# 2026-09-02 every tailnet iSCSI session on orange-pi5 ping-timed-out in the same
+# second, recovery gave up after 120s, and three ext4 journals aborted. The LAN
+# sessions to the very same target never blinked.
+#
+# This volume was missed in that migration because it had not broken yet. It
+# turned up when scripts/audit-storage-classes.sh asked the question the other
+# way round -- which pods are still on the tunnel -- and it was the only one on a
+# node that has a LAN route to nas02 and was taking the tunnel anyway.
+#
+# iSCSI rather than NFS because InfluxDB is a live database: TSM files plus a
+# bolt index, memory-mapped and fsync'd. That wants a block device.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: influxdb-data-lan
+  namespace: lamg
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd-lan
   resources:
     requests:
       storage: 5Gi
