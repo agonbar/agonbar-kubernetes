@@ -35,7 +35,7 @@ metadata:
   labels:
     app: mokuro-webdav
 spec:
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app: mokuro-webdav
