@@ -67,6 +67,32 @@ spec:
                   # Bump deliberately; v2.x->v2.y runs SQLite migrations on boot.
                   image: ghcr.io/suwayomi/tachidesk:v2.3.2243
                   imagePullPolicy: IfNotPresent
+                  # Postgres instead of the bundled H2, on the same nas02 PG17 the
+                  # Servarr apps and Home Assistant already use. H2 kept its store on
+                  # this iSCSI volume and lost it twice: recovery artefacts from
+                  # 29-Jul, then database.mv.db.corrupt-20260901 when the journal
+                  # aborted on 1-Sep. Both times the .tachibk backups were unharmed,
+                  # which is the only reason the library survived.
+                  #
+                  # The image's startup script copies DATABASE_* into server.conf, so
+                  # these are the documented knobs and not a hack. Postgres support is
+                  # marked beta upstream (merged 2025-09-02, PR #1617); the H2 store is
+                  # left in place on the volume as the rollback.
+                  #
+                  # The IP is deliberate: this pod runs with dnsPolicy None pointing at
+                  # 1.1.1.1, so it cannot resolve anything on the LAN by name.
+                  env:
+                      - name: DATABASE_TYPE
+                        value: POSTGRESQL
+                      - name: DATABASE_URL
+                        value: postgresql://192.168.0.29:5432/suwayomi
+                      - name: DATABASE_USERNAME
+                        value: suwayomi
+                      - name: DATABASE_PASSWORD
+                        valueFrom:
+                            secretKeyRef:
+                                name: suwayomi-db
+                                key: password
                   ports:
                       - containerPort: 4567
                         protocol: TCP
