@@ -44,6 +44,31 @@ spec:
                   value: "50"
                 - name: BIG_PROGRESS_PCT
                   value: "50"
+                # Third category: completed torrents left seeding-stopped.
+                # ShareLimitAction is deliberately "Stop" and not "Remove..."
+                # (a Remove would delete a 100%-complete torrent whose *arr
+                # import is still blocked or pending, e.g. a season pack with a
+                # numbering mismatch or an episode with a TBA title), so nothing
+                # ever reaps them. Reaped here only when no *arr still lists the
+                # hash in its queue, which means the import already happened or
+                # was abandoned.
+                - name: ARR_APIS
+                  # name=url pairs. Every *arr that can hold an unimported
+                  # download MUST be listed here, or its in-flight torrents look
+                  # unreferenced and get deleted. Lidarr is omitted because it is
+                  # scaled to 0; add it back (and wire a lidarr key into
+                  # arr-api-keys + the case statement below) if it ever returns.
+                  value: "sonarr=http://sonarr.piracy.svc.cluster.local:8989 radarr=http://radarr.piracy.svc.cluster.local:7878"
+                - name: SONARR_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: arr-api-keys
+                      key: sonarr
+                - name: RADARR_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: arr-api-keys
+                      key: radarr
                 # Live since 2026-05-16 (first run deleted 62 stale torrents).
                 - name: DRY_RUN
                   value: "false"
@@ -63,19 +88,50 @@ spec:
                   echo "$RESP" | grep -q "Ok." || { echo "[qbit-cleanup] auth FAILED: $RESP"; exit 1; }
                   curl -sf -b "$COOKIE" "${QBIT_URL}/api/v2/torrents/info" > /tmp/torrents.json
                   total=$(jq length /tmp/torrents.json)
+
+                  # Collect every downloadId the *arrs still have queued. Any
+                  # failure here aborts the run: deleting on an incomplete list
+                  # is exactly how an in-flight import loses its data.
+                  : > /tmp/queued.txt
+                  for pair in $ARR_APIS; do
+                    name=${pair%%=*}
+                    url=${pair#*=}
+                    case "$name" in
+                      sonarr) key=$SONARR_API_KEY ;;
+                      radarr) key=$RADARR_API_KEY ;;
+                      *) echo "[qbit-cleanup] no API key wired for '$name'"; exit 1 ;;
+                    esac
+                    if ! curl -sf -m 30 -H "X-Api-Key: $key" \
+                         "${url}/api/v3/queue?page=1&pageSize=1000&includeUnknownSeriesItems=true&includeUnknownMovieItems=true" \
+                         > /tmp/q-$name.json; then
+                      echo "[qbit-cleanup] ABORT: cannot read $name queue at $url"
+                      exit 1
+                    fi
+                    jq -r '.records[]?.downloadId // empty | ascii_downcase' /tmp/q-$name.json >> /tmp/queued.txt
+                    echo "[qbit-cleanup] $name queue: $(jq '.totalRecords' /tmp/q-$name.json) rows"
+                  done
+                  sort -u /tmp/queued.txt -o /tmp/queued.txt
+                  echo "[qbit-cleanup] hashes still queued in the *arrs: $(wc -l < /tmp/queued.txt)"
                   cutoff=$(( $(date +%s) - STALE_DAYS*86400 ))
                   bigbytes=$(( BIG_SIZE_GB * 1073741824 ))
-                  jq -r --argjson cutoff "$cutoff" --argjson bigbytes "$bigbytes" --argjson bigpct "$BIG_PROGRESS_PCT" '
-                    .[]
+                  jq -r --argjson cutoff "$cutoff" --argjson bigbytes "$bigbytes" --argjson bigpct "$BIG_PROGRESS_PCT" \
+                     --rawfile queued /tmp/queued.txt '
+                    ($queued | split("\n") | map(select(length > 0))) as $q
+                    | .[]
                     | select(
                         (.downloaded == 0 and .last_activity < $cutoff)
                         or
                         (.downloaded > 0 and .size > $bigbytes and (.progress * 100) < $bigpct and .last_activity < $cutoff)
+                        or
+                        (.progress == 1
+                         and (.state | test("^(stopped|paused|stalled)UP$"))
+                         and .last_activity < $cutoff
+                         and ((.hash | ascii_downcase) as $h | ($q | index($h)) == null))
                       )
                     | "\(.hash)\t\(((now - .added_on) / 86400 | floor))d\t\(.state)\t\(.name)"
                   ' /tmp/torrents.json > /tmp/dead.txt
                   count=$(wc -l < /tmp/dead.txt)
-                  echo "[qbit-cleanup] qbit-total=${total} candidates=${count} (last_activity older than ${STALE_DAYS}d AND [downloaded==0 OR (size>${BIG_SIZE_GB}G AND progress<${BIG_PROGRESS_PCT}%)])"
+                  echo "[qbit-cleanup] qbit-total=${total} candidates=${count} (last_activity older than ${STALE_DAYS}d AND [downloaded==0 OR (size>${BIG_SIZE_GB}G AND progress<${BIG_PROGRESS_PCT}%) OR (100% seeding-stopped AND not queued in any *arr)])"
                   if [ "$count" -eq 0 ]; then
                     echo "[qbit-cleanup] nothing to do"
                     exit 0
