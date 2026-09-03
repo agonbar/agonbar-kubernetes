@@ -13,9 +13,10 @@
 # provisioned by an explicit cert-manager Certificate instead of the ingress
 # annotation.
 #
-# Backend: selector-less Service + manual Endpoints → the herdr-web front-door
-# over the tailnet (currently work-vm-01 100.72.0.46; vm-00 is down — repoint to
-# 100.72.0.8 when it's back for fleet aggregation).
+# Backend: selector-less Service + manual Endpoints -> the herdr-web front-door
+# over the tailnet. work-vm-00 (100.72.0.8) is the aggregator and holds the
+# whole fleet; work-vm-01 only ever served its own view, and it is being emptied
+# to hand its Proxmox back to Redytel.
 apiVersion: v1
 kind: Service
 metadata:
@@ -35,7 +36,7 @@ metadata:
   namespace: lamg
 subsets:
   - addresses:
-      - ip: 100.72.0.46       # work-vm-01 (vm-00 front-door is DOWN; repoint to 100.72.0.8 when back)
+      - ip: 100.72.0.8        # work-vm-00, herdr-web.service on :8787
     ports:
       - name: http
         port: 8787
