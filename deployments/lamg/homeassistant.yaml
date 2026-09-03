@@ -21,7 +21,6 @@ spec:
     metadata:
       labels:
         app: homeassistant
-        app.vscode: "true"
     spec:
       initContainers:
         # /config is NFS since 2026-09-03, so the ext4-goes-read-only failure this
@@ -41,9 +40,23 @@ spec:
             - |
               set -e
               MP="/config"
+
+              # HA writes .ha_run.lock holding the PID it had inside its own
+              # container. On NFS that file outlives the container, and after a
+              # restart PID 71 is some unrelated process, so HA decides another
+              # instance is running and refuses to start -- for ever. Cost us
+              # ~50min of dead domotics on 2026-09-03. Recreate + replicas:1
+              # means a second pod cannot exist, so any lock here is stale.
+              clear_stale_lock() {
+                if [ -f "${MP}/.ha_run.lock" ]; then
+                  echo "[config-check] clearing stale lock: $(cat "${MP}/.ha_run.lock")"
+                  rm -f "${MP}/.ha_run.lock"
+                fi
+              }
               if touch "${MP}/.rw-test" 2>/dev/null; then
                 rm -f "${MP}/.rw-test"
                 echo "[config-check] ${MP} is writable."
+                clear_stale_lock
                 exit 0
               fi
 
@@ -52,6 +65,7 @@ spec:
               if touch "${MP}/.rw-test" 2>/dev/null; then
                 rm -f "${MP}/.rw-test"
                 echo "[config-check] remount,rw recovered ${MP}."
+                clear_stale_lock
                 exit 0
               fi
 
@@ -99,46 +113,10 @@ spec:
             requests:
               cpu: 5m
               memory: 30Mi
-        # Tag pinned explicitly because keel rewrites the image to
-        # ...:latest on every poll. Untagged here meant ArgoCD saw a permanent
-        # diff against a value keel would immediately put back -- the two would
-        # have fought each other forever once selfHeal came back on.
-        - image: ghcr.io/linuxserver/code-server:latest
-          name: vscode
-          env:
-            - name: PUID
-              value: '1000'
-            - name: PGID
-              value: '1000'
-            - name: TZ
-              value: 'Europe/Madrid'
-            - name: SUDO_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: lamg
-                  key: sudoPassword
-            - name: DEFAULT_WORKSPACE
-              value: '/config/workspace'
-          ports:
-            - containerPort: 8443
-              name: vscode
-              protocol: TCP
-          volumeMounts:
-            - name: vscode-config
-              mountPath: /config
-            - name: config
-              mountPath: /config/workspace
-          resources:
-            requests:
-              cpu: 5m
-              memory: 30Mi
       volumes:
         - name: config
           persistentVolumeClaim:
             claimName: homeassistant-config-nfs
-        - name: vscode-config
-          persistentVolumeClaim:
-            claimName: vscode-config-lan
       nodeSelector:
         svccontroller.k3s.cattle.io/lbpool: lamg
       # nas00 is a 2-core/3GB box that flaps NodeNotReady under load; its RWO

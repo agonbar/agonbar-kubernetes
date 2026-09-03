@@ -1,6 +1,77 @@
-# vscode container is now part of homeassistant deployment
-# This file only contains the Service and PVC
+# code-server for editing Home Assistant's config.
+#
+# Was a sidecar in the homeassistant pod until 2026-09-03. That pinned the
+# domotics to vscode-config-lan, an RWO iSCSI volume, so every stall of the
+# nas01 target took Home Assistant down with it -- even after HA's own config
+# had been moved to NFS precisely to escape that. Now it is a pod of its own:
+# /config/workspace is the same RWX NFS claim, which is what RWX is for.
+#
+# replicas: 0 while nas01 is offline; its own volume is still iSCSI on that
+# target. Scale back to 1 once nas01 is healthy and the volume has been fsck'd.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vscode
+  namespace: lamg
+  labels:
+    app.vscode: "true"
+spec:
+  strategy:
+    type: Recreate
+  replicas: 0
+  selector:
+    matchLabels:
+      app.vscode: "true"
+  template:
+    metadata:
+      labels:
+        app.vscode: "true"
+    spec:
+      containers:
+        # Tag pinned explicitly because keel rewrites the image to
+        # ...:latest on every poll. Untagged here meant ArgoCD saw a permanent
+        # diff against a value keel would immediately put back -- the two would
+        # have fought each other forever once selfHeal came back on.
+        - image: ghcr.io/linuxserver/code-server:latest
+          name: vscode
+          env:
+            - name: PUID
+              value: '1000'
+            - name: PGID
+              value: '1000'
+            - name: TZ
+              value: 'Europe/Madrid'
+            - name: SUDO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: lamg
+                  key: sudoPassword
+            - name: DEFAULT_WORKSPACE
+              value: '/config/workspace'
+          ports:
+            - containerPort: 8443
+              name: vscode
+              protocol: TCP
+          volumeMounts:
+            - name: vscode-config
+              mountPath: /config
+            - name: config
+              mountPath: /config/workspace
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: homeassistant-config-nfs
+        - name: vscode-config
+          persistentVolumeClaim:
+            claimName: vscode-config-lan
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
 
+---
 apiVersion: v1
 kind: Service
 metadata:
