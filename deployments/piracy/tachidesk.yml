@@ -6,11 +6,9 @@ metadata:
     labels:
         app: tachidesk # <--- change this to match label on the pod
 spec:
-
-    replicas: 0
     strategy:
         type: Recreate
-    replicas: 1
+    replicas: 0
     selector:
         matchLabels:
             app: tachidesk # <--- change this to match label on the pod
