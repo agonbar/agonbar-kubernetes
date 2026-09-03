@@ -6,6 +6,8 @@ metadata:
   labels:
     app: jellyfin # <--- change this to match label on the pod
 spec:
+
+  replicas: 0
   strategy:
     type: Recreate
   replicas: 1
