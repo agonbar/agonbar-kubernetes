@@ -43,6 +43,14 @@ spec:
                         mountPath: /downloads
                       - name: tv
                         mountPath: /tv
+                      # /tv is anime and /SERIES is everything else: two different NFS
+                      # shares. bazarr only had /tv, so every regular-series episode
+                      # sonarr reported under /SERIES was unreachable and never got
+                      # analysed -- 1847 of 11142 episodes had no ffprobe_cache, and the
+                      # log had been filling with "cannot be found for analysis" since
+                      # 27-Aug. Same two mounts sonarr has; no path mapping needed.
+                      - name: series
+                        mountPath: /SERIES
                       # Si también tienes películas (Radarr), deberías añadir ese volumen aquí
                   # startupProbe gates the other two so a slow boot is not mistaken
                   # for a dead app; /api/system/ping is served without auth.
@@ -82,6 +90,10 @@ spec:
                   nfs:
                       server: 192.168.0.29
                       path: /mnt/RAID/docker/media/tv
+                - name: series
+                  nfs:
+                      server: 192.168.0.29
+                      path: /mnt/RAID/docker/media/SERIES
                 - name: downloads
                   nfs:
                       server: 192.168.0.29
