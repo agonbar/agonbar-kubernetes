@@ -25,6 +25,23 @@ spec:
       nodeSelector:
         kubernetes.io/arch: amd64
         svccontroller.k3s.cattle.io/lbpool: lamg
+      # postgis is amd64-only, so on the lamg pool this can land on nas00 or
+      # nas01 and nothing else. nas00 has 1.2GB allocatable and already carries
+      # 372Mi of requests; on 2026-09-03 the kubelet evicted this pod there
+      # mid-migration (exit 137, "node was low on resource: memory") and rolled
+      # back a points backfill that had been running for seven minutes. With no
+      # resources block the scheduler saw the pod as free and kept re-picking
+      # nas00. Excluding it leaves only nas01, which does flap -- but Pending is
+      # a safe state for a Postgres and eviction mid-write is not.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: NotIn
+                    values:
+                      - nas00
       containers:
       - name: postgres
         image: postgis/postgis:17-3.5-alpine
@@ -55,6 +72,15 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 10
           failureThreshold: 5
+        # Measured 163Mi at boot before the eviction; the points backfill needs
+        # headroom on top. The request is what keeps the scheduler honest.
+        resources:
+          requests:
+            cpu: 100m
+            memory: 512Mi
+          limits:
+            cpu: "2"
+            memory: 1536Mi
       volumes:
       - name: dawarich-db-data
         persistentVolumeClaim:

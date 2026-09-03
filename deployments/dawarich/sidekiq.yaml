@@ -26,6 +26,13 @@ spec:
       - name: dawarich-sidekiq
         image: freikin/dawarich:latest
         command: ["bundle", "exec", "sidekiq"]
+        resources:
+          requests:
+            cpu: 100m
+            memory: 512Mi
+          limits:
+            cpu: "2"
+            memory: 1536Mi
         env:
         - name: RAILS_ENV
           value: "development"
