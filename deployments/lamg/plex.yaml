@@ -18,7 +18,7 @@ spec:
   # then, so it never reached the cluster -- Plex has been running the whole
   # week. orange-pi5 is at ~20% now and nas01 is back, so git matches reality
   # rather than the other way round.
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: plex

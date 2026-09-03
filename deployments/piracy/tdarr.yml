@@ -6,6 +6,8 @@ metadata:
     labels:
         app: tdarr
 spec:
+
+    replicas: 0
     strategy:
         type: Recreate
     replicas: 1

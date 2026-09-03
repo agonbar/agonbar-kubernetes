@@ -6,6 +6,8 @@ metadata:
     labels:
         app: emulerr
 spec:
+
+    replicas: 0
     strategy:
         type: Recreate
     replicas: 1
