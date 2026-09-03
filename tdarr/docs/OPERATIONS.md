@@ -149,16 +149,41 @@ batch pass below.
 
 ### Tier 2 — continuous VMAF acceptance pass (deployed 2026-05-26)
 
+> **Retired 2026-09-03.** The pilot is over: `/media/tv-pilot` is empty
+> and the newest audit file is from 2026-06-25, after which the pods
+> spent ten weeks logging `candidates available=0` every 30s while
+> reserving a CPU each on the encoder nodes. The Deployments and their
+> manifest are deleted; everything below still describes how the thing
+> works, because the code, the image and the audit trail all survive.
+>
+> To bring it back when a new batch starts landing in `/media/tv-pilot`:
+>
+> ```
+> git show 7f3b861:deployments/piracy/tdarr-validator.yml \
+>   > deployments/piracy/tdarr-validator.yml
+> ```
+>
+> That revision already has label placement (`workload=media` + pod
+> anti-affinity) instead of the hostname pins, so it does not need
+> editing. Set `replicas: 1` on the shards you want and check
+> `SHARD_COUNT` matches how many you start. Nothing else is needed: the
+> 4427 passed / 415 failed fingerprints are still on the NFS share and
+> `load_passed_index()` reads them back, so it resumes rather than
+> re-validating the library.
+>
+> The failure mode of leaving this retired is silent. A new pilot will
+> transcode unvalidated and nothing will say so.
+
 Tdarr keeps `folderToFolderConversionDeleteSource: false`
-permanently. The deletion decision is owned by `tdarr-validator`,
-which now runs as **three Deployments** (`tdarr-validator-{0,1,2}`),
-one pinned to each `workload=media` node:
+permanently. The deletion decision was owned by `tdarr-validator`,
+which ran as **three Deployments** (`tdarr-validator-{0,1,2}`),
+one per `workload=media` node:
 
 - Code: `tdarr/validator/validator.py`. Per file: 3 × 30s libvmaf
   windows at 10/50/90% of duration, pass = worst window ≥ 95
   (env `VMAF_MIN`). On pass + `DRY_RUN=false`, atomic
   `os.replace(out, src)` on the shared NFS mount.
-- Manifest: `deployments/piracy/tdarr-validator.yml`.
+- Manifest: deleted, see the restore command above.
 - Sharding: pod N processes files where
   `sha1(src) % SHARD_COUNT == SHARD_INDEX`. Disjoint sets, no
   coordinator. Each pod loops forever (`LOOP_SECONDS=30`),
