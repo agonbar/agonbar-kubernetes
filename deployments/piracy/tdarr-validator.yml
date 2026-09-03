@@ -30,11 +30,12 @@ metadata:
   namespace: piracy
   labels: {app: tdarr-validator, shard: "0"}
 spec:
-  # Scaled to 0: work-vm-00 (its pinned node) is offline / in use for other
-  # work. The sweep runs on 2 shards (validator-1 SHARD_INDEX=0, validator-2
-  # SHARD_INDEX=1, SHARD_COUNT=2) across work-vm-01/02 meanwhile. Restore to
-  # replicas=1 + SHARD_COUNT=3 on all shards (validator-1 idx=1, validator-2
-  # idx=2) when work-vm-00 returns.
+  # Scaled to 0. The sweep runs on 2 shards: validator-2 (idx 0) and
+  # validator-1 (idx 1), SHARD_COUNT=2. Both now live on the nodes that are
+  # staying; work-vm-01 is being emptied to hand its Proxmox back to Redytel.
+  # To go back to 3 shards, set replicas=1 here and SHARD_COUNT=3 on all three
+  # (validator-1 idx=1, validator-2 idx=2) on a node that is not work-vm-00,
+  # which already hosts validator-1.
   replicas: 0
   strategy: {type: Recreate}
   selector:
@@ -94,7 +95,7 @@ spec:
     metadata:
       labels: {app: tdarr-validator, shard: "1"}
     spec:
-      nodeSelector: {kubernetes.io/hostname: work-vm-01}
+      nodeSelector: {kubernetes.io/hostname: work-vm-00}
       tolerations:
         - {key: dedicated, operator: Equal, value: media, effect: NoSchedule}
       imagePullSecrets: [{name: ghcr-agonbar}]
@@ -144,7 +145,7 @@ spec:
     metadata:
       labels: {app: tdarr-validator, shard: "2"}
     spec:
-      nodeSelector: {kubernetes.io/hostname: work-vm-02}
+      nodeSelector: {kubernetes.io/hostname: kubernetes-10}
       tolerations:
         - {key: dedicated, operator: Equal, value: media, effect: NoSchedule}
       imagePullSecrets: [{name: ghcr-agonbar}]
