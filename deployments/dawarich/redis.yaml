@@ -26,6 +26,13 @@ spec:
       - name: redis
         image: redis:7.0-alpine
         command: ["redis-server"]
+        resources:
+          requests:
+            cpu: 10m
+            memory: 64Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
         securityContext:
           runAsUser: 950
         volumeMounts:
