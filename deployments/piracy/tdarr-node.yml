@@ -47,6 +47,13 @@ spec:
             enableServiceLinks: false
             nodeSelector:
                 workload: media
+                # Gated by the 02:00-04:00 window: the CronJobs in
+                # tdarr-window.yml add and remove this label on the
+                # workload=media nodes. Kept as a separate label on purpose --
+                # cruncharr and mokuro-ocr also select workload=media and must
+                # not be dragged into the window. ArgoCD never sees a diff
+                # because node labels do not live in git.
+                media-window: "open"
             tolerations:
                 - key: dedicated
                   operator: Equal
