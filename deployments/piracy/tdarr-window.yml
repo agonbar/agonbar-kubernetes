@@ -1,0 +1,112 @@
+# Encoding window for the Tdarr workers: 02:00-04:00 Europe/Madrid.
+#
+# tdarr-node is a DaemonSet, so there is no replica count to set to 0. Instead
+# the DaemonSet selects an extra node label, media-window=open, and these two
+# CronJobs add it at 02:00 and strip it at 04:00. Losing the label makes the
+# DaemonSet controller delete the pods; getting it back recreates them.
+#
+# Why a second label instead of toggling workload=media: cruncharr and
+# mokuro-ocr select workload=media too, and they are not part of this window.
+#
+# Why node labels instead of scaling something in git: nodes are not managed by
+# ArgoCD, so nothing here fights selfHeal. No ignoreDifferences needed.
+#
+# A transcode running at 04:00 is killed mid-file. Tdarr requeues it, and the
+# partial output lands in its cache, not in the library.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+    name: tdarr-window
+    namespace: piracy
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+    name: tdarr-window
+rules:
+    - apiGroups: [""]
+      resources: ["nodes"]
+      verbs: ["get", "list", "patch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+    name: tdarr-window
+roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: tdarr-window
+subjects:
+    - kind: ServiceAccount
+      name: tdarr-window
+      namespace: piracy
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+    name: tdarr-window-open
+    namespace: piracy
+spec:
+    schedule: "0 2 * * *"
+    timeZone: Europe/Madrid
+    concurrencyPolicy: Forbid
+    successfulJobsHistoryLimit: 1
+    failedJobsHistoryLimit: 3
+    jobTemplate:
+        spec:
+            backoffLimit: 2
+            template:
+                spec:
+                    restartPolicy: OnFailure
+                    serviceAccountName: tdarr-window
+                    containers:
+                        - name: open
+                          image: alpine/k8s:1.30.0
+                          command:
+                              - kubectl
+                              - label
+                              - nodes
+                              - -l
+                              - workload=media
+                              - media-window=open
+                              - --overwrite
+                          resources:
+                              requests: {cpu: 10m, memory: 32Mi}
+                              limits: {cpu: 200m, memory: 128Mi}
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+    name: tdarr-window-close
+    namespace: piracy
+spec:
+    schedule: "0 4 * * *"
+    timeZone: Europe/Madrid
+    concurrencyPolicy: Forbid
+    successfulJobsHistoryLimit: 1
+    failedJobsHistoryLimit: 3
+    jobTemplate:
+        spec:
+            backoffLimit: 2
+            template:
+                spec:
+                    restartPolicy: OnFailure
+                    serviceAccountName: tdarr-window
+                    containers:
+                        - name: close
+                          image: alpine/k8s:1.30.0
+                          # Trailing dash removes the label.
+                          command:
+                              - kubectl
+                              - label
+                              - nodes
+                              - -l
+                              - workload=media
+                              - media-window-
+                          resources:
+                              requests: {cpu: 10m, memory: 32Mi}
+                              limits: {cpu: 200m, memory: 128Mi}
