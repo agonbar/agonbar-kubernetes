@@ -7,7 +7,7 @@ metadata:
         app: anisub
 spec:
     strategy:
-        type: Recreate
+        type: RollingUpdate
     replicas: 1
     selector:
         matchLabels:
@@ -18,40 +18,6 @@ spec:
                 app: anisub
         spec:
             enableServiceLinks: false
-            initContainers:
-                - name: iscsi-fsck
-                  image: alpine:latest
-                  imagePullPolicy: IfNotPresent
-                  securityContext:
-                      privileged: true
-                  command:
-                      - /bin/sh
-                      - -c
-                      - |
-                        set -e
-                        MOUNTPOINT="/data"
-                        echo "[iscsi-fsck] Checking filesystem at ${MOUNTPOINT}..."
-                        if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
-                          rm -f "${MOUNTPOINT}/.rw-test"
-                          echo "[iscsi-fsck] Filesystem is writable. Nothing to do."
-                          exit 0
-                        fi
-                        echo "[iscsi-fsck] Filesystem is READ-ONLY."
-                        echo "[iscsi-fsck] Attempting a single safe remount,rw (no fsck)..."
-                        if mount -o remount,rw "${MOUNTPOINT}" 2>/dev/null && touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
-                          rm -f "${MOUNTPOINT}/.rw-test"
-                          echo "[iscsi-fsck] remount,rw succeeded — filesystem writable. Done."
-                          exit 0
-                        fi
-                        echo "[iscsi-fsck] STILL READ-ONLY. The RO state lives in the node-level CSI globalmount and cannot be repaired from inside the pod."
-                        echo "[iscsi-fsck] DO NOT run e2fsck on the mounted device — it corrupts the filesystem."
-                        echo "[iscsi-fsck] Recovery: scale this Deployment to 0, wait for the VolumeAttachment to detach, then scale back to 1 (forces a clean iSCSI re-attach that clears RO)."
-                        exit 1
-                  volumeMounts:
-                      - name: data
-                        mountPath: /data
-                      - name: host-proc-mounts
-                        mountPath: /host-proc-mounts
             containers:
                 - name: anisub
                   image: ghcr.io/agonbar/anisub:latest
@@ -78,8 +44,11 @@ spec:
                             secretKeyRef:
                                 name: anisub-secrets
                                 key: CRUNCHARR_API_KEY
-                      - name: DATA_DIR
-                        value: "/data"
+                      - name: DATABASE_URL
+                        valueFrom:
+                            secretKeyRef:
+                                name: anisub-db
+                                key: DATABASE_URL
                       - name: WEB_PORT
                         value: "8080"
                       - name: POLL_INTERVAL
@@ -122,9 +91,6 @@ spec:
                   ports:
                       - containerPort: 8080
                         protocol: TCP
-                  volumeMounts:
-                      - name: data
-                        mountPath: /data
                   resources:
                       requests:
                           memory: 64Mi
@@ -146,13 +112,6 @@ spec:
                           port: 8080
                       initialDelaySeconds: 5
                       periodSeconds: 10
-            volumes:
-                - name: data
-                  persistentVolumeClaim:
-                      claimName: anisub-data
-                - name: host-proc-mounts
-                  hostPath:
-                      path: /proc/1/mounts
             nodeSelector:
                 svccontroller.k3s.cattle.io/lbpool: lamg
 ---
