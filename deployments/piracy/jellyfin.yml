@@ -8,7 +8,7 @@ metadata:
 spec:
   strategy:
     type: Recreate
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app: jellyfin # <--- change this to match label on the pod
