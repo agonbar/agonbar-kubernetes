@@ -37,6 +37,45 @@ spec:
             - containerPort: 18083
               name: mqtt-dashboard
               protocol: TCP
+          # Nothing was watching the broker that the whole house depends on.
+          # The concrete bug this fixes: with RollingUpdate, one replica and no
+          # readiness gate, the Service started sending traffic the moment the
+          # new pod was Running, seconds before EMQX had bound 1883. Clients got
+          # ECONNREFUSED against a pod Kubernetes considered fine, and
+          # zigbee2mqtt exits on that rather than retrying ("MQTT failed to
+          # connect, exiting..."), which is how a broker restart turned into
+          # dead domotics and someone unplugging the Zigbee stick.
+          #
+          # /status on 18083 is EMQX's own check; it answers 200 "emqx is
+          # running" only once the node has actually started.
+          #
+          # Readiness is quick, because the point is to leave the Service the
+          # instant it stops serving. Liveness is slow (2 min) so a busy broker
+          # is never restarted for being briefly late. RollingUpdate is kept
+          # deliberately: with a readiness gate the old pod keeps serving until
+          # the new one is really up, which is the handoff we want. Recreate
+          # would guarantee a gap, and a gap is what kills z2m.
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: 18083
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /status
+              port: 18083
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 8
+          startupProbe:
+            httpGet:
+              path: /status
+              port: 18083
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 36
           resources:
             requests:
               cpu: 5m
