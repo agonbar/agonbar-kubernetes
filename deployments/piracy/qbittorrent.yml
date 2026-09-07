@@ -58,7 +58,7 @@ spec:
             containers:
                 - name: qbittorrent
                   image: linuxserver/qbittorrent:latest
-                  imagePullPolicy: IfNotPresent
+                  imagePullPolicy: Always
                   env:
                       - name: PGID
                         value: '950'

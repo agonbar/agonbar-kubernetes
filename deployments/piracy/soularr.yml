@@ -24,7 +24,7 @@ spec:
             containers:
                 - name: soularr
                   image: mrusse08/soularr:latest
-                  imagePullPolicy: IfNotPresent
+                  imagePullPolicy: Always
                   env:
                       - name: TZ
                         value: Europe/Madrid

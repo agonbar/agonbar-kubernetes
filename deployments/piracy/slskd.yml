@@ -63,7 +63,7 @@ spec:
             containers:
                 - name: slskd
                   image: slskd/slskd:latest
-                  imagePullPolicy: IfNotPresent
+                  imagePullPolicy: Always
                   env:
                       - name: SLSKD_REMOTE_CONFIGURATION
                         value: 'true'

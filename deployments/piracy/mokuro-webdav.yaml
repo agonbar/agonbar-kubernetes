@@ -59,7 +59,7 @@ spec:
       containers:
         - name: webdav
           image: ghcr.io/hacdias/webdav:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           args:
             - -c
             - /config/config.yml
