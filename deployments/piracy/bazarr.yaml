@@ -25,7 +25,12 @@ spec:
             containers:
                 - name: bazarr
                   image: linuxserver/bazarr:latest
-                  imagePullPolicy: IfNotPresent
+                  # Always, not IfNotPresent: with a floating tag each node
+                  # caches whatever :latest was when it first pulled, so a
+                  # reschedule can land the app on a months-old build. That is
+                  # what broke it — the Postgres schema was stamped with an
+                  # Alembic revision the stale image had never heard of.
+                  imagePullPolicy: Always
                   env:
                       - name: PGID
                         value: '1000'
