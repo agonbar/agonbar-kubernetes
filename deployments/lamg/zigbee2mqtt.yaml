@@ -35,6 +35,43 @@ spec:
             - containerPort: 8080
               name: zigbee2mqtt
               protocol: TCP
+          # Liveness measured as "is it talking to the broker", not "is the
+          # process alive". The failure this catches: on 2026-09-07 z2m lost
+          # MQTT, logged ECONNREFUSED for five seconds and then went silent for
+          # twelve minutes while the pod stayed 1/1 Running with 0 restarts. It
+          # keeps reading the Zigbee radio perfectly and publishes none of it,
+          # so the house looks like a dead dongle. That is why people were
+          # unplugging the USB stick: it is the only way anyone had to restart
+          # this pod.
+          #
+          # /proc/net/tcp instead of a health endpoint because 2.14.1 has none
+          # (/health, /api/health and /healthcheck all 404). 075B is 1883 and
+          # state 01 is ESTABLISHED. mqtt.keepalive is 60 in configuration.yaml,
+          # so a connection that has really died stops being ESTABLISHED within
+          # about 90s rather than lingering half-open.
+          #
+          # Thresholds are deliberately slow: 3 min without a connection before
+          # a restart, so a broker bounce or a blip does not bounce the
+          # domotics. The startup probe gives the adapter 5 min to come up
+          # before liveness can fire at all.
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - awk '$3 ~ /:075B$/ && $4 == "01" {f=1} END {exit !f}' /proc/net/tcp
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 6
+          startupProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - awk '$3 ~ /:075B$/ && $4 == "01" {f=1} END {exit !f}' /proc/net/tcp
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
           resources:
             requests:
               cpu: 5m
