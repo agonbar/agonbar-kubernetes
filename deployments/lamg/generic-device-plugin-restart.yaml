@@ -38,6 +38,26 @@ metadata:
   name: generic-device-plugin-restart
   namespace: kube-system
 spec:
+  # SUSPENDED 2026-09-08 as an experiment. This was added on 2026-05-26 for a
+  # failure nobody re-tested since, and by now it may be papering over nothing:
+  # the image is :latest, so the plugin has been updating itself for three
+  # months and the upstream bug may well be gone.
+  #
+  # Note it does NOT cover the same ground as the probes added in 310357b and
+  # 35834e0. Those catch a live pod that has stopped talking to MQTT. This one
+  # was for a pod that never gets admitted at all
+  # (UnexpectedAdmissionError), which no probe can help with because the
+  # container never starts.
+  #
+  # What to watch: a zigbee2mqtt pod stuck in UnexpectedAdmissionError, or
+  # Pending with "Insufficient devices/sonoffzigbeedongle" while the dongle is
+  # physically plugged in and healthy.
+  #   kubectl -n lamg get pods -l app=zigbee2mqtt
+  #   kubectl get events -A | grep -i unexpectedadmission
+  #
+  # To bring it back, set this to false. Do not delete the block; if the
+  # problem returns we want the history, not a rediscovery.
+  suspend: true
   schedule: "0 * * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 1
