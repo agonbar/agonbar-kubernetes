@@ -98,20 +98,28 @@ spec:
                       limits:
                           memory: 256Mi
                           cpu: 250m
+                  # Liveness must not touch Postgres: the database is on nas02,
+                  # so a LAN blip would restart a perfectly healthy process,
+                  # and a restart cannot fix a network problem.
                   livenessProbe:
                       httpGet:
-                          path: /api/status
+                          path: /healthz
                           port: 8080
                       initialDelaySeconds: 10
                       periodSeconds: 30
                       timeoutSeconds: 5
                       failureThreshold: 3
+                  # Readiness does check the database — serving the dashboard
+                  # without it is pointless. timeoutSeconds was defaulting to
+                  # 1s, too tight for a round trip to nas02.
                   readinessProbe:
                       httpGet:
                           path: /api/status
                           port: 8080
                       initialDelaySeconds: 5
                       periodSeconds: 10
+                      timeoutSeconds: 5
+                      failureThreshold: 3
             nodeSelector:
                 svccontroller.k3s.cattle.io/lbpool: lamg
 ---
