@@ -54,7 +54,7 @@ spec:
             containers:
                 - name: prowlarr
                   image: linuxserver/prowlarr:nightly
-                  imagePullPolicy: IfNotPresent
+                  imagePullPolicy: Always
                   env:
                       - name: PGID
                         value: "950"

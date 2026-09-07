@@ -54,7 +54,7 @@ spec:
             containers:
                 - name: sonarr
                   image: linuxserver/sonarr:latest
-                  imagePullPolicy: IfNotPresent
+                  imagePullPolicy: Always
                   env:
                       - name: PGID
                         value: '950'
