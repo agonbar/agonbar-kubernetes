@@ -54,7 +54,7 @@ spec:
             containers:
                 - name: radarr
                   image: linuxserver/radarr:latest
-                  imagePullPolicy: IfNotPresent
+                  imagePullPolicy: Always
                   env:
                       - name: PGID
                         value: '950'

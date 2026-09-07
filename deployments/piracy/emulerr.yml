@@ -54,7 +54,7 @@ spec:
             containers:
                 - name: emulerr
                   image: isc30/emulerr:latest
-                  imagePullPolicy: IfNotPresent
+                  imagePullPolicy: Always
                   env:
                       - name: PGID
                         value: '950'

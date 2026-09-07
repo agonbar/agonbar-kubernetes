@@ -19,7 +19,7 @@ spec:
             containers:
                 - name: dhcp
                   image: networkboot/dhcpd
-                  imagePullPolicy: IfNotPresent
+                  imagePullPolicy: Always
                   ports:
                       - containerPort: 67
                         protocol: UDP

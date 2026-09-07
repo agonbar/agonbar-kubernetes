@@ -55,7 +55,7 @@ spec:
             containers:
                 - name: houndarr
                   image: ghcr.io/av1155/houndarr:latest
-                  imagePullPolicy: IfNotPresent
+                  imagePullPolicy: Always
                   env:
                       - name: PGID
                         value: '950'
