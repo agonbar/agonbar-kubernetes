@@ -1,0 +1,247 @@
+# RomM — ROM library manager for the EmuDeck collection on nas02.
+#
+# Scope of this first deployment: the EmuDeck library only
+# (/mnt/RAID/docker/syncthing/config/Emudeck, 189 platform folders under roms/).
+# The second collection in /mnt/RAID/adrian/_ADRIAN/Juegos is NOT here: that path
+# has no NFS export, and exporting the whole home would hand the cluster a folder
+# full of contracts and scanned IDs. Those ROMs get moved, then added as a
+# second library source.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: romm
+  namespace: piracy
+  labels:
+    app: romm
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: romm
+  template:
+    metadata:
+      labels:
+        app: romm
+    spec:
+      containers:
+        - name: romm
+          # Pinned for GitOps reproducibility. Bumping runs alembic migrations on
+          # boot, so read the release notes before moving it.
+          image: rommapp/romm:5.2.0
+          imagePullPolicy: IfNotPresent
+          env:
+            # Postgres on the same nas02 PG17 the Servarr apps, Suwayomi and
+            # anisub already use. RomM ships MariaDB in its example compose, but
+            # config_manager.py accepts "postgresql" and maps it to psycopg.
+            - name: ROMM_DB_DRIVER
+              value: postgresql
+            - name: DB_HOST
+              value: "192.168.0.29"
+            # Required. DB_PORT defaults to 3306 (config/__init__.py), so leaving
+            # it out silently points Postgres traffic at the MariaDB port.
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: romm
+            - name: DB_USER
+              value: romm
+            - name: DB_PASSWD
+              valueFrom:
+                secretKeyRef:
+                  name: romm
+                  key: db-password
+            - name: ROMM_AUTH_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: romm
+                  key: auth-secret-key
+            # Kept at 1 on purpose. base_handler.py builds the engine with
+            # pool_pre_ping but no pool_size, so each worker takes SQLAlchemy's
+            # default 5 + 10 overflow. nas02 runs max_connections=100 shared
+            # across 8 apps and already fell over once on 2026-09-03 when the
+            # pool ran dry. One worker caps RomM's share at 15.
+            - name: WEB_SERVER_CONCURRENCY
+              value: "1"
+            # The library lives on NFS and holds .7z archives, which upstream
+            # reports as slow to hash. Two workers, raise it once a full scan has
+            # been timed.
+            - name: SCAN_WORKERS
+              value: "2"
+            # Hash matching against No-Intro/Redump. This is what identifies the
+            # library at all: 98% of these filenames carry no region tag and 100%
+            # carry no language tag, so the filename tells RomM almost nothing.
+            - name: HASHEOUS_API_ENABLED
+              value: "true"
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          volumeMounts:
+            # Read-only on purpose. This path is inside Syncthing's config
+            # directory and Syncthing owns it; RomM writes to /romm/library when
+            # renaming or uploading, and two writers on one tree is how the
+            # sync-conflict files in Emudeck/saves got there. Move the library
+            # out of the Syncthing config dir before making this writable.
+            - name: library
+              mountPath: /romm/library
+              readOnly: true
+            - name: data
+              mountPath: /romm/resources
+              subPath: resources
+            - name: data
+              mountPath: /romm/assets
+              subPath: assets
+            - name: config
+              mountPath: /romm/config
+            # Valkey runs inside the image; the example compose gives it a
+            # volume. It is a task cache, so an interrupted scan is the worst an
+            # empty dir costs.
+            - name: redis-data
+              mountPath: /redis-data
+          startupProbe:
+            httpGet:
+              path: /api/heartbeat
+              port: 8080
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /api/heartbeat
+              port: 8080
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/heartbeat
+              port: 8080
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: 512Mi
+              cpu: 200m
+            limits:
+              memory: 2Gi
+              cpu: "2"
+      volumes:
+        - name: library
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/syncthing/config/Emudeck
+            readOnly: true
+        - name: data
+          persistentVolumeClaim:
+            claimName: romm-data
+        - name: config
+          configMap:
+            name: romm-config
+        - name: redis-data
+          emptyDir: {}
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: romm-data
+  namespace: piracy
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-iscsi-ssd-lan
+  resources:
+    requests:
+      storage: 20Gi
+
+---
+# config.yml lives here rather than on the volume so the platform mapping is
+# reviewable in git. Folder names in the library are matched case-sensitively.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: romm-config
+  namespace: piracy
+data:
+  config.yml: |
+    exclude:
+      platforms:
+        # EmuDeck keeps tooling next to the consoles under roms/.
+        - emulators
+        - tools
+        - scripts
+        - desktop
+        - cloud
+      roms:
+        single_file:
+          extensions:
+            - txt
+            - xml
+            - cfg
+            - dat
+          names:
+            - '._*'
+            - '*.sync-conflict-*'
+
+    scan:
+      priority:
+        # Spain first. Default is ["us","wor","ss","eu","jp"], which picks the
+        # US release of everything. prefer_config makes this win over the
+        # filename tags, which is what we want while the filenames carry no
+        # region at all.
+        region:
+          - sp
+          - eu
+          - wor
+          - us
+          - jp
+        region_mode: prefer_config
+        language:
+          - es
+          - en
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: romm
+  namespace: piracy
+spec:
+  type: NodePort
+  selector:
+    app: romm
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+      name: romm
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: romm-https
+  namespace: piracy
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: romm.${BASE_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: romm
+                port:
+                  number: 8080
+  tls:
+    - secretName: romm.${BASE_DOMAIN}
+      hosts:
+        - romm.${BASE_DOMAIN}
