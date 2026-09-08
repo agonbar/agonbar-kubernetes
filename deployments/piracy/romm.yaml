@@ -183,6 +183,17 @@ data:
         - scripts
         - desktop
         - cloud
+        # Emulator installations, not games. roms/wiiu is a Cemu tree (236 .ini
+        # files, mlc01, graphicPacks), roms/model2 is the Model 2 emulator (136
+        # .lua, EMULATOR.INI) and roms/xbox360 is Xenia. Each has an inner
+        # roms/ holding nothing but .txt files. Between them they account for
+        # 521 of the 601 files the setup wizard counted as games.
+        - wiiu
+        - model2
+        - xbox360
+        # Launcher shims: Bottles.sh, Flatseal.sh, Heroic-Games-Launcher.sh.
+        - generic-applications
+        - remoteplay
       roms:
         single_file:
           extensions:
