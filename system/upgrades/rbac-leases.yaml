@@ -1,0 +1,34 @@
+# The upstream chart's Role for the system-upgrade SA grants only batch/jobs and
+# secrets. system-upgrade-controller v0.20.1 does leader election, so without
+# leases it logs, once per second:
+#
+#   leases.coordination.k8s.io "system-upgrade-controller" is forbidden:
+#   User "system:serviceaccount:system-upgrade:system-upgrade" cannot get
+#   resource "leases" in API group "coordination.k8s.io"
+#
+# Kept in a separate Role rather than patching the upstream one, because the
+# ovh-system-upgrade-controller ArgoCD app owns that object with selfHeal and
+# would revert an edit to it. This file is applied by hand along with plan.yaml.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: system-upgrade-leases
+  namespace: system-upgrade
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: system-upgrade-leases
+  namespace: system-upgrade
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: system-upgrade-leases
+subjects:
+  - kind: ServiceAccount
+    name: system-upgrade
+    namespace: system-upgrade
