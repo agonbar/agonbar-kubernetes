@@ -43,6 +43,9 @@ spec:
               mountPath: /config
             - name: data
               mountPath: /data
+            - name: media
+              mountPath: /media
+              readOnly: true
           resources:
             requests:
               cpu: 5m
@@ -56,6 +59,11 @@ spec:
           nfs:
               server: 192.168.0.29
               path: /mnt/RAID/docker/syncthing/data
+        - name: media
+          nfs:
+              server: 192.168.0.29
+              path: /mnt/RAID/docker/media
+              readOnly: true
       nodeSelector:
         svccontroller.k3s.cattle.io/lbpool: lamg
 
