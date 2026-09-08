@@ -25,6 +25,13 @@ spec:
       labels:
         app: romm
     spec:
+      # Kubernetes injects docker-link-style variables for every Service in the
+      # namespace, and the Service here is called `romm`, so ROMM_PORT arrives as
+      # "tcp://10.43.x.x:8080". The entrypoint does
+      # `export ROMM_PORT=${ROMM_PORT:-8080}` and feeds it to nginx's listen
+      # directive, which then refuses to start with "invalid host". Nothing here
+      # reads the injected variables.
+      enableServiceLinks: false
       containers:
         - name: romm
           # Pinned for GitOps reproducibility. Bumping runs alembic migrations on
