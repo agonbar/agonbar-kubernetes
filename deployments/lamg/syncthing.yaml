@@ -35,6 +35,9 @@ spec:
             - containerPort: 22000
               name: syncthing-2
               protocol: TCP
+            - containerPort: 22000
+              name: syncthing-2-quic
+              protocol: UDP
             - containerPort: 8384
               name: syncthing-3
               protocol: TCP
@@ -90,5 +93,30 @@ spec:
       protocol: TCP
       port: 8384
       targetPort: 8384
+  selector:
+    app: syncthing
+
+---
+# Direct public-IP exposure on ovh02 for the sync protocol only (not the GUI).
+# ovh02 isn't in the lamg lbpool, so externalIPs is used instead of a LoadBalancer
+# pool to reach its public address without adding ovh02 to every lamg-pool service.
+apiVersion: v1
+kind: Service
+metadata:
+  name: syncthing-public
+  namespace: lamg
+spec:
+  type: ClusterIP
+  externalIPs:
+    - 80.241.214.25
+  ports:
+    - name: syncthing-tcp
+      protocol: TCP
+      port: 22000
+      targetPort: 22000
+    - name: syncthing-quic
+      protocol: UDP
+      port: 22000
+      targetPort: 22000
   selector:
     app: syncthing
