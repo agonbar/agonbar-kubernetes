@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: satisfactory
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: satisfactory
+  namespace: games
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: satisfactory
+  template:
+    metadata:
+      labels:
+        app: satisfactory
+    spec:
+      containers:
+        - image: wolveix/satisfactory-server:latest
+          name: satisfactory
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: MAXPLAYERS
+              value: "16"
+          ports:
+            - containerPort: 7777
+              name: gameport-tcp
+              protocol: TCP
+            - containerPort: 7777
+              name: gameport-udp
+              protocol: UDP
+            - containerPort: 8888
+              name: apiport
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /config
+              name: satisfactory
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+            limits:
+              cpu: "4"
+              memory: 8Gi
+      volumes:
+        - name: satisfactory
+          persistentVolumeClaim:
+            claimName: satisfactory-data
+      nodeSelector:
+        kubernetes.io/arch: amd64
+        kubernetes.io/hostname: ovh02
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: satisfactory
+  namespace: games
+spec:
+  type: LoadBalancer
+
+  selector:
+    app: satisfactory
+
+  ports:
+    - port: 7777
+      targetPort: 7777
+      name: gameport-tcp
+      protocol: TCP
+    - port: 7777
+      targetPort: 7777
+      name: gameport-udp
+      protocol: UDP
+    - port: 8888
+      targetPort: 8888
+      name: apiport
+      protocol: TCP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: satisfactory-data
+  namespace: games
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 10Gi
