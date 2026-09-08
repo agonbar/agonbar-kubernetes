@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="agonbar-kubernetes">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3b7bef"/>
+      <stop offset="1" stop-color="#2456c6"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="52" fill="url(#bg)"/>
+  <!-- three-site mesh: one control-plane node (top) + two house workers (bottom) -->
+  <g stroke="#ffffff" stroke-width="10" stroke-linecap="round" opacity="0.9">
+    <line x1="128" y1="80" x2="76" y2="176"/>
+    <line x1="128" y1="80" x2="180" y2="176"/>
+    <line x1="76" y1="176" x2="180" y2="176"/>
+  </g>
+  <g fill="#ffffff">
+    <!-- control plane (VPS) -->
+    <circle cx="128" cy="80" r="26"/>
+    <!-- lamg house worker -->
+    <circle cx="76" cy="176" r="22"/>
+    <!-- aya house worker -->
+    <circle cx="180" cy="176" r="22"/>
+  </g>
+  <!-- k3s "3" cutout hint inside the control-plane node -->
+  <circle cx="128" cy="80" r="11" fill="#2456c6"/>
+</svg>
