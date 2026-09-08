@@ -10,6 +10,13 @@
 # The private key never leaves this machine except inside that kubeconfig.
 set -euo pipefail
 
+# NixOS: openssl isn't always on PATH. Re-exec inside a nix-shell that provides
+# it (kubectl/python3/base64 stay on PATH). No-op on systems that have openssl.
+if ! command -v openssl >/dev/null 2>&1; then
+  command -v nix-shell >/dev/null 2>&1 && exec nix-shell -p openssl --run "bash '$0' $*"
+  echo "!! openssl not found and no nix-shell to provide it"; exit 1
+fi
+
 USER="tokkenno"
 GROUP="tenant-tokkenno"
 NS="tokkenno"
