@@ -26,3 +26,13 @@ kubeconfig
 # Ad-hoc tooling / scratch directories
 deployments/piracy/anime_sub_upgrade/
 .sisyphus/
+
+# Syncthing conflict copies. This repo lives in a synced directory, so a
+# concurrent edit leaves e.g. radarr.sync-conflict-20260903-104530-EZFUC2T.yml
+# next to radarr.yml. They are stale snapshots and must never be committed:
+# ArgoCD would apply them as a second copy of the resource, and kubeconform
+# would validate them as if they were real manifests.
+*.sync-conflict-*
+
+# Playwright MCP session scratch (console logs, page snapshots, downloads)
+.playwright-mcp/
