@@ -13,7 +13,9 @@
 # the device by mounting the PVC in a privileged pod, so if the filesystem is far
 # enough gone that the kubelet reports `can't read superblock`, the repair pod
 # never leaves ContainerCreating and this script hangs waiting for it. Hit that
-# on lamg/vscode-config 2026-09-02. Fall back to attaching the LUN by hand:
+# on lamg/vscode-config 2026-09-02. scripts/iscsi-pvc-fsck.sh automates that
+# case: it drains the workload, lets the CSI detach, then re-attaches the LUN
+# over iSCSI just for the fsck. Or do the same by hand:
 #
 #   IQN=$(kubectl get pv <pv> -o jsonpath='{.spec.csi.volumeAttributes.iqn}')
 #   PORTAL=$(kubectl get pv <pv> -o jsonpath='{.spec.csi.volumeAttributes.portal}')
