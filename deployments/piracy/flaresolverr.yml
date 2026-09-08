@@ -31,22 +31,28 @@ spec:
                   ports:
                       - containerPort: 8191
                         protocol: TCP
+                  # FlareSolverr answers /health from the same single-threaded server
+                  # that drives the browser, so a queued Cloudflare challenge makes
+                  # the probe time out on a process that is healthy, just busy.
+                  # Measured 2026-09-08 on orange-pi5: 23s median per challenge,
+                  # 98.6s worst case. The old 5s x 3 window (~45s) killed it
+                  # mid-burst and took every indexer behind the proxy down with it.
                   livenessProbe:
                       httpGet:
                           path: /health
                           port: 8191
                       initialDelaySeconds: 30
-                      periodSeconds: 15
-                      timeoutSeconds: 5
-                      failureThreshold: 3
+                      periodSeconds: 30
+                      timeoutSeconds: 30
+                      failureThreshold: 6
                   readinessProbe:
                       httpGet:
                           path: /health
                           port: 8191
                       initialDelaySeconds: 15
-                      periodSeconds: 10
-                      timeoutSeconds: 5
-                      failureThreshold: 3
+                      periodSeconds: 30
+                      timeoutSeconds: 30
+                      failureThreshold: 6
                   resources:
                       requests:
                           memory: 128Mi
