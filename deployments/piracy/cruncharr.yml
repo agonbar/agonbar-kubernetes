@@ -17,6 +17,45 @@ spec:
       labels:
         app: cruncharr
     spec:
+      initContainers:
+        # The config PVC is ext4 over iSCSI. When that filesystem drops to read-only the
+        # app keeps running and fails silently: SQLite writes error, the state layer
+        # swallows it, and Crunchyroll tokens stop persisting. That ran unnoticed for four
+        # days from 2026-09-04. Refuse to start instead, so the failure is visible at once.
+        - name: iscsi-fsck
+          image: alpine:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              MOUNTPOINT="/data/config"
+              echo "[iscsi-fsck] Checking filesystem at ${MOUNTPOINT}..."
+              if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                rm -f "${MOUNTPOINT}/.rw-test"
+                echo "[iscsi-fsck] Filesystem is writable. Nothing to do."
+                exit 0
+              fi
+              echo "[iscsi-fsck] Filesystem is READ-ONLY."
+              echo "[iscsi-fsck] Attempting a single safe remount,rw (no fsck)..."
+              if mount -o remount,rw "${MOUNTPOINT}" 2>/dev/null && touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                rm -f "${MOUNTPOINT}/.rw-test"
+                echo "[iscsi-fsck] remount,rw succeeded. Filesystem writable. Done."
+                exit 0
+              fi
+              echo "[iscsi-fsck] STILL READ-ONLY and not repairable from inside the pod."
+              echo "[iscsi-fsck] DO NOT run e2fsck on the mounted device: it corrupts the filesystem."
+              echo "[iscsi-fsck] Recovery: suspend the ArgoCD app, scale this Deployment to 0, wait for"
+              echo "[iscsi-fsck] the iSCSI session to log out, then on the node log back into the target"
+              echo "[iscsi-fsck] and run 'fsck.ext4 -fy' on the DETACHED device before scaling back to 1."
+              echo "[iscsi-fsck] A plain scale 0/1 does NOT clear on-disk ext4 metadata corruption."
+              exit 1
+          volumeMounts:
+            - name: config
+              mountPath: /data/config
       containers:
         - name: cruncharr
           image: ghcr.io/agonbar/cruncharr:latest
