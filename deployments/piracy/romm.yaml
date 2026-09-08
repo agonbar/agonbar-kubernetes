@@ -186,8 +186,10 @@ data:
         # Emulator installations, not games. roms/wiiu is a Cemu tree (236 .ini
         # files, mlc01, graphicPacks), roms/model2 is the Model 2 emulator (136
         # .lua, EMULATOR.INI) and roms/xbox360 is Xenia. Each has an inner
-        # roms/ holding nothing but .txt files. Between them they account for
-        # 521 of the 601 files the setup wizard counted as games.
+        # roms/ holding nothing but .txt files. Excluding the five below took
+        # the wizard from 184 platforms / 601 games to 179 / 560: RomM counts a
+        # multi-file directory as one game, so Cemu's 298 files were never 298
+        # entries.
         - wiiu
         - model2
         - xbox360
