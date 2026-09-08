@@ -81,6 +81,41 @@ spec:
             # carry no language tag, so the filename tells RomM almost nothing.
             - name: HASHEOUS_API_ENABLED
               value: "true"
+            # Metadata providers. optional: true so the pod still starts before
+            # the keys exist; RomM reads an unset variable as "provider off",
+            # which is the state the heartbeat reports today. Sealed by
+            # scripts/wizard-romm-metadata-keys.sh, which adds them to the same
+            # piracy/romm SealedSecret that already holds the database password.
+            #
+            # IGDB is the one that matters: without it there are no covers, and
+            # the RomM Playnite plugin refuses to run at all.
+            - name: IGDB_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: romm
+                  key: igdb-client-id
+                  optional: true
+            - name: IGDB_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: romm
+                  key: igdb-client-secret
+                  optional: true
+            # ScreenScraper ships dev credentials inside the image, so this only
+            # raises the rate limit and unlocks the Spanish regional media that
+            # scan.priority.region is set up to prefer.
+            - name: SCREENSCRAPER_USER
+              valueFrom:
+                secretKeyRef:
+                  name: romm
+                  key: screenscraper-user
+                  optional: true
+            - name: SCREENSCRAPER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: romm
+                  key: screenscraper-password
+                  optional: true
           ports:
             - containerPort: 8080
               protocol: TCP
