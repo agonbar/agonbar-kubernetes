@@ -44,6 +44,7 @@ jobs:
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
             -ignore-filename-pattern 'anime_sub_upgrade/' \
             -ignore-filename-pattern '\.claude/' \
+            -ignore-filename-pattern 'system/nodes/' \
             -ignore-filename-pattern 'values\.yaml$' \
             -ignore-filename-pattern 'argocd-repo-server-cmp-sidecar-patch\.yaml$' \
             deployments/ system/
