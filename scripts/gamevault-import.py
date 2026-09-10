@@ -300,9 +300,15 @@ def read_map(path):
 
 
 def sizes_at(root, names):
-    """Size of each name under root, missing ones absent from the dict."""
+    """Size of each name under root, missing ones absent from the dict.
+
+    Guarantees the pod itself, because copy/verify/prune reach the filesystem
+    only through here. Leaving that to the caller meant they worked only when
+    an earlier `audit` had happened to leave a pod behind.
+    """
     if not names:
         return {}
+    ensure_pod()
     # Individual stats are allowed to fail (a file legitimately may not be
     # there yet), so the sentinel is what distinguishes "absent" from "the pod
     # never ran this". Without it a dead pod looks like an empty directory.
