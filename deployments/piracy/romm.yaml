@@ -158,9 +158,6 @@ spec:
             # uploading here cannot collide with Syncthing.
             - name: library
               mountPath: /romm/library
-            - name: emudeck-bios
-              mountPath: /romm/library/bios
-              readOnly: true
             - name: data
               mountPath: /romm/resources
               subPath: resources
@@ -207,11 +204,6 @@ spec:
           nfs:
             server: 192.168.0.29
             path: /mnt/RAID/docker/romm-library
-        - name: emudeck-bios
-          nfs:
-            server: 192.168.0.29
-            path: /mnt/RAID/docker/syncthing/config/Emudeck/bios
-            readOnly: true
         - name: data
           persistentVolumeClaim:
             claimName: romm-data
