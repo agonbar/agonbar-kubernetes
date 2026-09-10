@@ -36,3 +36,4 @@ deployments/piracy/anime_sub_upgrade/
 
 # Playwright MCP session scratch (console logs, page snapshots, downloads)
 .playwright-mcp/
+__pycache__/
