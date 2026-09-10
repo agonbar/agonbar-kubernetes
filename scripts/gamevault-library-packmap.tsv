@@ -32,7 +32,14 @@ ESDL.ERDR	The Lord of the Rings The Return of the King (2003).zip
 
 # The .mdf here needs packing for a different reason than fable's: it is not
 # a format GameVault can serve at all. Copied bare it indexes as nothing.
-ESDLA RDRB	The Lord of the Rings The Battle for Middle-earth II [Rise of the Witch-king] (2006).zip
+#
+# This one stays without cover art, and that is IGDB's limit rather than a
+# naming problem: searching IGDB for the expansion returns nothing at all,
+# while "Battle for Middle-earth II" returns only the base game. Naming it
+# after the base game would give it a cover by filing it as a second version
+# of a game it is not. Edit the metadata by hand in the UI if you want art —
+# user edits always win over the provider.
+ESDLA RDRB	The Lord of the Rings The Rise of the Witch-king (2006).zip
 
 # --- Installed games -------------------------------------------------------
 Beat.Saber	Beat Saber (2018).zip
