@@ -183,7 +183,7 @@ finish() {
 # STAGES
 # ──────────────────────────────────────────────────────────────────────────
 
-TOTAL_STAGES=5
+TOTAL_STAGES=6
 
 CTX="lamg"
 NS="piracy"
@@ -233,6 +233,14 @@ stage "IGDB: crear la aplicación en Twitch"
 say "IGDB es de Twitch, así que las claves salen de la consola de desarrollador"
 say "de Twitch. Necesitas 2FA activo en la cuenta o no te deja registrar apps."
 printf '\n'
+note "Es el proveedor que más falta hace: sin él no hay fichas y el plugin de"
+note "Playnite ni arranca. Pero puedes saltarlo y volver a lanzar esto luego:"
+note "el wizard añade solo las claves que le des y respeta las que ya estén."
+printf '\n'
+IGDB_CLIENT_ID=""; IGDB_CLIENT_SECRET=""
+if ! confirm "¿Configuramos IGDB?"; then
+  note "saltado"
+else
 open_url "https://dev.twitch.tv/console/apps/create"
 printf '\n'
 step "Name: algo reconocible, por ejemplo romm-lamg. Tiene que ser único en"
@@ -253,6 +261,7 @@ step "Dale a «New Secret» y confirma. El secreto se enseña UNA vez."
 warn "Si cierras la pantalla sin copiarlo, no se recupera: hay que generar otro."
 ask_secret IGDB_CLIENT_SECRET "Pega el Client Secret (no se verá al escribir):"
 [[ -z "${IGDB_CLIENT_SECRET:-}" ]] && { warn "hace falta el Client Secret"; exit 1; }
+fi
 
 # ── 3 ─────────────────────────────────────────────────────────────────────
 stage "ScreenScraper: cuenta de usuario"
@@ -278,6 +287,24 @@ else
 fi
 
 # ── 4 ─────────────────────────────────────────────────────────────────────
+stage "RetroAchievements: API key"
+say "Trae los logros por juego y el progreso. RomM solo necesita la API key,"
+say "no el usuario."
+printf '\n'
+RA_KEY=""
+if confirm "¿Configuramos RetroAchievements?"; then
+  open_url "https://retroachievements.org/settings"
+  printf '\n'
+  step "Entra con tu cuenta y baja hasta la sección «Keys»."
+  step "Copia el valor de «Web API Key». No es la de conexión."
+  printf '\n'
+  ask_secret RA_KEY "Pega la Web API Key (no se verá al escribir):"
+  [[ -z "${RA_KEY:-}" ]] && { warn "no has pegado nada"; exit 1; }
+else
+  note "saltado"
+fi
+
+# ── 5 ─────────────────────────────────────────────────────────────────────
 stage "Sellar las claves"
 say "Se cifran aquí, en tu máquina, con la clave pública del cluster. En claro"
 say "no se escriben en disco ni salen por pantalla en ningún momento."
@@ -293,13 +320,21 @@ sellar() {
     --scope cluster-wide --raw --from-file=/dev/stdin 2>/tmp/kubeseal-$1.err
 }
 declare -A NUEVAS=()
-NUEVAS[igdb-client-id]="$(sellar igdb-id "$IGDB_CLIENT_ID")"
-NUEVAS[igdb-client-secret]="$(sellar igdb-secret "$IGDB_CLIENT_SECRET")"
+if [[ -n "$IGDB_CLIENT_ID" ]]; then
+  NUEVAS[igdb-client-id]="$(sellar igdb-id "$IGDB_CLIENT_ID")"
+  NUEVAS[igdb-client-secret]="$(sellar igdb-secret "$IGDB_CLIENT_SECRET")"
+fi
 if [[ -n "$SS_USER" ]]; then
   NUEVAS[screenscraper-user]="$(sellar ss-user "$SS_USER")"
   NUEVAS[screenscraper-password]="$(sellar ss-pass "$SS_PASSWORD")"
 fi
-unset IGDB_CLIENT_SECRET SS_PASSWORD
+if [[ -n "$RA_KEY" ]]; then
+  NUEVAS[retroachievements-api-key]="$(sellar ra-key "$RA_KEY")"
+fi
+unset IGDB_CLIENT_SECRET SS_PASSWORD RA_KEY
+if [[ "${#NUEVAS[@]}" -eq 0 ]]; then
+  warn "no has configurado ningún proveedor; no hay nada que sellar"; exit 0
+fi
 for k in "${!NUEVAS[@]}"; do
   if [[ -z "${NUEVAS[$k]}" ]]; then
     warn "el sellado de $k salió vacío"; cat /tmp/kubeseal-*.err 2>/dev/null | head -3; exit 1
@@ -343,7 +378,7 @@ else
   warn "el fichero quedó inválido; revísalo con git diff antes de nada"; exit 1
 fi
 
-# ── 5 ─────────────────────────────────────────────────────────────────────
+# ── 6 ─────────────────────────────────────────────────────────────────────
 stage "Desplegar"
 say "El deployment ya referencia estas cuatro claves como optional, así que lo"
 say "único que falta es que ArgoCD se lleve el SealedSecret y reiniciar el pod"
@@ -359,9 +394,10 @@ if confirm "¿Commit y push ahora?"; then
   printf '\n'
   say "Esperando a que el Secret tenga las claves nuevas..."
   for _ in $(seq 1 20); do
+    UNA=$(printf '%s\n' "${!NUEVAS[@]}" | head -1)
     if kubectl --context "$CTX" -n "$NS" get secret "$SECRET_NAME" \
-         -o jsonpath='{.data.igdb-client-id}' 2>/dev/null | grep -q .; then
-      printf '  %s✓%s el controlador ya descifró igdb-client-id\n' "$GREEN" "$RESET"
+         -o "jsonpath={.data.$UNA}" 2>/dev/null | grep -q .; then
+      printf '  %s✓%s el controlador ya descifró %s\n' "$GREEN" "$RESET" "$UNA"
       kubectl --context "$CTX" -n "$NS" rollout restart deploy/romm >/dev/null
       kubectl --context "$CTX" -n "$NS" rollout status deploy/romm --timeout=180s
       break

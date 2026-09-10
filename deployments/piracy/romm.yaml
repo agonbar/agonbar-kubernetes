@@ -116,6 +116,13 @@ spec:
                   name: romm
                   key: screenscraper-password
                   optional: true
+            # Logros por juego y progreso. Solo pide la Web API key, no usuario.
+            - name: RETROACHIEVEMENTS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: romm
+                  key: retroachievements-api-key
+                  optional: true
           ports:
             - containerPort: 8080
               protocol: TCP
