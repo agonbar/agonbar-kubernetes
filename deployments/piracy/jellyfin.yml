@@ -56,7 +56,19 @@ spec:
               mountPath: /host-proc-mounts
       containers:
         - name: jellyfin
-          image: lscr.io/linuxserver/jellyfin:latest
+          # Pinned on 2026-09-10 after :latest walked us into Jellyfin 12
+          # unattended. The volume had gone read-only, jellyfin crashlooped 352
+          # times over two days, and with :latest + Always it pulled a fresh
+          # image on every one of those restarts. linuxserver moved :latest to
+          # 12.0 on 2026-09-08, so somewhere in that loop we crossed a major
+          # version with a schema migration, on a filesystem that could not
+          # write. The 12.0 migration eventually ran fine once the mount was
+          # repaired, but nobody chose it and nobody was watching.
+          #
+          # version-* still gets linuxserver rebuilds (base image CVEs) while
+          # staying on Jellyfin 12.0, so security fixes arrive and major
+          # versions do not.
+          image: lscr.io/linuxserver/jellyfin:version-12.0ubu2604
           imagePullPolicy: Always
           securityContext:
             privileged: true
@@ -91,11 +103,22 @@ spec:
               mountPath: /dev/dma_heap
             - name: dev-mali0
               mountPath: /dev/mali0
+          # Liveness alone gave startup 30s + 3x15s = 75s. The 12.0 upgrade
+          # took 2m06s ("Startup complete 0:02:06") running 31 schema
+          # migrations, so it only survived on luck. A startup probe means
+          # liveness cannot fire until the server has answered once, and 10 min
+          # is enough for a migration on a slow arm64 box.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8096
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 60
           livenessProbe:
             httpGet:
               path: /health
               port: 8096
-            initialDelaySeconds: 30
             periodSeconds: 15
             timeoutSeconds: 5
             failureThreshold: 3
