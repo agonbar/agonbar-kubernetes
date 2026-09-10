@@ -1,0 +1,58 @@
+# Pack map for `gamevault-import.py pack` — source directory, then the
+# archive name GameVault should serve it under.
+#
+# These are the entries where the game is a directory rather than a file, so
+# copying one file out of them gives a broken download. Three different shapes,
+# one fix:
+#
+#   multi-part installer   Final Fantasy: elamigos-1.bin is useless without
+#                          setup-0.bin and setup-1.bin beside it
+#   multi-disc set         ESDL.ERDR is CD1+CD2+CD3
+#   already installed      Beat Saber, Besiege, Re-Volt: thousands of loose
+#                          files, no archive at all
+#
+# Fable belongs to a fourth shape worth naming: the .mdf needs its .mds to
+# mount, and the folder also carries serial.txt and a Spanish translation.
+# Any single file out of it is a dead end.
+#
+# `pack` picks -0 (store) when the directory is mostly already-compressed
+# content and -1 otherwise, so ISO sets are not re-compressed for nothing.
+
+# --- Multi-part installer --------------------------------------------------
+Final.Fantasy.I-VI.Pixel.Remaster.MULTi12	Final Fantasy I-VI Pixel Remaster (2022).zip
+
+# --- Disc images that need their sidecar files -----------------------------
+fable	Fable The Lost Chapters (2005).zip
+
+# --- Multi-disc ------------------------------------------------------------
+# Volume labels read ESDLA3-CD1/2/3. "ESDLA 3" is El Retorno del Rey, the 2003
+# EA action game, which is a different game from the Battle for Middle-earth
+# strategy ones already imported from ESDLA/ and ESDLA RDRB/.
+ESDL.ERDR	The Lord of the Rings The Return of the King (2003).zip
+
+# --- Installed games -------------------------------------------------------
+Beat.Saber	Beat Saber (2018).zip
+Besiege	Besiege (2015).zip
+Revolt	Re-Volt (1999).zip
+mari0-win	Mari0 (v1.3) (2012).zip
+
+# Third build of Factorio in the collection. Named the same way as the other
+# two so all three land under one entry with a version picker.
+Factorio.v0.14.22	Factorio (v0.14.22) (2016).zip
+
+# Fan projects with no clean IGDB entry. Named without a year rather than
+# inventing one — a wrong year is worse than a missing one, since GameVault
+# matches on title plus year offset.
+pokemmo	PokeMMO.zip
+Survivors	Survivers [Beta 3].zip
+
+# --- Deliberately not packed ----------------------------------------------
+# Escape.From.Monkey.Island — CD1+CD2 of a game already imported from the
+# Monkey Island Collection. A duplicate, not a gap.
+#
+# Toradora[EN][1.00] — contains manual.pdf, xdelta3.exe and toradora.patch.
+# It is an English translation patch, not the game. Nothing to serve.
+#
+# feedthebeast — a Minecraft modpack launcher across two profiles, not a game
+# that installs and runs on its own. Uncomment if you want it archived anyway.
+# feedthebeast	Feed The Beast [modpacks].zip

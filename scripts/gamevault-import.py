@@ -25,6 +25,7 @@ Workflow:
   gamevault-import.py propose > map.tsv     # guess canonical names via IGDB
   # ...review and fix map.tsv by hand, it is meant to be edited...
   gamevault-import.py copy map.tsv          # copy in, skipping what is done
+  gamevault-import.py pack packmap.tsv      # zip whole dirs into one archive
   gamevault-import.py verify map.tsv        # sizes match at both ends
   gamevault-import.py prune map.tsv         # delete the sources (needs rw)
 
@@ -70,8 +71,10 @@ spec:
     svccontroller.k3s.cattle.io/lbpool: lamg
   containers:
     - name: helper
-      image: busybox:1.36
-      command: ["sleep", "86400"]
+      image: alpine:3.20
+      # zip is what `pack` needs and alpine does not ship it. Everything else
+      # here (cp, stat, find, dd) is in busybox either way.
+      command: ["sh", "-c", "apk add --no-cache zip >/dev/null && sleep 86400"]
       volumeMounts:
         - name: src
           mountPath: {SRC}
@@ -114,8 +117,15 @@ def sh(script, check=True):
     return r.stdout
 
 
-def ensure_pod():
+def ensure_pod(need_zip=False):
     if kubectl("get", "pod", POD).returncode == 0:
+        # A pod left over from an earlier run may predate the alpine image, in
+        # which case zip is missing and `pack` would fail halfway through a
+        # multi-gigabyte archive rather than up front.
+        if need_zip and kubectl("exec", POD, "--", "sh", "-c",
+                                "command -v zip").returncode != 0:
+            sys.exit(f"the running {POD} pod has no zip. Finish or stop any "
+                     f"copy in flight, then `--stop` and re-run.")
         return
     r = subprocess.run(["kubectl", "--context", CTX, "apply", "-f", "-"],
                        input=POD_SPEC, capture_output=True, text=True)
@@ -318,6 +328,68 @@ def cmd_copy(args):
     cmd_verify(args)
 
 
+# Content that is already compressed. Re-compressing an ISO gains nothing and
+# costs an hour, so a directory made mostly of these gets zipped with -0.
+PACKED_EXT = {"iso", "mdf", "rar", "7z", "zip", "cab", "bin", "gz", "mp4",
+              "ogg", "png", "jpg", "jar"}
+
+
+def cmd_pack(args):
+    """Zip whole directories into single servable archives.
+
+    GameVault serves one file per game version. A multi-part installer, a
+    CD1/CD2/CD3 set and an already-installed game all have the same problem —
+    the game is a directory, not a file — and the same fix.
+    """
+    pairs = read_map(args.map)
+    ensure_pod(need_zip=True)
+
+    plans = []
+    for src, name in pairs:
+        out = sh(f'find "{SRC}/{src}" -type f -exec stat -c "%s|%n" {{}} \\; '
+                 f'2>/dev/null', check=False)
+        total = packed = 0
+        for line in out.splitlines():
+            if "|" not in line:
+                continue
+            s, p = line.split("|", 1)
+            s = int(s)
+            total += s
+            if p.rsplit(".", 1)[-1].lower() in PACKED_EXT:
+                packed += s
+        if total == 0:
+            sys.exit(f"no files under {src!r} — wrong path?")
+        level = "-0" if packed > total / 2 else "-1"
+        plans.append((src, name, total, level))
+
+    done = sizes_at(LIB, [n for _, n, _, _ in plans])
+    todo = [p for p in plans if p[1] not in done]
+    print(f"{len(plans) - len(todo)} already packed, {len(todo)} to go")
+    for src, name, total, level in todo:
+        mode = "store" if level == "-0" else "deflate"
+        print(f"  {human(total):>8}  {mode:<8} {src}  ->  {name}")
+    if args.dry_run or not todo:
+        return
+
+    for i, (src, name, total, level) in enumerate(todo, 1):
+        print(f"[{i}/{len(todo)}] {human(total):>8}  {name} ... ",
+              end="", flush=True)
+        # cd into the parent so paths inside the zip are relative to the game
+        # directory rather than carrying /src/ down the tree.
+        r = kubectl("exec", POD, "--", "sh", "-c",
+                    f'cd "{SRC}" && zip {level} -r -q "{LIB}/.pack-{i}.zip" "{src}" && '
+                    f'chmod 644 "{LIB}/.pack-{i}.zip" && '
+                    f'mv "{LIB}/.pack-{i}.zip" "{LIB}/{name}"')
+        if r.returncode != 0:
+            sh(f'rm -f "{LIB}/.pack-{i}.zip"', check=False)
+            sys.exit(f"FAILED\n{r.stderr.strip()}")
+        # Reading the central directory back proves the archive is complete;
+        # a truncated zip has no readable index.
+        chk = kubectl("exec", POD, "--", "sh", "-c",
+                      f'unzip -l "{LIB}/{name}" | tail -1')
+        print(f"ok ({chk.stdout.strip()})")
+
+
 def cmd_verify(args):
     pairs = read_map(args.map)
     src_sizes = sizes_at(SRC, [s for s, _ in pairs])
@@ -383,8 +455,8 @@ def main():
 
     sub.add_parser("audit").set_defaults(fn=cmd_audit)
     sub.add_parser("propose").set_defaults(fn=cmd_propose)
-    for name, fn in (("copy", cmd_copy), ("verify", cmd_verify),
-                     ("prune", cmd_prune)):
+    for name, fn in (("copy", cmd_copy), ("pack", cmd_pack),
+                     ("verify", cmd_verify), ("prune", cmd_prune)):
         s = sub.add_parser(name)
         s.add_argument("map")
         s.add_argument("-n", "--dry-run", action="store_true")
