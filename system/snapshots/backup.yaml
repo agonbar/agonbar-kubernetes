@@ -107,7 +107,7 @@ data:
       echo "[${NS}/${PVC}] Enforcing snapshot retention (keep last 7)..."
       SNAPS=$(kubectl get volumesnapshots -n "${NS}" \
         --sort-by=.metadata.creationTimestamp \
-        -o jsonpath='{.items[?(@.spec.source.persistentVolumeClaimName=="'"${PVC}"'")].metadata.name}')
+        -o jsonpath='{.items[?(@.spec.source.persistentVolumeClaimName=="'"${PVC}"'")].metadata.name}' || true)
       COUNT=0
       TOTAL=0
       for s in $SNAPS; do TOTAL=$((TOTAL + 1)); done
@@ -140,10 +140,13 @@ data:
       # The snapshot and the temp PVC must both use the source PVC's own class,
       # or the temp PVC binds but the snapshot is useless for a real restore.
       SNAPSHOT_CLASS=$(kubectl get pvc "${PVC}" -n "${NS}" \
-        -o jsonpath='{.spec.storageClassName}' 2>/dev/null)
+        -o jsonpath='{.spec.storageClassName}' 2>/dev/null || true)
       if [ -z "${SNAPSHOT_CLASS}" ]; then
-        echo "[${NS}/${PVC}] ERROR: PVC not found or has no storageClassName, skipping"
-        FAILED=1
+        # Deleted PVC still listed below. Not a backup failure: nothing to copy.
+        # Left loud so the list gets tidied, but it must not sink the run --
+        # anisub-data was deleted and took the whole piracy namespace with it
+        # for three nights (2026-09-08 to 10).
+        echo "[${NS}/${PVC}] SKIP: no such PVC, drop it from the list below"
         return
       fi
       if ! kubectl get volumesnapshotclass "${SNAPSHOT_CLASS}" >/dev/null 2>&1; then
@@ -187,7 +190,7 @@ data:
 
       # 3. get restore size
       RESTORE_SIZE=$(kubectl get volumesnapshot "${SNAP_NAME}" -n "${NS}" \
-        -o jsonpath='{.status.restoreSize}')
+        -o jsonpath='{.status.restoreSize}' || true)
       echo "[${NS}/${PVC}] Snapshot ready, restore size: ${RESTORE_SIZE}"
 
       # 4. create temp PVC from snapshot
@@ -333,7 +336,7 @@ data:
 
       # Si alguna vez vuelve a una clase CSI tiene que ir por backup_pvc, que si
       # hace snapshot. Copiarlo aqui en silencio seria perder esa copia sin avisar.
-      SC=$(kubectl get pvc "${PVC}" -n "${NS}" -o jsonpath='{.spec.storageClassName}' 2>/dev/null)
+      SC=$(kubectl get pvc "${PVC}" -n "${NS}" -o jsonpath='{.spec.storageClassName}' 2>/dev/null || true)
       if [ "${SC}" != "local-path" ]; then
         echo "[${NS}/${PVC}] ERROR: expected local-path, got '${SC}'; use backup_pvc"
         FAILED=1
@@ -414,7 +417,7 @@ data:
       DONE=""
       while [ "$(date +%s)" -lt "${END}" ]; do
         CONDS=$(kubectl get job "${JOB_NAME}" -n "${NS}" \
-          -o jsonpath='{.status.conditions[?(@.status=="True")].type}' 2>/dev/null)
+          -o jsonpath='{.status.conditions[?(@.status=="True")].type}' 2>/dev/null || true)
         case "${CONDS}" in
           *Complete*) DONE="ok"; break ;;
           *Failed*)   DONE="fail"; break ;;
@@ -523,7 +526,7 @@ data:
     backup_pvc lamg zigbee2mqtt-config
 
     # piracy namespace
-    backup_pvc piracy anisub-data
+    # anisub-data: PVC deleted, entry removed 2026-09-10.
     backup_pvc piracy bazarr-config
     backup_pvc piracy cruncharr-config
     backup_pvc piracy emulerr-config
