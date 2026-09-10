@@ -519,15 +519,19 @@ data:
     # hasta entonces copiar los dos es inofensivo y no deja hueco en ningun momento.
     backup_pvc lamg homeassistant-config-lan
     backup_pvc lamg homeassistant-config-nfs
-    backup_pvc lamg influxdb-data
+    backup_pvc lamg influxdb-data-lan
     backup_pvc lamg plex-config-lan
     backup_pvc lamg scrutiny-config
     backup_pvc lamg vscode-config-lan
-    backup_pvc lamg zigbee2mqtt-config
+    backup_pvc lamg zigbee2mqtt-config-nfs
 
     # piracy namespace
+    # Swapped to the live claims on 2026-09-11. Nine entries here still named
+    # the pre-migration volumes, which are mounted by 0 pods: the nightly run
+    # was copying frozen rollback copies and skipping the data in use. The
+    # coverage check caught it once the run stopped dying early (59dd89e).
     # anisub-data: PVC deleted, entry removed 2026-09-10.
-    backup_pvc piracy bazarr-config
+    backup_pvc piracy bazarr-config-nfs
     backup_pvc piracy cruncharr-config
     backup_pvc piracy emulerr-config
     # houndarr salio de iSCSI a local-path el 2026-09-02 (f2da258) porque su
@@ -537,17 +541,18 @@ data:
     # cifra las credenciales: sin el, restaurar la base de datos no sirve de nada.
     backup_local_path_pvc piracy houndarr-data-local
     backup_pvc piracy jellyfin-config
-    backup_pvc piracy lidarr-config
-    backup_pvc piracy prowlarr-config
-    backup_pvc piracy qbittorrent-config
+    backup_pvc piracy lidarr-config-nfs
+    backup_pvc piracy prowlarr-config-nfs
+    backup_pvc piracy qbittorrent-config-nfs
     backup_pvc piracy qui-config
-    backup_pvc piracy radarr-config
+    backup_pvc piracy radarr-config-nfs
+    backup_pvc piracy romm-data
     backup_pvc piracy seerr-config
     backup_pvc piracy slskd-config
-    backup_pvc piracy sonarr-config
+    backup_pvc piracy sonarr-config-nfs
     backup_pvc piracy soularr-config
     backup_pvc piracy tachidesk-data
-    backup_pvc piracy tdarr-config
+    backup_pvc piracy tdarr-config-nfs
     backup_pvc piracy tdarr-server
 
     # BACKUP_ONLY sirve para relanzar un volumen suelto, asi que ahi la cobertura
