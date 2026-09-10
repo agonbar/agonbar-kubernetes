@@ -107,12 +107,13 @@ spec:
                 secretKeyRef:
                   name: gamevault
                   key: admin-password
-            # BOOTSTRAP: open until the agonbar account exists, then closed in
-            # the follow-up commit. Registration has to be open for that first
-            # POST /api/auth/basic/register; there is no other way to create
-            # the account short of writing a bcrypt hash into the table.
+            # Closed. The agonbar account was registered during bootstrap and
+            # recoverAdmin() now re-asserts its role, activation and password
+            # on every boot. Adding a second user means flipping this to
+            # "false" for as long as it takes them to register — there is no
+            # admin-side "create user" endpoint.
             - name: SERVER_REGISTRATION_DISABLED
-              value: "false"
+              value: "true"
 
             # Same Twitch application as RomM. IGDB is the only built-in
             # provider; RAWG was removed in v13 and everything else needs a
