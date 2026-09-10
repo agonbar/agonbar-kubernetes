@@ -20,14 +20,16 @@ NFS MW.rar	Need for Speed Most Wanted (2005).rar
 The.Wandering.Village.v0.1.33.zip	The Wandering Village (v0.1.33) (2022).zip
 IGG-GangBeastsv0.3.2.rar	Gang Beasts (v0.3.2) (2017).rar
 
-# Two builds of the same game. GameVault 17 collapses these into one entry
-# with a version picker, which is the whole point of naming them this way.
+# Builds of the same game. GameVault buckets versions by title AND release
+# year, so these carry the same year (2020, Factorio 1.0) even though the
+# builds predate it. Dating each build to its own year split them into
+# separate library entries — measured on the first import.
 Factorio_x64_0.18.22.zip	Factorio (v0.18.22) (2020).zip
-Factorio_Win64_0.16.51.zip	Factorio (v0.16.51) (2018).zip
+Factorio_Win64_0.16.51.zip	Factorio (v0.16.51) (2020).zip
 
 # --- Single-ISO repacks ----------------------------------------------------
 Kingdom.Hearts.III.and.Re.Mind-CODEX/codex-kingdom.hearts.iii.and.re.mind.iso	Kingdom Hearts III [Re Mind] (2021).iso
-Assassins creed [PC-DVD]/Assassins creed [PC-DVD] [Multi5] [Spanish] [www.topetorrent.com].iso	Assassins Creed (2007).iso
+Assassins creed [PC-DVD]/Assassins creed [PC-DVD] [Multi5] [Spanish] [www.topetorrent.com].iso	Assassin's Creed (2007).iso
 Black And White 2 [PCDVD]/Black And White 2 [PCDVD][MULTi7].iso	Black and White 2 (2005).iso
 CoDWaW/rld-cod5.iso	Call of Duty World at War (2008).iso
 cod4/COD4MW SPANISH.iso	Call of Duty 4 Modern Warfare (2007).iso
@@ -57,7 +59,10 @@ Monkey Island Collection/DVD 2/Tales of Monkey Island (Deluxe Edition)/Monkey_Is
 # The RDRB disc reads LOTRBFME2EP1, which is expansion pack 1, Rise of the
 # Witch-king.
 ESDLA/LOTRBFME2.iso	The Lord of the Rings The Battle for Middle-earth II (2006).iso
-ESDLA RDRB/ns-LotrBfMe2EP1_Maxi-poseden.mdf	The Lord of the Rings The Battle for Middle-earth II [Rise of the Witch-king] (2006).mdf
+# ESDLA RDRB/ — packed instead. A bare .mdf copies fine but never indexes:
+#   GameVault serves what 7-Zip can open and .mdf is not on that list, so the
+#   file sat in the library invisible. Measured, not assumed: 23 files copied,
+#   22 games indexed.
 # ESDLA/LOTRBFME2.mdf — same volume label (LOTRBFME2) as the .iso next to it,
 # so it is the same disc in another container, not a second game. The .iso is
 # taken; this is redundant and can be deleted with the rest of the source.

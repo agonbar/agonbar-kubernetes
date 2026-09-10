@@ -30,15 +30,20 @@ fable	Fable The Lost Chapters (2005).zip
 # strategy ones already imported from ESDLA/ and ESDLA RDRB/.
 ESDL.ERDR	The Lord of the Rings The Return of the King (2003).zip
 
+# The .mdf here needs packing for a different reason than fable's: it is not
+# a format GameVault can serve at all. Copied bare it indexes as nothing.
+ESDLA RDRB	The Lord of the Rings The Battle for Middle-earth II [Rise of the Witch-king] (2006).zip
+
 # --- Installed games -------------------------------------------------------
 Beat.Saber	Beat Saber (2018).zip
 Besiege	Besiege (2015).zip
 Revolt	Re-Volt (1999).zip
 mari0-win	Mari0 (v1.3) (2012).zip
 
-# Third build of Factorio in the collection. Named the same way as the other
-# two so all three land under one entry with a version picker.
-Factorio.v0.14.22	Factorio (v0.14.22) (2016).zip
+# Third build of Factorio. Same year as the other two on purpose — GameVault
+# buckets versions by title AND year, so dating each build separately splits
+# them into three library entries instead of one with a version picker.
+Factorio.v0.14.22	Factorio (v0.14.22) (2020).zip
 
 # Fan projects with no clean IGDB entry. Named without a year rather than
 # inventing one — a wrong year is worse than a missing one, since GameVault

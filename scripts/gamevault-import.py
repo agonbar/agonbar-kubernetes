@@ -117,8 +117,25 @@ def sh(script, check=True):
     return r.stdout
 
 
+def pod_running():
+    """Running AND ready, not merely present.
+
+    `kubectl get pod` succeeds for a pod in Terminating too, so treating
+    "exists" as "usable" raced a previous --stop: every exec then failed
+    against a pod on its way out, and because sizes_at() tolerates per-file
+    stat failures the run reported every source as missing instead.
+    """
+    r = kubectl("get", "pod", POD, "-o",
+                "jsonpath={.status.phase}|{.status.containerStatuses[0].ready}"
+                "|{.metadata.deletionTimestamp}")
+    if r.returncode != 0:
+        return False
+    phase, ready, deleting = (r.stdout.split("|") + ["", "", ""])[:3]
+    return phase == "Running" and ready == "true" and not deleting
+
+
 def ensure_pod(need_zip=False):
-    if kubectl("get", "pod", POD).returncode == 0:
+    if pod_running():
         # A pod left over from an earlier run may predate the alpine image, in
         # which case zip is missing and `pack` would fail halfway through a
         # multi-gigabyte archive rather than up front.
@@ -127,13 +144,17 @@ def ensure_pod(need_zip=False):
             sys.exit(f"the running {POD} pod has no zip. Finish or stop any "
                      f"copy in flight, then `--stop` and re-run.")
         return
+    # A pod left Terminating by an earlier --stop blocks a same-name apply.
+    kubectl("wait", "--for=delete", f"pod/{POD}", "--timeout=120s")
     r = subprocess.run(["kubectl", "--context", CTX, "apply", "-f", "-"],
                        input=POD_SPEC, capture_output=True, text=True)
     if r.returncode != 0:
         sys.exit(f"could not create helper pod:\n{r.stderr.strip()}")
     # Runs as root, and the source export does not squash root, which is how it
     # reads a tree owned by 3000:3000 with mode 770.
-    kubectl("wait", "--for=condition=Ready", f"pod/{POD}", "--timeout=180s")
+    kubectl("wait", "--for=condition=Ready", f"pod/{POD}", "--timeout=300s")
+    if not pod_running():
+        sys.exit(f"helper pod {POD} did not become ready")
 
 
 def human(n):
@@ -282,9 +303,15 @@ def sizes_at(root, names):
     """Size of each name under root, missing ones absent from the dict."""
     if not names:
         return {}
+    # Individual stats are allowed to fail (a file legitimately may not be
+    # there yet), so the sentinel is what distinguishes "absent" from "the pod
+    # never ran this". Without it a dead pod looks like an empty directory.
     script = "; ".join(
         f'stat -c "%s|%n" "{root}/{n}" 2>/dev/null' for n in names)
-    out = sh(script, check=False)
+    out = sh(script + '; echo "__RAN__"', check=False)
+    if "__RAN__" not in out:
+        sys.exit("helper pod did not execute the stat batch; refusing to "
+                 "treat that as 'files missing'")
     res = {}
     for line in out.splitlines():
         if "|" in line:
@@ -464,7 +491,7 @@ def main():
 
     args = p.parse_args()
     if args.stop:
-        kubectl("delete", "pod", POD, "--ignore-not-found", "--wait=false")
+        kubectl("delete", "pod", POD, "--ignore-not-found", "--wait=true")
         return 0
     if not args.cmd:
         p.print_help()
