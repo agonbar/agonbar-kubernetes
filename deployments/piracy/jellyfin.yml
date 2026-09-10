@@ -56,19 +56,16 @@ spec:
               mountPath: /host-proc-mounts
       containers:
         - name: jellyfin
-          # Pinned on 2026-09-10 after :latest walked us into Jellyfin 12
-          # unattended. The volume had gone read-only, jellyfin crashlooped 352
-          # times over two days, and with :latest + Always it pulled a fresh
-          # image on every one of those restarts. linuxserver moved :latest to
-          # 12.0 on 2026-09-08, so somewhere in that loop we crossed a major
-          # version with a schema migration, on a filesystem that could not
-          # write. The 12.0 migration eventually ran fine once the mount was
-          # repaired, but nobody chose it and nobody was watching.
-          #
-          # version-* still gets linuxserver rebuilds (base image CVEs) while
-          # staying on Jellyfin 12.0, so security fixes arrive and major
-          # versions do not.
-          image: lscr.io/linuxserver/jellyfin:version-12.0ubu2604
+          # Deliberately :latest. Major versions land unattended, and that is
+          # the trade accepted here: no version bookkeeping, restore from a
+          # snapshot if a release goes bad. It already happened once, on
+          # 2026-09-08, when :latest moved to Jellyfin 12 while this pod was
+          # crashlooping on a read-only volume and pulled a new image on each
+          # of 352 restarts. The 12.0 migration then ran on a filesystem it
+          # could not write to. It survived, but the snapshot is what makes
+          # this safe, so the daily snapshot of jellyfin-config is not
+          # optional.
+          image: lscr.io/linuxserver/jellyfin:latest
           imagePullPolicy: Always
           securityContext:
             privileged: true
