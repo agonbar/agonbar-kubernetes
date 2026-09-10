@@ -158,13 +158,6 @@ spec:
             # uploading here cannot collide with Syncthing.
             - name: library
               mountPath: /romm/library
-            # Switch stays where it is. Its 31 NSPs are 95 GB, an order of
-            # magnitude more than everything else combined, and copying them
-            # buys nothing RomM can use: No-Intro does not cover Switch, so
-            # there is no canonical name to rename them to.
-            - name: emudeck-switch
-              mountPath: /romm/library/roms/switch
-              readOnly: true
             - name: emudeck-bios
               mountPath: /romm/library/bios
               readOnly: true
@@ -214,11 +207,6 @@ spec:
           nfs:
             server: 192.168.0.29
             path: /mnt/RAID/docker/romm-library
-        - name: emudeck-switch
-          nfs:
-            server: 192.168.0.29
-            path: /mnt/RAID/docker/syncthing/config/Emudeck/roms/switch
-            readOnly: true
         - name: emudeck-bios
           nfs:
             server: 192.168.0.29
