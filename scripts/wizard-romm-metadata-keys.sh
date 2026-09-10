@@ -183,7 +183,7 @@ finish() {
 # STAGES
 # ──────────────────────────────────────────────────────────────────────────
 
-TOTAL_STAGES=6
+TOTAL_STAGES=7
 
 CTX="lamg"
 NS="piracy"
@@ -305,6 +305,24 @@ else
 fi
 
 # ── 5 ─────────────────────────────────────────────────────────────────────
+stage "SteamGridDB: API key"
+say "Da grids y heroes: el arte que enseñan Playnite y Big Picture en los"
+say "accesos directos. No cambia nada en la web de RomM, solo en el salón."
+printf '\n'
+SGDB_KEY=""
+if confirm "¿Configuramos SteamGridDB?"; then
+  open_url "https://www.steamgriddb.com/profile/preferences/api"
+  printf '\n'
+  step "Entra con tu cuenta de Steam."
+  step "En «API» dale a generar la clave si no tienes ninguna, y cópiala."
+  printf '\n'
+  ask_secret SGDB_KEY "Pega la API key (no se verá al escribir):"
+  [[ -z "${SGDB_KEY:-}" ]] && { warn "no has pegado nada"; exit 1; }
+else
+  note "saltado"
+fi
+
+# ── 6 ─────────────────────────────────────────────────────────────────────
 stage "Sellar las claves"
 say "Se cifran aquí, en tu máquina, con la clave pública del cluster. En claro"
 say "no se escriben en disco ni salen por pantalla en ningún momento."
@@ -331,7 +349,10 @@ fi
 if [[ -n "$RA_KEY" ]]; then
   NUEVAS[retroachievements-api-key]="$(sellar ra-key "$RA_KEY")"
 fi
-unset IGDB_CLIENT_SECRET SS_PASSWORD RA_KEY
+if [[ -n "$SGDB_KEY" ]]; then
+  NUEVAS[steamgriddb-api-key]="$(sellar sgdb-key "$SGDB_KEY")"
+fi
+unset IGDB_CLIENT_SECRET SS_PASSWORD RA_KEY SGDB_KEY
 if [[ "${#NUEVAS[@]}" -eq 0 ]]; then
   warn "no has configurado ningún proveedor; no hay nada que sellar"; exit 0
 fi
@@ -378,7 +399,7 @@ else
   warn "el fichero quedó inválido; revísalo con git diff antes de nada"; exit 1
 fi
 
-# ── 6 ─────────────────────────────────────────────────────────────────────
+# ── 7 ─────────────────────────────────────────────────────────────────────
 stage "Desplegar"
 say "El deployment ya referencia estas claves como optional, así que lo"
 say "único que falta es que ArgoCD se lleve el SealedSecret y reiniciar el pod"
