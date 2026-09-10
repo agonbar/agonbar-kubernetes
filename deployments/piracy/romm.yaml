@@ -81,6 +81,20 @@ spec:
             # carry no language tag, so the filename tells RomM almost nothing.
             - name: HASHEOUS_API_ENABLED
               value: "true"
+            # A second hash matcher alongside Hasheous: playmatch_handler.py
+            # looks up by SHA1/MD5/CRC too. It is the only one of these that
+            # attacks the real gap (4 of 9 gba ROMs unidentified), and it keeps
+            # scans working on days like 2026-09-10, when hasheous.org served
+            # 502 from its own health check for hours.
+            - name: PLAYMATCH_API_ENABLED
+              value: "true"
+            # More cover sources, and playtime estimates. Neither needs an
+            # account; both sit below IGDB and ScreenScraper in the artwork
+            # priority, so they only fill gaps.
+            - name: TGDB_API_ENABLED
+              value: "true"
+            - name: HLTB_API_ENABLED
+              value: "true"
             # Metadata providers. optional: true so the pod still starts before
             # the keys exist; RomM reads an unset variable as "provider off",
             # which is the state the heartbeat reports today. Sealed by
@@ -122,6 +136,15 @@ spec:
                 secretKeyRef:
                   name: romm
                   key: retroachievements-api-key
+                  optional: true
+            # Grids and heroes, which is the art Playnite and Big Picture show
+            # on the shortcuts. Matters for the living-room VM, not for the
+            # RomM web UI.
+            - name: STEAMGRIDDB_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: romm
+                  key: steamgriddb-api-key
                   optional: true
           ports:
             - containerPort: 8080
