@@ -150,13 +150,23 @@ spec:
             - containerPort: 8080
               protocol: TCP
           volumeMounts:
-            # Read-only on purpose. This path is inside Syncthing's config
-            # directory and Syncthing owns it; RomM writes to /romm/library when
-            # renaming or uploading, and two writers on one tree is how the
-            # sync-conflict files in Emudeck/saves got there. Move the library
-            # out of the Syncthing config dir before making this writable.
+            # The consolidated library, built by scripts/rom-consolidate.py from
+            # the EmuDeck tree and the hand-picked collection under
+            # _ADRIAN/Juegos, each file renamed to its No-Intro name so RomM can
+            # read region and language off it. Writable, unlike the EmuDeck tree
+            # it replaces: nothing else owns this one, so RomM renaming or
+            # uploading here cannot collide with Syncthing.
             - name: library
               mountPath: /romm/library
+            # Switch stays where it is. Its 31 NSPs are 95 GB, an order of
+            # magnitude more than everything else combined, and copying them
+            # buys nothing RomM can use: No-Intro does not cover Switch, so
+            # there is no canonical name to rename them to.
+            - name: emudeck-switch
+              mountPath: /romm/library/roms/switch
+              readOnly: true
+            - name: emudeck-bios
+              mountPath: /romm/library/bios
               readOnly: true
             - name: data
               mountPath: /romm/resources
@@ -203,7 +213,16 @@ spec:
         - name: library
           nfs:
             server: 192.168.0.29
-            path: /mnt/RAID/docker/syncthing/config/Emudeck
+            path: /mnt/RAID/docker/romm-library
+        - name: emudeck-switch
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/syncthing/config/Emudeck/roms/switch
+            readOnly: true
+        - name: emudeck-bios
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/syncthing/config/Emudeck/bios
             readOnly: true
         - name: data
           persistentVolumeClaim:
@@ -241,30 +260,12 @@ metadata:
 data:
   config.yml: |
     exclude:
-      platforms:
-        # EmuDeck keeps tooling next to the consoles under roms/.
-        - emulators
-        - tools
-        - scripts
-        - desktop
-        - cloud
-        # Emulator installations, not games. roms/wiiu is a Cemu tree (236 .ini
-        # files, mlc01, graphicPacks), roms/model2 is the Model 2 emulator (136
-        # .lua, EMULATOR.INI) and roms/xbox360 is Xenia. Each has an inner
-        # roms/ holding nothing but .txt files. Excluding the five below took
-        # the wizard from 184 platforms / 601 games to 179 / 560: RomM counts a
-        # multi-file directory as one game, so Cemu's 298 files were never 298
-        # entries.
-        - wiiu
-        - model2
-        - xbox360
-        # Launcher shims: Bottles.sh, Flatseal.sh, Heroic-Games-Launcher.sh.
-        - generic-applications
-        - remoteplay
-        # roms/ps4 holds no games, only a `shortcuts` directory, which the scan
-        # imported as a multi-file ROM and left as the only unidentifiable
-        # entry outside Switch.
-        - ps4
+      # The consolidated tree holds eight platform directories and nothing
+      # else, so the long exclusion list the EmuDeck tree needed is gone with
+      # it: no emulator installs under roms/, no launcher shims, and none of
+      # the 172 empty platform folders EmuDeck creates whether or not you own
+      # a game for them. What is left is the debris that travels with the ROMs
+      # themselves.
       roms:
         single_file:
           extensions:
