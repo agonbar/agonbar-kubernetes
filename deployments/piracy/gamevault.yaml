@@ -4,11 +4,15 @@
 # the PC games that run natively. They don't overlap — GameVault has no ROM or
 # emulator support and no plans for it.
 #
-# Library scope: /mnt/RAID/docker/gamevault-library, a new empty tree. The
-# existing collection under /mnt/RAID/adrian/_ADRIAN/Juegos/PC is deliberately
-# NOT mounted: 47 entries of repacks, loose .iso/.rar and a 19GB WoW archive,
-# none of which follow the naming convention below. Same call as RomM made with
-# the EmuDeck tree — consolidate first, then add as a second source.
+# Library: /mnt/RAID/docker/gamevault-library, filled by moving games out of
+# the old collection at /mnt/RAID/adrian/_ADRIAN/Juegos/PC rather than by
+# pointing at it. That folder is being emptied as its contents get organised;
+# what stays behind is what could not be made to work.
+#
+# The collection is never mounted here. Games are copied in under canonical
+# names by scripts/gamevault-import.py, verified, and only then deleted at the
+# source. The two paths are separate ZFS datasets (RAID/adrian, RAID/docker),
+# so it is a real copy, not a rename.
 #
 # Filenames are the metadata. GameVault parses them and the format is strict
 # and case sensitive:

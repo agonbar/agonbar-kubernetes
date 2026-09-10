@@ -1,0 +1,91 @@
+# Import map for scripts/gamevault-import.py — source path, then the name
+# GameVault should serve it under.
+#
+# Started from `gamevault-import.py propose` and corrected by hand. IGDB's
+# first match got roughly half of these right; it invented an Assassin's Creed
+# bundle from 2020 for the 2007 game and mapped three separate Monkey Island
+# discs onto three chapters of Tales of Monkey Island, so nothing here is
+# machine-decided.
+#
+# Naming rules that are not optional. GameVault parses round brackets as flags
+# — (v1.2) is a version, (2009) is a year, (EarlyAccess) is a flag — so a
+# subtitle or edition goes in square brackets, and the parse is case
+# sensitive. Colons are dropped rather than escaped.
+#
+# Commented-out lines are deliberate. They stay in _ADRIAN until someone
+# decides what they are. Uncomment to import.
+
+# --- Loose archives, unambiguous -------------------------------------------
+NFS MW.rar	Need for Speed Most Wanted (2005).rar
+The.Wandering.Village.v0.1.33.zip	The Wandering Village (v0.1.33) (2022).zip
+IGG-GangBeastsv0.3.2.rar	Gang Beasts (v0.3.2) (2017).rar
+
+# Two builds of the same game. GameVault 17 collapses these into one entry
+# with a version picker, which is the whole point of naming them this way.
+Factorio_x64_0.18.22.zip	Factorio (v0.18.22) (2020).zip
+Factorio_Win64_0.16.51.zip	Factorio (v0.16.51) (2018).zip
+
+# --- Single-ISO repacks ----------------------------------------------------
+Kingdom.Hearts.III.and.Re.Mind-CODEX/codex-kingdom.hearts.iii.and.re.mind.iso	Kingdom Hearts III [Re Mind] (2021).iso
+Assassins creed [PC-DVD]/Assassins creed [PC-DVD] [Multi5] [Spanish] [www.topetorrent.com].iso	Assassins Creed (2007).iso
+Black And White 2 [PCDVD]/Black And White 2 [PCDVD][MULTi7].iso	Black and White 2 (2005).iso
+CoDWaW/rld-cod5.iso	Call of Duty World at War (2008).iso
+cod4/COD4MW SPANISH.iso	Call of Duty 4 Modern Warfare (2007).iso
+Two Worlds II/rld-tww2.iso	Two Worlds II (2010).iso
+Rogue.Legacy/wmt-rogl.iso	Rogue Legacy (2013).iso
+Evoland-HI2U/hi-evola.iso	Evoland (2013).iso
+Quantum.Conundrum.v1.0.multi6.cracked.READ.NFO-THETA/Quantum Conundrum.exe	Quantum Conundrum (2012).exe
+
+# --- Monkey Island Collection ---------------------------------------------
+# One folder, five separate games. IGDB matched three of them to the wrong
+# Telltale chapter, so these titles are hand-set.
+Monkey Island Collection/DVD 1/The Secret of Monkey Island (Special Edition)/Monkey_Island_1.iso	The Secret of Monkey Island [Special Edition] (2009).iso
+Monkey Island Collection/DVD 1/Monkey Island 2 - LeChuck's Revenge (Special Edition)/Monkey_Island_2.iso	Monkey Island 2 LeChucks Revenge [Special Edition] (2010).iso
+Monkey Island Collection/DVD 1/Monkey Island 3 - The Curse of Monkey Island/Monkey_Island_3.iso	The Curse of Monkey Island (1997).iso
+Monkey Island Collection/DVD 2/Monkey Island 4 - Escape from Monkey Island/Monkey_Island_4.iso	Escape from Monkey Island (2000).iso
+Monkey Island Collection/DVD 2/Tales of Monkey Island (Deluxe Edition)/Monkey_Island_5.iso	Tales of Monkey Island [Deluxe Edition] (2009).iso
+
+# --- Visual novels ---------------------------------------------------------
+[Fuwanovel] Evangelion Girlfriend of Steel/GirlfriendOfSteel.iso	Neon Genesis Evangelion - Girlfriend of Steel (1997).iso
+[Fuwanovel] Sono Hana 5 - The Joy of Loving You/[Fuwanovel] Sono Hana 5 - The Joy of Loving You.exe	Sono Hanabira 5 - The Joy of Loving You (2009).exe
+
+# --- Battle for Middle-earth II -------------------------------------------
+# The .iso and the .mdf in ESDLA/ are 3.9G and 5.7G, so they are NOT the same
+# dump in two containers. Taking the .iso, which is the standard one; the .mdf
+# needs someone to mount it and see what it actually is.
+ESDLA/LOTRBFME2.iso	The Lord of the Rings The Battle for Middle-earth II (2006).iso
+ESDLA RDRB/ns-LotrBfMe2EP1_Maxi-poseden.mdf	The Lord of the Rings The Battle for Middle-earth II [Rise of the Witch-king] (2006).mdf
+# ESDLA/LOTRBFME2.mdf	UNKNOWN — 5.7G, larger than the .iso next to it
+
+# --- Held back: needs a human decision ------------------------------------
+# WorldofWarcraft.7z is 18G with no version marker. Which expansion's client
+# it is decides the name, and getting that wrong makes it unfindable.
+# WorldofWarcraft.7z	World of Warcraft (2004).7z
+
+# CRUSADER.iso — IGDB proposed "Crusader (2025)", which is certainly wrong for
+# a 2008-dated file. Almost certainly Crusader: No Remorse (1995) or No Regret
+# (1996), but the ISO has to be opened to tell which.
+# CRUSADER.iso	Crusader No Remorse (1995).iso
+
+# emperor.iso — three plausible games: Emperor Battle for Dune (2001),
+# Emperor Rise of the Middle Kingdom (2002), or the Disney platformer IGDB
+# guessed. Not resolvable from the filename.
+# emperor.iso	Emperor Battle for Dune (2001).iso
+
+# fable/Fabl3/Fable Disk 1.mdf — folder says "Fabl3" (Fable III, 2010) but the
+# file says "Disk 1", and Fable III shipped on one DVD while Fable: The Lost
+# Chapters shipped on several. The folder and the filename disagree.
+# fable/Fabl3/Fable Disk 1.mdf	Fable III (2010).mdf
+
+# Final.Fantasy.I-VI.Pixel.Remaster elamigos-1.bin sits next to setup-0.bin and
+# setup-1.bin — it is one part of a multi-part installer, not a standalone
+# archive. Serving it alone gives a broken download. Needs repacking.
+# Final.Fantasy.I-VI.Pixel.Remaster.MULTi12/elamigos-1.bin	Final Fantasy I-VI Pixel Remaster (2022).bin
+
+# --- Multi-disc: not importable as-is -------------------------------------
+# GameVault serves one file per version and has no multi-disc concept, so a
+# CD1/CD2/CD3 set has to be repacked into a single archive first. Left alone.
+# ESDL.ERDR/ESDLA3-CD1.iso ... CD2 ... CD3   (LOTR: Return of the King, 2003)
+# Escape.From.Monkey.Island/...CD1.iso ... CD2.iso
+#   — and this one is already covered by the Monkey Island Collection entry
+#     above, so it is a duplicate rather than a gap.
