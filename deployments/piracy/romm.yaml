@@ -261,6 +261,10 @@ data:
         # Launcher shims: Bottles.sh, Flatseal.sh, Heroic-Games-Launcher.sh.
         - generic-applications
         - remoteplay
+        # roms/ps4 holds no games, only a `shortcuts` directory, which the scan
+        # imported as a multi-file ROM and left as the only unidentifiable
+        # entry outside Switch.
+        - ps4
       roms:
         single_file:
           extensions:
