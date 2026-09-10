@@ -380,7 +380,7 @@ fi
 
 # ── 6 ─────────────────────────────────────────────────────────────────────
 stage "Desplegar"
-say "El deployment ya referencia estas cuatro claves como optional, así que lo"
+say "El deployment ya referencia estas claves como optional, así que lo"
 say "único que falta es que ArgoCD se lleve el SealedSecret y reiniciar el pod"
 say "para que RomM lea las variables nuevas."
 printf '\n'
@@ -388,13 +388,27 @@ git --no-pager diff --stat -- "$SEALED_FILE" "$MANIFEST" 2>/dev/null || true
 printf '\n'
 warn "ArgoCD sincroniza deployments/piracy solo, así que el push despliega."
 if confirm "¿Commit y push ahora?"; then
+  # El mensaje nombra lo que se selló de verdad. Antes iba fijo a "IGDB and
+  # ScreenScraper" y mentía en cuanto saltabas alguna fase.
+  QUE=$(printf '%s\n' "${!NUEVAS[@]}" | sed 's/-[a-z-]*$//' | sort -u | paste -sd, -)
   git add "$SEALED_FILE" "$MANIFEST"
-  git commit -q -m "piracy: add IGDB and ScreenScraper credentials for RomM" || true
+  git commit -q -m "piracy: add RomM metadata credentials (${QUE})" || true
   git push && printf '  %s✓%s pusheado\n' "$GREEN" "$RESET"
   printf '\n'
+  # Sin esto la espera de abajo caduca casi siempre: este cluster reconcilia
+  # cada hora, así que ArgoCD puede tardar eso en ver el commit. Se queda en
+  # "Synced" contra la revisión vieja, que es lo que despista.
+  say "Forzando el refresco de ArgoCD..."
+  if kubectl --context "$CTX" -n argocd patch application piracy --type merge \
+       -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}' >/dev/null 2>&1; then
+    printf '  %s✓%s refresco pedido\n' "$GREEN" "$RESET"
+  else
+    warn "no pude refrescar la Application; puede tardar hasta una hora"
+  fi
+  printf '\n'
   say "Esperando a que el Secret tenga las claves nuevas..."
+  UNA=$(printf '%s\n' "${!NUEVAS[@]}" | head -1)
   for _ in $(seq 1 20); do
-    UNA=$(printf '%s\n' "${!NUEVAS[@]}" | head -1)
     if kubectl --context "$CTX" -n "$NS" get secret "$SECRET_NAME" \
          -o "jsonpath={.data.$UNA}" 2>/dev/null | grep -q .; then
       printf '  %s✓%s el controlador ya descifró %s\n' "$GREEN" "$RESET" "$UNA"
