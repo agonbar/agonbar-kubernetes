@@ -50,12 +50,17 @@ Monkey Island Collection/DVD 2/Tales of Monkey Island (Deluxe Edition)/Monkey_Is
 [Fuwanovel] Sono Hana 5 - The Joy of Loving You/[Fuwanovel] Sono Hana 5 - The Joy of Loving You.exe	Sono Hanabira 5 - The Joy of Loving You (2009).exe
 
 # --- Battle for Middle-earth II -------------------------------------------
-# The .iso and the .mdf in ESDLA/ are 3.9G and 5.7G, so they are NOT the same
-# dump in two containers. Taking the .iso, which is the standard one; the .mdf
-# needs someone to mount it and see what it actually is.
+# ESDLA/ holds a 3.9G .iso and a 5.7G .mdf. Different sizes, but both carry the
+# volume label LOTRBFME2, so it is one disc in two containers rather than two
+# games — the .mdf just includes the raw padding an .iso drops. Taking the
+# .iso; the .mdf is redundant and goes with the rest of the source on prune.
+# The RDRB disc reads LOTRBFME2EP1, which is expansion pack 1, Rise of the
+# Witch-king.
 ESDLA/LOTRBFME2.iso	The Lord of the Rings The Battle for Middle-earth II (2006).iso
 ESDLA RDRB/ns-LotrBfMe2EP1_Maxi-poseden.mdf	The Lord of the Rings The Battle for Middle-earth II [Rise of the Witch-king] (2006).mdf
-# ESDLA/LOTRBFME2.mdf	UNKNOWN — 5.7G, larger than the .iso next to it
+# ESDLA/LOTRBFME2.mdf — same volume label (LOTRBFME2) as the .iso next to it,
+# so it is the same disc in another container, not a second game. The .iso is
+# taken; this is redundant and can be deleted with the rest of the source.
 
 # --- Resolved by opening the files ----------------------------------------
 # Client version 3.3.5a, which is the last Wrath of the Lich King patch and
@@ -77,22 +82,32 @@ CRUSADER.iso	Stronghold Crusader (2002).iso
 # the name so nobody downloads it expecting a game.
 emperor.iso	Emperor Battle for Dune [Disc 3 of 3] (2001).iso
 
-# --- Held back: needs a human decision ------------------------------------
+# --- Resolved, but packed as directories ----------------------------------
+# These three are in gamevault-library-packmap.tsv instead, because the game is
+# a directory here and any single file out of it is a dead end.
+#
+# fable/ — confirmed Fable: The Lost Chapters (2005), not Fable III. The disc
+#   root holds FABLE___THE_LOST_CHAPTERS.MSI and DISK1C_1.CAB..DISK4C_1.CAB, so
+#   the "Fabl3" folder name was misleading. The .mdf also needs its .mds to
+#   mount, and the folder carries serial.txt and a Spanish translation.
+#
+# Final.Fantasy.I-VI.Pixel.Remaster.MULTi12/ — elamigos-1.bin sits next to
+#   setup-0.bin and setup-1.bin. One part of a multi-part installer; serving it
+#   alone gives a broken download.
+#
+# ESDL.ERDR/ — CD1+CD2+CD3, labels ESDLA3-CD1/2/3. That is El Retorno del Rey
+#   (2003), the EA action game, not the Battle for Middle-earth strategy games
+#   above. Different series, similar folder name.
 
-# fable/Fabl3/Fable Disk 1.mdf — folder says "Fabl3" (Fable III, 2010) but the
-# file says "Disk 1", and Fable III shipped on one DVD while Fable: The Lost
-# Chapters shipped on several. The folder and the filename disagree.
-# fable/Fabl3/Fable Disk 1.mdf	Fable III (2010).mdf
-
-# Final.Fantasy.I-VI.Pixel.Remaster elamigos-1.bin sits next to setup-0.bin and
-# setup-1.bin — it is one part of a multi-part installer, not a standalone
-# archive. Serving it alone gives a broken download. Needs repacking.
-# Final.Fantasy.I-VI.Pixel.Remaster.MULTi12/elamigos-1.bin	Final Fantasy I-VI Pixel Remaster (2022).bin
-
-# --- Multi-disc: not importable as-is -------------------------------------
-# GameVault serves one file per version and has no multi-disc concept, so a
-# CD1/CD2/CD3 set has to be repacked into a single archive first. Left alone.
-# ESDL.ERDR/ESDLA3-CD1.iso ... CD2 ... CD3   (LOTR: Return of the King, 2003)
-# Escape.From.Monkey.Island/...CD1.iso ... CD2.iso
-#   — and this one is already covered by the Monkey Island Collection entry
-#     above, so it is a duplicate rather than a gap.
+# --- Left in _ADRIAN -------------------------------------------------------
+# Escape.From.Monkey.Island/ — CD1+CD2 of a game already imported from the
+#   Monkey Island Collection. A duplicate, not a gap.
+#
+# Toradora[EN][1.00]/ — manual.pdf, xdelta3.exe and toradora.patch. An English
+#   translation patch, not the game.
+#
+# Nothing else in the collection is a game: four empty folders (fallout3,
+# fallout3(expansiones), Façade, Sims3v1.17(No-DVD)), a loose Assassin's Creed
+# crack, "call 4", Factorio mods, PS2 tooling under piratearps2/, and a stray
+# Hero00.pax. The CoDWaW/ and cod4/ patch installers stay too — the games
+# themselves came in as ISOs above.
