@@ -57,20 +57,27 @@ ESDLA/LOTRBFME2.iso	The Lord of the Rings The Battle for Middle-earth II (2006).
 ESDLA RDRB/ns-LotrBfMe2EP1_Maxi-poseden.mdf	The Lord of the Rings The Battle for Middle-earth II [Rise of the Witch-king] (2006).mdf
 # ESDLA/LOTRBFME2.mdf	UNKNOWN — 5.7G, larger than the .iso next to it
 
+# --- Resolved by opening the files ----------------------------------------
+# Client version 3.3.5a, which is the last Wrath of the Lich King patch and
+# the one private servers standardised on.
+WorldofWarcraft.7z	World of Warcraft [Wrath of the Lich King] (v3.3.5a) (2008).7z
+
+# Not Crusader Kings and not Crusader: No Remorse. The README.DOC inside the
+# ISO is the Spanish manual for "Stronghold: Crusader" and links
+# stronghold.godgames.com/crusader. Independently, the disc carries SECDRV.SYS
+# and DRVMGT.DLL — SafeDisc — which did not exist when the 1995 Crusader
+# shipped.
+CRUSADER.iso	Stronghold Crusader (2002).iso
+
+# Emperor: Battle for Dune, confirmed: the root holds MOVIES0001.RFD/.RFH and
+# MUSIC.BAG, both Westwood-only container formats, and the volume label is
+# EMPEROR3. That label is also the problem — this is disc 3 of a 3-disc set
+# and the other two are not in the collection, so it installs nothing on its
+# own. Imported anyway so it stops living in _ADRIAN, with the disc number in
+# the name so nobody downloads it expecting a game.
+emperor.iso	Emperor Battle for Dune [Disc 3 of 3] (2001).iso
+
 # --- Held back: needs a human decision ------------------------------------
-# WorldofWarcraft.7z is 18G with no version marker. Which expansion's client
-# it is decides the name, and getting that wrong makes it unfindable.
-# WorldofWarcraft.7z	World of Warcraft (2004).7z
-
-# CRUSADER.iso — IGDB proposed "Crusader (2025)", which is certainly wrong for
-# a 2008-dated file. Almost certainly Crusader: No Remorse (1995) or No Regret
-# (1996), but the ISO has to be opened to tell which.
-# CRUSADER.iso	Crusader No Remorse (1995).iso
-
-# emperor.iso — three plausible games: Emperor Battle for Dune (2001),
-# Emperor Rise of the Middle Kingdom (2002), or the Disney platformer IGDB
-# guessed. Not resolvable from the filename.
-# emperor.iso	Emperor Battle for Dune (2001).iso
 
 # fable/Fabl3/Fable Disk 1.mdf — folder says "Fabl3" (Fable III, 2010) but the
 # file says "Disk 1", and Fable III shipped on one DVD while Fable: The Lost
