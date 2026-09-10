@@ -1,0 +1,266 @@
+# GameVault — DRM-free PC game library (GOG, homebrew, fan remakes).
+#
+# The complement to romm.yaml: RomM holds the emulated collection, this holds
+# the PC games that run natively. They don't overlap — GameVault has no ROM or
+# emulator support and no plans for it.
+#
+# Library scope: /mnt/RAID/docker/gamevault-library, a new empty tree. The
+# existing collection under /mnt/RAID/adrian/_ADRIAN/Juegos/PC is deliberately
+# NOT mounted: 47 entries of repacks, loose .iso/.rar and a 19GB WoW archive,
+# none of which follow the naming convention below. Same call as RomM made with
+# the EmuDeck tree — consolidate first, then add as a second source.
+#
+# Filenames are the metadata. GameVault parses them and the format is strict
+# and case sensitive:
+#   Title (Version) (EarlyAccess) (GameType) (NoCache) (ReleaseYear).ext
+#   Baldurs Gate 3 (v4.1.1) (2023).zip
+# Round brackets are reserved for those flags, so a subtitle goes in square
+# brackets: "Fallout 3 [GOTY] (2009).zip".
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gamevault
+  namespace: piracy
+  labels:
+    app: gamevault
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gamevault
+  template:
+    metadata:
+      labels:
+        app: gamevault
+    spec:
+      enableServiceLinks: false
+      securityContext:
+        # Not cosmetic. entrypoint.sh branches on `id -u`: as root it runs
+        # `chown -R` and `chmod -R 775` over /config /files /media /logs /db
+        # /plugins /savefiles before dropping privileges, which on an NFS game
+        # library means walking every file on every pod start. As non-root it
+        # skips straight to `exec node`. PUID/PGID only exist on the root
+        # branch and are ignored here.
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: gamevault
+          # Pinned for GitOps reproducibility. TypeORM runs migrations during
+          # app.init(), before the port opens, so a version bump means a longer
+          # first boot — that's what the startupProbe budget below is for.
+          image: phalcode/gamevault-backend:17.0.1
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            # readOnlyRootFilesystem is not viable: the web UI unpacks into
+            # /config/frontend and the logger writes to /logs.
+          env:
+            # Postgres on the same nas02 PG17 instance the Servarr apps, RomM,
+            # Suwayomi and anisub already share.
+            - name: DB_SYSTEM
+              value: POSTGRESQL
+            - name: DB_HOST
+              value: "192.168.0.29"
+            - name: DB_PORT
+              value: "5432"
+            # DB_USER and DB_NAME do not exist. The variables are DB_USERNAME
+            # and DB_DATABASE; a typo silently falls back to the defaults
+            # (`default` / `gamevault`) instead of failing.
+            - name: DB_USERNAME
+              value: gamevault
+            - name: DB_DATABASE
+              value: gamevault
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: gamevault
+                  key: db-password
+            # DB_SYNCHRONIZE stays at its default false, because migrationsRun
+            # is computed as !DB_SYNCHRONIZE. Setting it true would disable
+            # migrations, not enable them.
+
+            # The app secret, and the one value that must not be left implicit.
+            # Unset, it falls through DB_PASSWORD → SERVER_ADMIN_PASSWORD →
+            # METADATA_IGDB_CLIENT_SECRET → randomBytes(32). The random tail
+            # invalidates every session on restart, and the DB_PASSWORD rung
+            # means rotating the database password logs everyone out.
+            - name: AUTH_SEED
+              valueFrom:
+                secretKeyRef:
+                  name: gamevault
+                  key: auth-seed
+
+            # SERVER_ADMIN_USERNAME does NOT create the account. On every boot
+            # recoverAdmin() looks the username up and, if it exists, forces
+            # role=ADMIN, activated=true and resets the password. If it doesn't
+            # exist it logs a warning and carries on. The account itself comes
+            # from registering once — and the first user to register on an
+            # empty database becomes admin anyway.
+            - name: SERVER_ADMIN_USERNAME
+              value: agonbar
+            - name: SERVER_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: gamevault
+                  key: admin-password
+            # BOOTSTRAP: open until the agonbar account exists, then closed in
+            # the follow-up commit. Registration has to be open for that first
+            # POST /api/auth/basic/register; there is no other way to create
+            # the account short of writing a bcrypt hash into the table.
+            - name: SERVER_REGISTRATION_DISABLED
+              value: "false"
+
+            # Same Twitch application as RomM. IGDB is the only built-in
+            # provider; RAWG was removed in v13 and everything else needs a
+            # plugin dropped into /plugins.
+            - name: METADATA_IGDB_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: gamevault
+                  key: igdb-client-id
+            - name: METADATA_IGDB_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: gamevault
+                  key: igdb-client-secret
+
+            # /files is NFS, where inotify does not fire. Without polling the
+            # watcher never reports a new game and the library only changes on
+            # the hourly interval sweep.
+            - name: GAMES_INDEX_USE_POLLING
+              value: "true"
+
+            # The backend fetches its own web UI from GitHub releases at boot
+            # and unpacks it into /config/frontend, so /config has to be a real
+            # volume (it is) and the pod needs egress to api.github.com. Pinned
+            # rather than resolved, both for reproducibility and because the
+            # anonymous GitHub API limit of 60 req/h is shared across every
+            # pod leaving this cluster.
+            - name: WEB_UI_VERSION
+              value: "17.0.0"
+          ports:
+            - containerPort: 8080
+              name: http
+          startupProbe:
+            httpGet:
+              path: /api/status
+              port: 8080
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /api/status
+              port: 8080
+            periodSeconds: 15
+            timeoutSeconds: 10
+          livenessProbe:
+            # Weak on purpose, and worth knowing why: /api/status returns 200
+            # unconditionally and in 17.0.1 nothing in the codebase ever sets
+            # the body's status field to UNHEALTHY. This catches a hung or dead
+            # process, not a broken database. A DB outage shows up as failing
+            # requests, not as a failing probe.
+            httpGet:
+              path: /api/status
+              port: 8080
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+          volumeMounts:
+            - name: data
+              mountPath: /config
+              subPath: config
+            - name: data
+              mountPath: /media
+              subPath: media
+            - name: data
+              mountPath: /logs
+              subPath: logs
+            - name: library
+              mountPath: /files
+          resources:
+            requests:
+              memory: 512Mi
+              cpu: 200m
+            limits:
+              memory: 2Gi
+              cpu: "2"
+              # Single-file games (.exe/.sh/.AppImage) are tarred into the
+              # container's /tmp on download and cached until restart, with no
+              # cap. Archives are streamed and never hit this path. The limit
+              # is here so the kubelet evicts this pod instead of filling the
+              # node's disk.
+              ephemeral-storage: 10Gi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: gamevault-data
+        - name: library
+          nfs:
+            server: 192.168.0.29
+            path: /mnt/RAID/docker/gamevault-library
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+
+---
+# NFS rather than iSCSI. This holds IGDB cover art, the unpacked frontend and
+# logs — nothing that wants block storage — and it sidesteps the ext4
+# journal-abort failure mode the iSCSI-backed volumes on this cluster keep
+# hitting.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gamevault-data
+  namespace: piracy
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-nfs-ssd-lan
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gamevault
+  namespace: piracy
+spec:
+  type: ClusterIP
+  selector:
+    app: gamevault
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+      name: http
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gamevault-https
+  namespace: piracy
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: gamevault.${BASE_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: gamevault
+                port:
+                  number: 8080
+  tls:
+    - secretName: gamevault.${BASE_DOMAIN}
+      hosts:
+        - gamevault.${BASE_DOMAIN}
