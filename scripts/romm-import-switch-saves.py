@@ -10,8 +10,12 @@ Each save is a directory, so this packs one zip per (profile, title_id) and
 uploads it to the matching ROM. Profiles holding byte-identical data for the
 same title are collapsed into a single upload.
 
-Idempotent: RomM rejects a save whose filename already exists for the ROM
-unless `overwrite` is set, and this never sets it.
+Rerunnable: RomM matches an upload to an existing save of the same ROM by
+filename and overwrites it in place, so a second run updates, never duplicates.
+
+Some profiles belong to other people, whose saves go to their own RomM account:
+
+    romm-import-switch-saves.py --user <their account> --profile F87053BD
 """
 
 import argparse
@@ -48,6 +52,11 @@ PROFILE_NAMES = {
     "00000000": "sin perfil",  # yuzu's fallback account
 }
 
+# Profiles whose saves belong to another RomM account. Skipped unless named
+# with --profile. panda's are also copied outside the Syncthing folder, in
+# /config/_rescate-saves-switch, in case EmuDeck's copy is gone by then.
+OTHER_OWNERS = {"F87053BD"}
+
 
 def kexec(target, script, attempts=4):
     """Run a command in a pod, retrying the flaky WAN link to the apiserver."""
@@ -82,15 +91,16 @@ def manifest():
     return rows
 
 
-def mint_token():
-    """Sign a short-lived bearer token with RomM's own auth key, inside the pod."""
+def mint_token(username="agonbar"):
+    """Sign a short-lived bearer token for `username` with RomM's own key, inside the pod."""
     script = (
         "python3 -c \"import json;"
         "from datetime import timedelta;"
         "from handler.auth.base_handler import OAuthHandler;"
         "from handler.auth.constants import FULL_SCOPES;"
         "from handler.database import db_user_handler;"
-        "u=[x for x in db_user_handler.get_users() if x.enabled][0];"
+        f"u=db_user_handler.get_user_by_username('{username}');"
+        "assert u and u.enabled, 'no existe ese usuario en RomM';"
         "print(json.dumps({'user':u.username,'token':OAuthHandler().create_access_token("
         "{'sub':u.username,'iss':'romm:oauth','scopes':' '.join(FULL_SCOPES)},"
         "timedelta(minutes=45))}))\""
@@ -226,13 +236,21 @@ def purge(token):
 
 
 def main():
+    global NAND
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--replace", action="store_true",
-                    help="delete the saves a previous run uploaded before starting")
+                    help="delete every yuzu save of --user before starting")
+    ap.add_argument("--user", default="agonbar", help="RomM account that receives the saves")
+    ap.add_argument("--profile", action="append",
+                    help="only this yuzu profile (first 8 hex); repeatable")
+    ap.add_argument("--nand", default=NAND,
+                    help="the 0000000000000000 save dir, e.g. the rescue copy")
     args = ap.parse_args()
 
-    session = mint_token()
+    NAND = args.nand
+
+    session = mint_token(args.user)
     token = session["token"]
     print(f"autenticado como {session['user']}", file=sys.stderr)
 
@@ -244,6 +262,9 @@ def main():
     seen = set()
     plan, orphans = [], []
     for profile, title_id, count, digest in sorted(rows):
+        wanted = profile[:8] in args.profile if args.profile else profile[:8] not in OTHER_OWNERS
+        if not wanted:
+            continue
         hit = index.get(title_id[:12])
         if not hit:
             orphans.append((title_id, profile, count))
