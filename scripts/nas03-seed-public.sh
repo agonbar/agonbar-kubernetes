@@ -102,16 +102,18 @@ copy_nas00() {
 }
 
 seed_nas02() {
-  "${N02[@]}" "cd ~/nas03-seed && setsid nohup rsync $RSYNC_OPTS --from0 --files-from=from-nas02.lst \
+  # BWLIMIT (KiB/s) leaves room on nas03's 1GbE when copy-nas00 runs at the same time.
+  "${N02[@]}" "cd ~/nas03-seed && setsid nohup rsync $RSYNC_OPTS ${BWLIMIT:+--bwlimit=$BWLIMIT} --from0 --files-from=from-nas02.lst \
     -e $(printf %q "$RSH") --rsync-path='sudo rsync' $N02_SRC/ $NAS03:$DST > seed-nas02.log 2>&1 < /dev/null &"
   log "started rsync on nas02; log ~/nas03-seed/seed-nas02.log"
 }
 
 status() {
   echo "== nas00 unit"; "${N00[@]}" "systemctl is-active nas03-seed-nas00 2>/dev/null; sudo -n grep '^==' /var/log/nas03-seed-nas00.log 2>/dev/null | tail -3; sudo -n tail -c 400 /var/log/nas03-seed-nas00.log 2>/dev/null | tr '\r' '\n' | tail -2" || true
-  echo "== nas00 md/disk errors since boot"; "${N00[@]}" "cat /proc/mdstat | grep -A1 ^md1; sudo -n dmesg | grep -i -E 'md/raid|I/O error|medium error|ata[0-9].*(error|reset)' | tail -5" || true
-  echo "== nas02 seed"; "${N02[@]}" "pgrep -f 'files-from=from-nas02' >/dev/null && echo running || echo not-running; tail -c 400 ~/nas03-seed/seed-nas02.log 2>/dev/null | tr '\r' '\n' | tail -2" || true
-  echo "== nas03"; ssh -o BatchMode=yes "$NAS03" "zfs list -H -o used,avail RAID/Public 2>/dev/null || df -h $DST | tail -1"
+  echo "== nas00 md/disk errors since boot"; "${N00[@]}" "cat /proc/mdstat | grep -A1 ^md1; sudo -n dmesg | grep -i -E 'md/raid.*(fail|error|disabl)|I/O error|medium error|ata[0-9].*(error|reset)' | tail -5" || true
+  # [f] keeps pgrep from matching the remote shell running this very command.
+  echo "== nas02 seed"; "${N02[@]}" "pgrep -f '[f]iles-from=from-nas02' >/dev/null && echo running || echo not-running; tail -c 400 ~/nas03-seed/seed-nas02.log 2>/dev/null | tr '\r' '\n' | tail -2" || true
+  echo "== nas03"; ssh -i "$HOME/.ssh/nas" -o BatchMode=yes "$NAS03" "zfs list -H -o used,avail RAID/Public 2>/dev/null || df -h $DST | tail -1"
 }
 
 verify() {
