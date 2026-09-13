@@ -100,12 +100,17 @@ spec:
                           memory: 1Gi
                           cpu: 1000m
                       limits:
-                          # Capped to fit the 18Gi/16cpu work-vm-* media nodes. The prior
-                          # 100Gi/12 limit was fiction: Tdarr's parallel ffmpeg transcodes
-                          # exhausted real node RAM, causing node-level OOM resets that took
-                          # down cruncharr (colocated) and corrupted its SQLite DB. An 8Gi
-                          # cgroup cap contains Tdarr to a cgroup-OOM instead of nuking the node.
-                          memory: 8Gi
+                          # Capped to fit the smallest media node (kubernetes-00/kubernetes-10,
+                          # 16Gi). The prior 100Gi/12 limit was fiction: Tdarr's parallel ffmpeg
+                          # transcodes exhausted real node RAM, causing node-level OOM resets
+                          # that took down cruncharr (colocated) and corrupted its SQLite DB.
+                          # A cgroup cap contains Tdarr to a cgroup-OOM instead of nuking the
+                          # node. 2026-09-13: 8 -> 10Gi after kubernetes-00/work-vm-00 hit the
+                          # 8Gi cap mid-transcode and OOMKilled repeatedly, churning Tdarr's
+                          # server-side node registration (5-node cap) and knocking the other
+                          # two nodes off. Concurrent transcodes per node capped to 1 in the
+                          # Tdarr UI alongside this bump.
+                          memory: 10Gi
                           # 2026-09-01: 6 -> 12. The RAM cap above is what prevents the OOM
                           # incident; CPU was throttling every node to ~40% while x265 could
                           # use more. 12 = 75% of the 16-core work-vm-00/01/02. work-vm-03 has
