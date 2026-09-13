@@ -1,0 +1,45 @@
+# OVH DNS credentials for the letsencrypt-dns-ovh ClusterIssuer. They live here
+# because cert-manager's OVH webhook reads them from the Certificate's namespace
+# (see deployments/cert-issuer/ovh-dns.yaml). Sure's pods neither mount this
+# Secret nor have RBAC to read secrets; only the webhook's ServiceAccount does.
+---
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: ovh-dns-credentials
+  namespace: sure
+spec:
+  encryptedData:
+    applicationConsumerKey: AgCcmC8WpaieRJNZrgK13zMLzI1S0NPGi1q9nEdq95BMV8x8sJr3MHrIJb/Rm8/La4/YnqWUUI+0tsVXN/QWWb/0DvTumo2MNc7+QFM8VFbFVquRuNukjf/8FQ0K1gVcopUxcpd1OoVt1H8+DvIQlonNWKsxud9dPmAx3B9krOcWfnP0AXPTtP8KdmMdkNZdkv+/fGGnlhxte8wdFC4P1cBBCc026HbMD9rf05YksuzZKpn1ELBfeXBw2GihdbjvxXpf3knSdfduabPQAvTfqurEdBJUBes1KVhoDQs2ViZHDwqKnKal/gyMwFUg/kNN8Qhc8CRMlvfQesr8nPnjnd4gSahd83O5zAMrcfVGra3YXWzPdRrwjPBH5tDMmCn8mH01k+161IHUNvymvLxfgrPpWUoQ4T68yGj79pUfVKSeCEGPsLo7GC/2vYvOQhNoWbKRvfMqEIPCRgOxUvLNNY2AcJtjAWcDsAd23NPZuZaKfRNb9Bs+bgcIg7UYBdKpEasZzoaXr1o/5t7J8I8Q72Rj2QpLR1+zWehjr57apdttESwuIe32TCqO/fljz9O/SdO+osaZ1aXPlBgkiB6sQ5LEc0gDj7UNMoIL0scv6OmpTc0XSmi8PeKqoZtXnU9Hw8MOAzamyeys9Fnwx9pLDKGO9Aspje03H6W8+uPSzE1SltUuhQgzJeAGxDETGKVAo4tJ9SWOg9FlSQz6g0AIqdGtHNObcxVGv6rQ+QuQeq/XrA==
+    applicationKey: AgAYFxhg1anOImmXmiRChOD8PpK/FRc+hiDmXpl76lJfTRUyaJOkrKLZoDNIh0WJu6XGAQQQ30dmqyLewnSOo1FU3N2IrRL6TGuNkVPmxuFLR9uuSaL1iUe5H4YuY5P5z2MsJUZDh+RUXEvHqMxMRsSEpPUsM3kka8ZsJeOYfOtc+KSTPQdoR4N/egWocwKLLag3oGJlLb6b2RoOwziH6woKFTNlAWLlVxQ4Dq7a4UPUrYC7u0YKbnlLTVKh44d3V7PcxTBzWGVjxvebd9GrTEtljK7rC6JIcIPkMva5uwxYQQIeSjaX6q4mZ3zaeRWyNXodxnJn8n03tYkrHCtt6Yij662VxH5Ngrmyn3c3fJ9LKs357Cr7TIixjd4SUgCPnokXAK+vR85Nmv51LSWXRxfk0CQGhnsrz5WrKJgnDHH8e9zFpReW82P95wZox1f7Kzgaja2994v9OULQxCaNiFnXfXV7NbNI3QVz+LeVw4J/Q3Ois+visv0X+ojdAMd11ZeusyTDfJqX4lWNHPuFYH65pPsY/7EPXGBtz7FRtdmfPjOEb00Hn4QXeCj3otphZTthvnd0ez28Xl1o+QzXz8xxjfdrCIfan9s8A1b4vr4KcJGzavZAFwmxfpKNo2R7niSIfgfAZhFAZcOeHZkB6lc2VJazY/BcmNdamjl/c8fbsi8BMKoCaenvabN2vvSrote8C9Y5eUH5X8Fr435PmLN2
+    applicationSecret: AgCJW/C7b/UCtNRG+jR4fyOL9qjfPbggcSspf/rr/PVLKBIUOeNX+USLJiDUs6ukEsjT2A9LOiqYEfywF9jLuc7qx9lzL+yhIUIQXxv/b96Z2+PKvZTm20JciesXC909/uhfR3u752597qv/+wKIesTr8QxuX0VRS4aViJqNih1agYWjtUgiGulsCYt+UYQcKR5KVZRAM/OUShPcr40p//dNei3KuMozEB6wEoJGOee5OO1QAYFs3przjLmVZbW+Vbwzq7mqmmFLyABAjixJAMMUgtfqYs6I88w7mYZsZGDMJHYt6F2BmJS9GN+pOrzhF3tqVr9ffoGpCJo7+lKcNDiHy0OmgTe+IuC72Mya1g94IGn7rwv9OH7nvjzGpr3Opnhc1IQt44kxX97JUvjDak27tJ5h/lqW5cubJfIjc24mroUYeWDzOvJzhI4NMVEfhtFlapHcmxGs/HWBoRubbdw82M2Wiu1SgrGTAD9cqw0Y98TH48YkKCkYHfK1iUyoFq3dJ0qYMDRj90ca6XNC/gJcgLxON/ljAO8+dvyYKbG1adWU5/XIftPG4VIFhBsKOspH9v81etBoYUZan9TvHIL+txZMfZiSYGSBDQpAoeZT3MhAnbW6urYlAivIos8ZBFyK5eg4AyNgaPLusO+Yeq04Pu0UGUfk8QrPoRvS+RuHHnnSBwzJXNTVGKW/Mltp/rX9j1Zk30FFhPraQ/yhPYA6QdtIpW5vnrY1yPiu+007Jw==
+  template:
+    metadata:
+      name: ovh-dns-credentials
+      namespace: sure
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cert-manager-webhook-ovh:ovh-dns-credentials
+  namespace: sure
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["ovh-dns-credentials"]
+    verbs: ["get", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cert-manager-webhook-ovh:ovh-dns-credentials
+  namespace: sure
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cert-manager-webhook-ovh:ovh-dns-credentials
+subjects:
+  - kind: ServiceAccount
+    name: cert-manager-webhook-ovh
+    namespace: cert-manager
