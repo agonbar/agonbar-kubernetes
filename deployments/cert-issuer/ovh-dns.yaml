@@ -2,52 +2,13 @@
 # (DNS-01) instead of HTTP-01 through traefik. Use it for names that resolve to
 # tailnet/LAN addresses, e.g. sure.adriangonzalezbarbosa.eu -> nas02-k3s.
 #
-# The OVH token can only touch the adriangonzalezbarbosa.eu zone. Copy of
-# record: dotfiles/nix/secrets/ovh-dns-adriangonzalezbarbosa.age; recreate it
-# with scripts/ovh-dns-token-wizard.sh.
----
----
-apiVersion: bitnami.com/v1alpha1
-kind: SealedSecret
-metadata:
-  name: ovh-dns-credentials
-  namespace: cert-manager
-spec:
-  encryptedData:
-    applicationConsumerKey: AgBgCZDPm8c87jXkbLRvVKqPzccW5UGp6he8gJ7BXPTHaVwTbhKOP1eGT4NYfLVT5+9EQwm6mx9FHkyqlYXDxc2w6njfW8z9I0W79Te2+eb7LuLIp18BiyEZFhyvQ/NiwnXTJjKOQYFaaF5IO3OQEK9O+sgDfJUwXchu2AsIztSDvhYhnOXqwdxlHgcq5sDxHzOynnKKeDFOROuZID7RmmepNkknqSFSNUhASLoO+u9WnBA1VFRKO/Z8TRedfs512ofKEuNUppgcNeDYAiw60p47ciiIS8v5IiiSEYJKH1Kf6DRAmfceN/eq1QT2nqEE17fXGKjGs8YzDzvDjYC0E6Q+pXCEi2HjTpS+CiEmmJcCU7j53Q2wpEOjnrduYimUZ4nafUYpWwfFcDu6CztQ43nJyY3EL9KqyTh+Ihp0/Pub0lFRXYWcoakbxzXs3NOgeU82E1mgeE9pPFAlAPn4QZ2ls9qyqOfMyncdSdj6igWXvJ0EE9SisduhsC1QaIKO4Ef6hN65UgUjKNW9IVc4sk2B1F3XAq8jvzNFqByyEfYrUd8qmD5JMR4HIEGEnlxvCH5lRlUKx1n9FUSm3qwuM6ck5c/vBfR3nkMHwpOAprFzk59BxAyyrDGYhE9FLW06FEX33+a8Mk/HHNnNKu5eTLA8Y1A8eIPVHiPXCbVBB41KlGkL1nvyUBoILnpd56BAvmHCdjWuxLWC3rz3Pcd71Bc9YjA3gq336SA3o3SH51Chhg==
-    applicationKey: AgBdOC/lIb89COka1UDx4kHGQMWch08qnogyncz5RNVjupCiQLWrKyk2epyPs1kvKpfNY2C3jRBR8eU8ILTUzOn2uvGBkmZs7F2FT6GBp9p1mr1Z0zt0OWEiR1HRu9PLHfO84XQPIjimtr8f+KjIn61xN3kBphXVIkOZtlSUOy81tLRkjpYncJUk2cHojcWZZsJxZZrXWHWHEGfnM9dfMhfkCQn8GirlaFJvEyzK/owWN41UcI6WDhEYUXKUnK3u6wxtR0pRxniPWZ2cu77S0mzcgtx6ZS6T4aJ78d3ahT40osbv5byiwi7d0iV9IuOk1EDfphOidQeV5ZW3yi2UWPiQulEqRsy56bDQx0Vc6PoEHkBulzNILuYPvVxKav96/LPjJB2kzINBhiJYnwhOMFBwwyER68EwIPdm7OtV4SKDLJ0WZg1wxD2ZRCW4uFWGIq32LdLq7MSiWS5fyUQLZLR8npX0r25eZ3GQSD+QpHn7vsR2Blrtvd6IGE6m+jBruUxxcnFnOuuqwbBWkFDbmSw0pYl/IaDPHpNxSFyeiZo+jHXzNh9LYjA+Z9yOwkuoQ+fO3L4DofHT6btPxhMMYXGup+bqsKdoUyo7AWCqsQyDHrKlUfb3g8jBnkOJQ5lHcmjnY69Ff1EzJYUWMuwSCMKd+agfRjmhSifJBPjKdWtCkb3QIUEebBRo0WvjNqS/lnDsvtA2Brz0CuXK17p5j1Hq
-    applicationSecret: AgAv84teZowXsMxB4CkBtqMCOt1ghtO2kPnXB5FHB8b+at3JfpeexlajQ+8v0Q4pmGoRwxNIDVcAFDIlQ1ti2enXckQidFHh+YuTVsU56CI6++b0+nMz6Au9JBOH0EAQ6lbnfQ5QL/H6cWOOZYrEXu6xi2bTD3FGEplLX7XdmaMkcJBg+Xagr0XH1z3WPNvvgrX9JiqftY2xwmDqnLcj62vPy7Dfx+D1rzDPht0YuzsqZgoxcQ7f3n+YiL7K6X/mA4aoI0r5nzx5v9NjV0CEu7RVnDJzAMk09kNNswHBXkSMUztHa0GsJ9jNmLavMwndLD4E5h3gLLA/B5CmdWL//am22Eu9/B5fFQae9c9BDYI2T08uqETFI9oqA5hYpU2wY3uauglsIoY/433HAUOZ6x7+dxI5/KqQUx/6qRlm3QSHISbd6mKB/Akm73X1LfN9wT68dPiXzUAfw8dZSwTHmRX5mFM6ctohF6R4kVBbbZd0VeXlwCNSHrCkGQ+XlDrw1pqKo7NhKDx0uv8/iQ787OX+oIIuFAntr7s9Y6zfxhTaRjRYlCd1cwKBeBkc6OKine6KZ9cxRTy7TeAK1hR0Yoc5kmPGb28WtwCo4zcEIGIzJdZpzj5WE3q7E4Q+WSUhkKHvYEdCtN0nXjSazvN2VRqgxaRCSeF2z0XfM6mg46cbIonK21EZ4VgLbantDdYjtd/cyPqDWp8V1qsdfET9qlMOrnUXR336jl0vbm1mUtyJ5Q==
-  template:
-    metadata:
-      name: ovh-dns-credentials
-      namespace: cert-manager
----
-# The webhook only reads credentials it has been granted; the chart creates this
-# RBAC solely for issuers it manages itself, and this one is managed here.
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: cert-manager-webhook-ovh:ovh-dns-credentials
-  namespace: cert-manager
-rules:
-  - apiGroups: [""]
-    resources: ["secrets"]
-    resourceNames: ["ovh-dns-credentials"]
-    verbs: ["get", "watch"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: cert-manager-webhook-ovh:ovh-dns-credentials
-  namespace: cert-manager
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: cert-manager-webhook-ovh:ovh-dns-credentials
-subjects:
-  - kind: ServiceAccount
-    name: cert-manager-webhook-ovh
-    namespace: cert-manager
+# Credentials: cert-manager 1.16 hands the webhook the Certificate's namespace,
+# not cert-manager's, even for a ClusterIssuer. So each namespace that requests
+# a certificate from this issuer needs its own sealed `ovh-dns-credentials`
+# Secret plus a Role letting the webhook read it (see deployments/sure/ovh-dns.yaml).
+# The OVH token can only touch this zone. Copy of record:
+# dotfiles/nix/secrets/ovh-dns-adriangonzalezbarbosa.age; recreate it with
+# scripts/ovh-dns-token-wizard.sh.
 ---
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
