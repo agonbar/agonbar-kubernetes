@@ -32,6 +32,11 @@ data:
   ONBOARDING_STATE: open
 
 ---
+# replicas: 0 since 2026-09-13, right after the first deploy. The lamg pool has
+# no room for two Rails processes: orange-pi5 (8GB, limits at 288%, carrying
+# Home Assistant and the arr stack) went NotReady twice while Sure booted, and
+# nas01 already has 99% of its memory requested. The kubernetes-* nodes have
+# the headroom but no LAN path to 192.168.0.29. Scale up once it has a home.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -40,7 +45,7 @@ metadata:
   labels:
     app: sure-web
 spec:
-  replicas: 1
+  replicas: 0
   strategy:
     type: Recreate
   selector:
@@ -119,7 +124,7 @@ metadata:
   labels:
     app: sure-worker
 spec:
-  replicas: 1
+  replicas: 0
   strategy:
     type: Recreate
   selector:
@@ -176,7 +181,7 @@ metadata:
   labels:
     app: sure-redis
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: sure-redis
