@@ -1,0 +1,50 @@
+# DNS-01 solver for cert-manager against the OVH zone adriangonzalezbarbosa.eu,
+# for names that must not be served through the public traefik (the zone's
+# wildcard points at ovh02). Only the webhook is installed here; the
+# ClusterIssuer, its credentials and the secret-reader RBAC live in
+# deployments/cert-issuer/ovh-dns.yaml so the issuer can use ${LETSENCRYPT_EMAIL}.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager-webhook-ovh
+  namespace: argocd
+spec:
+  project: default
+  source:
+    chart: cert-manager-webhook-ovh
+    repoURL: https://aureq.github.io/cert-manager-webhook-ovh/
+    targetRevision: 0.9.16
+    helm:
+      releaseName: cert-manager-webhook-ovh
+      valuesObject:
+        groupName: acme.adriangonzalezbarbosa.eu
+        certManager:
+          namespace: cert-manager
+          serviceAccountName: cert-manager
+        issuers: []
+        pod:
+          # Next to the API server that calls it; ovh02 is also the steadiest node.
+          selectors:
+            nodeSelector:
+              kubernetes.io/hostname: ovh02
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 128Mi }
+  destination:
+    name: in-cluster
+    namespace: cert-manager
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - PruneLast=true
+      - RespectIgnoreDifferences=true
+      - Validate=false
+      - PrunePropagationPolicy=foreground
+    retry:
+      limit: 5
+      backoff:
+        duration: 20s
+        factor: 2
+        maxDuration: 3m0s
