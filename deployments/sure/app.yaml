@@ -32,11 +32,11 @@ data:
   ONBOARDING_STATE: open
 
 ---
-# replicas: 0 since 2026-09-13, right after the first deploy. The lamg pool has
-# no room for two Rails processes: orange-pi5 (8GB, limits at 288%, carrying
-# Home Assistant and the arr stack) went NotReady twice while Sure booted, and
-# nas01 already has 99% of its memory requested. The kubernetes-* nodes have
-# the headroom but no LAN path to 192.168.0.29. Scale up once it has a home.
+# Pinned to nas02-k3s, a NixOS k3s agent VM on the nas02 TrueNAS (16 GiB,
+# dotfiles nix/hosts/nas02-k3s). The first deploy landed on orange-pi5, which
+# went NotReady twice while the two Rails processes booted; nas01 had 99% of
+# its memory requested, and the kubernetes-* nodes have no LAN path to
+# 192.168.0.29. The VM sits on nas02's own LAN bridge, next to the database.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -45,7 +45,7 @@ metadata:
   labels:
     app: sure-web
 spec:
-  replicas: 0
+  replicas: 1
   strategy:
     type: Recreate
   selector:
@@ -114,6 +114,7 @@ spec:
             claimName: sure-storage
       nodeSelector:
         svccontroller.k3s.cattle.io/lbpool: lamg
+        kubernetes.io/hostname: nas02-k3s
 
 ---
 apiVersion: apps/v1
@@ -124,7 +125,7 @@ metadata:
   labels:
     app: sure-worker
 spec:
-  replicas: 0
+  replicas: 1
   strategy:
     type: Recreate
   selector:
@@ -169,6 +170,7 @@ spec:
             claimName: sure-storage
       nodeSelector:
         svccontroller.k3s.cattle.io/lbpool: lamg
+        kubernetes.io/hostname: nas02-k3s
 
 ---
 # Queue only, no persistence. Sidekiq-cron re-registers its schedule at boot,
@@ -181,7 +183,7 @@ metadata:
   labels:
     app: sure-redis
 spec:
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app: sure-redis
@@ -210,6 +212,7 @@ spec:
               memory: 256Mi
       nodeSelector:
         svccontroller.k3s.cattle.io/lbpool: lamg
+        kubernetes.io/hostname: nas02-k3s
 
 ---
 apiVersion: v1
