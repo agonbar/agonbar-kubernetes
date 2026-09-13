@@ -1,9 +1,15 @@
 # Sure: personal finance (community fork of Maybe Finance), Rails + Sidekiq.
 #
-# LAN only, on purpose. There is no Ingress: the app holds every bank movement,
+# Private on purpose. There is no Ingress: the app holds every bank movement,
 # so it is published solely through the lamg lbpool LoadBalancer below and is
-# never routed through traefik to the internet. That also means plain HTTP,
-# which is why RAILS_FORCE_SSL/RAILS_ASSUME_SSL are off.
+# never routed through traefik, which is also the public ingress on ovh02.
+#
+# URL: https://sure.adriangonzalezbarbosa.eu:3443. That name is an OVH A record
+# pointing at nas02-k3s's tailnet address (scripts/ovh-dns.sh), so it only works
+# over tailscale. TLS ends in the ghostunnel sidecar with a Let's Encrypt
+# certificate obtained by DNS-01 (ClusterIssuer letsencrypt-dns-ovh), because
+# 443 on the lamg nodes already belongs to svclb-traefik. Enable Banking's
+# redirect URL is registered with exactly this origin, port included.
 #
 # Database: `sure` role and db on the nas02 PG17 (192.168.0.29), so every pod
 # is pinned to the lamg pool, the only nodes with a LAN path to it. The daily
@@ -26,8 +32,12 @@ metadata:
   namespace: sure
 data:
   SELF_HOSTED: "true"
+  # ghostunnel is a TCP proxy and sends no X-Forwarded-Proto, so Rails is told
+  # every request is HTTPS. That makes cookies secure-only, which is why the
+  # plain :3000 port is not published. FORCE_SSL stays off: its redirect would
+  # drop the :3443 port.
   RAILS_FORCE_SSL: "false"
-  RAILS_ASSUME_SSL: "false"
+  RAILS_ASSUME_SSL: "true"
   DB_HOST: "192.168.0.29"
   DB_PORT: "5432"
   POSTGRES_USER: sure
@@ -116,10 +126,47 @@ spec:
               memory: 512Mi
             limits:
               memory: 1536Mi
+        - name: tls
+          image: ghostunnel/ghostunnel:v1.11.3
+          args:
+            - server
+            - --listen=0.0.0.0:3443
+            - --target=127.0.0.1:3000
+            - --cert=/tls/tls.crt
+            - --key=/tls/tls.key
+            - --disable-authentication
+            # cert-manager renews into the same Secret; this picks it up.
+            - --timed-reload=1h
+            - --quiet=conns
+          ports:
+            - containerPort: 3443
+              name: https
+          readinessProbe:
+            tcpSocket:
+              port: https
+            periodSeconds: 15
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tls
+              mountPath: /tls
+              readOnly: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
       volumes:
         - name: storage
           persistentVolumeClaim:
             claimName: sure-storage
+        - name: tls
+          secret:
+            secretName: sure-tls
       nodeSelector:
         svccontroller.k3s.cattle.io/lbpool: lamg
         kubernetes.io/hostname: nas02-k3s
@@ -238,7 +285,6 @@ spec:
       name: redis
 
 ---
-# 3000 is already taken in the lamg pool by netbootxyz.
 apiVersion: v1
 kind: Service
 metadata:
@@ -251,9 +297,23 @@ spec:
   selector:
     app: sure-web
   ports:
-    - port: 3100
-      targetPort: http
-      name: http
+    - port: 3443
+      targetPort: https
+      name: https
+
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: sure-tls
+  namespace: sure
+spec:
+  secretName: sure-tls
+  dnsNames:
+    - sure.adriangonzalezbarbosa.eu
+  issuerRef:
+    kind: ClusterIssuer
+    name: letsencrypt-dns-ovh
 
 ---
 # Uploads (CSV imports, logos). RWX because web and worker both mount it; the
@@ -270,17 +330,3 @@ spec:
   resources:
     requests:
       storage: 5Gi
-
----
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-  name: sure-tls
-  namespace: sure
-spec:
-  secretName: sure-tls
-  dnsNames:
-    - sure.adriangonzalezbarbosa.eu
-  issuerRef:
-    kind: ClusterIssuer
-    name: letsencrypt-dns-ovh
