@@ -1,0 +1,256 @@
+# Sure: personal finance (community fork of Maybe Finance), Rails + Sidekiq.
+#
+# LAN only, on purpose. There is no Ingress: the app holds every bank movement,
+# so it is published solely through the lamg lbpool LoadBalancer below and is
+# never routed through traefik to the internet. That also means plain HTTP,
+# which is why RAILS_FORCE_SSL/RAILS_ASSUME_SSL are off.
+#
+# Database: `sure` role and db on the nas02 PG17 (192.168.0.29), so every pod
+# is pinned to the lamg pool, the only nodes with a LAN path to it. The daily
+# piracy-postgres-backup CronJob dumps every database on that instance, this
+# one included. Credentials are mirrored in dotfiles/nix/secrets/sure-db.age.
+#
+# Connections: web and worker each open RAILS_MAX_THREADS (default 3) against
+# a server shared by 9 apps, so do not raise it casually.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sure
+  namespace: sure
+data:
+  SELF_HOSTED: "true"
+  RAILS_FORCE_SSL: "false"
+  RAILS_ASSUME_SSL: "false"
+  DB_HOST: "192.168.0.29"
+  DB_PORT: "5432"
+  POSTGRES_USER: sure
+  POSTGRES_DB: sure
+  REDIS_URL: redis://sure-redis:6379/1
+  TZ: Europe/Madrid
+  # Open only until the first account is registered; the first user becomes
+  # the instance super admin. Flip to "closed" right after.
+  ONBOARDING_STATE: open
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sure-web
+  namespace: sure
+  labels:
+    app: sure-web
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: sure-web
+  template:
+    metadata:
+      labels:
+        app: sure-web
+    spec:
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: web
+          # Pinned: the entrypoint runs `rails db:prepare` on every server
+          # start, so an image bump is a schema migration. Bump deliberately.
+          image: ghcr.io/we-promise/sure:0.7.4
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          envFrom:
+            - configMapRef:
+                name: sure
+            - secretRef:
+                name: sure
+          ports:
+            - containerPort: 3000
+              name: http
+          startupProbe:
+            # First boot loads the whole schema before the port opens.
+            httpGet:
+              path: /up
+              port: http
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /up
+              port: http
+            periodSeconds: 15
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /up
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+          volumeMounts:
+            - name: storage
+              mountPath: /rails/storage
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 1536Mi
+      volumes:
+        - name: storage
+          persistentVolumeClaim:
+            claimName: sure-storage
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sure-worker
+  namespace: sure
+  labels:
+    app: sure-worker
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: sure-worker
+  template:
+    metadata:
+      labels:
+        app: sure-worker
+    spec:
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: worker
+          image: ghcr.io/we-promise/sure:0.7.4
+          command: ["/rails/bin/docker-entrypoint", "bundle", "exec", "sidekiq"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          envFrom:
+            - configMapRef:
+                name: sure
+            - secretRef:
+                name: sure
+          volumeMounts:
+            - name: storage
+              mountPath: /rails/storage
+          resources:
+            requests:
+              cpu: 50m
+              memory: 384Mi
+            limits:
+              memory: 1536Mi
+      volumes:
+        - name: storage
+          persistentVolumeClaim:
+            claimName: sure-storage
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+
+---
+# Queue only, no persistence. Sidekiq-cron re-registers its schedule at boot,
+# so a restart costs at most the jobs in flight.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sure-redis
+  namespace: sure
+  labels:
+    app: sure-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sure-redis
+  template:
+    metadata:
+      labels:
+        app: sure-redis
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: redis
+          image: redis:7.4-alpine
+          args: ["--save", "", "--appendonly", "no"]
+          ports:
+            - containerPort: 6379
+              name: redis
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 256Mi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: lamg
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sure-redis
+  namespace: sure
+spec:
+  type: ClusterIP
+  selector:
+    app: sure-redis
+  ports:
+    - port: 6379
+      targetPort: redis
+      name: redis
+
+---
+# 3000 is already taken in the lamg pool by netbootxyz.
+apiVersion: v1
+kind: Service
+metadata:
+  name: sure
+  namespace: sure
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: lamg
+spec:
+  type: LoadBalancer
+  selector:
+    app: sure-web
+  ports:
+    - port: 3100
+      targetPort: http
+      name: http
+
+---
+# Uploads (CSV imports, logos). RWX because web and worker both mount it; the
+# financial data itself lives in Postgres, not here.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sure-storage
+  namespace: sure
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: truenas-nfs-ssd-lan
+  resources:
+    requests:
+      storage: 5Gi
