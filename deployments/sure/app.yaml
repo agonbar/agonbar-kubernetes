@@ -12,6 +12,13 @@
 #
 # Connections: web and worker each open RAILS_MAX_THREADS (default 3) against
 # a server shared by 9 apps, so do not raise it casually.
+#
+# Encryption: the sealed secret carries explicit ACTIVE_RECORD_ENCRYPTION_*
+# keys. They are not optional here. Sure 0.7.4 derives keys from
+# SECRET_KEY_BASE when they are absent, but its models only call `encrypts` when
+# the keys are explicit, so without them bank tokens, MFA secrets and emails are
+# written in plaintext. Changing the keys makes existing encrypted rows
+# unreadable; the copy of record is dotfiles/nix/secrets/sure-db.age.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -27,9 +34,10 @@ data:
   POSTGRES_DB: sure
   REDIS_URL: redis://sure-redis:6379/1
   TZ: Europe/Madrid
-  # Open only until the first account is registered; the first user becomes
-  # the instance super admin. Flip to "closed" right after.
-  ONBOARDING_STATE: open
+  # The only account was created on 2026-09-13; it is the instance super admin.
+  ONBOARDING_STATE: closed
+  # The static MCP_API_TOKEN (in the sealed secret) acts as this user.
+  MCP_USER_EMAIL: adrian.gonzalez.barbosa@gmail.com
 
 ---
 # Pinned to nas02-k3s, a NixOS k3s agent VM on the nas02 TrueNAS (16 GiB,
