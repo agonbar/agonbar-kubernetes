@@ -88,6 +88,17 @@ spec:
                                 key: gui-password
                       - name: FORCEGRAB_RESCAN_DELAYS
                         value: "10m,8h,24h,72h,168h"
+                      # Gap between Phase 3 Sonarr searches for the same
+                      # episode, one rung per attempt. Unlike the rescan ladder
+                      # above, running off the end is not giving up: the last
+                      # entry becomes the standing interval, because a Sonarr
+                      # search can start working at any time when a back-catalog
+                      # release finally shows up. The ladder resets when the
+                      # file on disk changes or cruncharr starts serving the
+                      # episode. Before this existed the reset was a flat 24h
+                      # and 690 episodes had burned ~84k fruitless searches.
+                      - name: SEARCH_RETRY_DELAYS
+                        value: "24h,48h,96h,192h,384h,720h"
                   ports:
                       - containerPort: 8080
                         protocol: TCP
