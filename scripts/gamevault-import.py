@@ -27,7 +27,9 @@ Workflow:
   gamevault-import.py copy map.tsv          # copy in, skipping what is done
   gamevault-import.py pack packmap.tsv      # zip whole dirs into one archive
   gamevault-import.py verify map.tsv        # sizes match at both ends
+  gamevault-import.py verify-packs packmap.tsv
   gamevault-import.py prune map.tsv         # delete the sources (needs rw)
+  gamevault-import.py prune-packs packmap.tsv   # rm -rf the packed dirs
 
 The map is TSV: source path relative to the collection root, then the canonical
 filename. Lines starting with # are ignored, so a candidate can be parked by
@@ -45,6 +47,11 @@ import urllib.parse
 CTX = "lamg"
 NS = "piracy"
 POD = "gamevault-import"
+# Deleting needs the source mounted writable, and that is a different pod
+# rather than a flag on this one: the read-only mount is what makes copy and
+# pack incapable of touching the collection, and a mode switch on a single pod
+# would quietly give that up for every command.
+POD_RW = "gamevault-import-rw"
 
 EXPORT = "/mnt/RAID/adrian/_ADRIAN/Juegos"
 SUBPATH = "PC"
@@ -59,11 +66,16 @@ ARCHIVE_EXT = {"zip", "rar", "7z", "iso", "mdf", "img", "bin", "cab",
 # Below this a file is a crack, a patch, a no-cd key or cover art.
 MIN_BYTES = 20 * 1024 * 1024
 
-POD_SPEC = f"""
+def pod_spec(name, writable=False):
+    ro = "false" if writable else "true"
+    return POD_TEMPLATE.replace("__NAME__", name).replace("__RO__", ro)
+
+
+POD_TEMPLATE = f"""
 apiVersion: v1
 kind: Pod
 metadata:
-  name: {POD}
+  name: __NAME__
   namespace: {NS}
 spec:
   restartPolicy: Never
@@ -79,7 +91,7 @@ spec:
         - name: src
           mountPath: {SRC}
           subPath: {SUBPATH}
-          readOnly: true
+          readOnly: __RO__
         - name: lib
           mountPath: {LIB}
   volumes:
@@ -87,7 +99,7 @@ spec:
       nfs:
         server: 192.168.0.29
         path: {EXPORT}
-        readOnly: true
+        readOnly: __RO__
     - name: lib
       nfs:
         server: 192.168.0.29
@@ -105,13 +117,20 @@ NOISE = [
 ]
 
 
+ACTIVE_POD = POD
+# Set once by the prune commands. sizes_at/pack_status call ensure_pod for
+# themselves, so without this a prune would build its file list through the
+# read-only pod and then try to delete through it.
+WANT_WRITABLE = False
+
+
 def kubectl(*args, **kw):
     return subprocess.run(["kubectl", "--context", CTX, "-n", NS, *args],
                           capture_output=True, text=True, **kw)
 
 
 def sh(script, check=True):
-    r = kubectl("exec", POD, "--", "sh", "-c", script)
+    r = kubectl("exec", ACTIVE_POD, "--", "sh", "-c", script)
     if check and r.returncode != 0:
         sys.exit(f"pod command failed:\n{r.stderr.strip()}")
     return r.stdout
@@ -125,7 +144,7 @@ def pod_running():
     against a pod on its way out, and because sizes_at() tolerates per-file
     stat failures the run reported every source as missing instead.
     """
-    r = kubectl("get", "pod", POD, "-o",
+    r = kubectl("get", "pod", ACTIVE_POD, "-o",
                 "jsonpath={.status.phase}|{.status.containerStatuses[0].ready}"
                 "|{.metadata.deletionTimestamp}")
     if r.returncode != 0:
@@ -134,27 +153,31 @@ def pod_running():
     return phase == "Running" and ready == "true" and not deleting
 
 
-def ensure_pod(need_zip=False):
+def ensure_pod(need_zip=False, writable=False):
+    global ACTIVE_POD
+    ACTIVE_POD = POD_RW if (writable or WANT_WRITABLE) else POD
+    writable = writable or WANT_WRITABLE
     if pod_running():
         # A pod left over from an earlier run may predate the alpine image, in
         # which case zip is missing and `pack` would fail halfway through a
         # multi-gigabyte archive rather than up front.
-        if need_zip and kubectl("exec", POD, "--", "sh", "-c",
+        if need_zip and kubectl("exec", ACTIVE_POD, "--", "sh", "-c",
                                 "command -v zip").returncode != 0:
-            sys.exit(f"the running {POD} pod has no zip. Finish or stop any "
+            sys.exit(f"the running {ACTIVE_POD} pod has no zip. Finish or stop any "
                      f"copy in flight, then `--stop` and re-run.")
         return
     # A pod left Terminating by an earlier --stop blocks a same-name apply.
-    kubectl("wait", "--for=delete", f"pod/{POD}", "--timeout=120s")
+    kubectl("wait", "--for=delete", f"pod/{ACTIVE_POD}", "--timeout=120s")
     r = subprocess.run(["kubectl", "--context", CTX, "apply", "-f", "-"],
-                       input=POD_SPEC, capture_output=True, text=True)
+                       input=pod_spec(ACTIVE_POD, writable),
+                       capture_output=True, text=True)
     if r.returncode != 0:
         sys.exit(f"could not create helper pod:\n{r.stderr.strip()}")
     # Runs as root, and the source export does not squash root, which is how it
     # reads a tree owned by 3000:3000 with mode 770.
-    kubectl("wait", "--for=condition=Ready", f"pod/{POD}", "--timeout=300s")
+    kubectl("wait", "--for=condition=Ready", f"pod/{ACTIVE_POD}", "--timeout=300s")
     if not pod_running():
-        sys.exit(f"helper pod {POD} did not become ready")
+        sys.exit(f"helper pod {ACTIVE_POD} did not become ready")
 
 
 def human(n):
@@ -350,7 +373,7 @@ def cmd_copy(args):
               end="", flush=True)
         # Copy to a temp name and rename, so an interrupted copy is never
         # picked up by GameVault's indexer as a truncated game.
-        r = kubectl("exec", POD, "--", "sh", "-c",
+        r = kubectl("exec", ACTIVE_POD, "--", "sh", "-c",
                     f'cp "{SRC}/{s}" "{LIB}/.part-{i}" && '
                     f'chmod 644 "{LIB}/.part-{i}" && '
                     f'mv "{LIB}/.part-{i}" "{LIB}/{n}"')
@@ -409,7 +432,7 @@ def cmd_pack(args):
               end="", flush=True)
         # cd into the parent so paths inside the zip are relative to the game
         # directory rather than carrying /src/ down the tree.
-        r = kubectl("exec", POD, "--", "sh", "-c",
+        r = kubectl("exec", ACTIVE_POD, "--", "sh", "-c",
                     f'cd "{SRC}" && zip {level} -r -q "{LIB}/.pack-{i}.zip" "{src}" && '
                     f'chmod 644 "{LIB}/.pack-{i}.zip" && '
                     f'mv "{LIB}/.pack-{i}.zip" "{LIB}/{name}"')
@@ -418,7 +441,7 @@ def cmd_pack(args):
             sys.exit(f"FAILED\n{r.stderr.strip()}")
         # Reading the central directory back proves the archive is complete;
         # a truncated zip has no readable index.
-        chk = kubectl("exec", POD, "--", "sh", "-c",
+        chk = kubectl("exec", ACTIVE_POD, "--", "sh", "-c",
                       f'unzip -l "{LIB}/{name}" | tail -1')
         print(f"ok ({chk.stdout.strip()})")
 
@@ -441,8 +464,90 @@ def cmd_verify(args):
     return 1 if bad else 0
 
 
+def pack_status(pairs):
+    """For each packed dir: (src, name, files_in_src, files_in_zip).
+
+    files_in_zip is None when the archive is missing or its index unreadable.
+    Size cannot be compared here the way `verify` does for copies — a zip is
+    not the size of the directory it holds — so the check is the file count
+    inside the archive against the file count at the source.
+    """
+    ensure_pod(need_zip=True)
+    out = []
+    for src, name in pairs:
+        n_src = sh(f'find "{SRC}/{src}" -type f 2>/dev/null | wc -l',
+                   check=False).strip()
+        n_src = int(n_src or 0)
+        # `unzip -l` reads the central directory; a truncated archive has none.
+        # The pod's unzip is busybox's, whose summary line is
+        # "<bytes>   <n> files" — not Info-ZIP's layout, so the count is the
+        # second-to-last field, not the last.
+        z = sh(f'unzip -l "{LIB}/{name}" 2>/dev/null | tail -1', check=False)
+        n_zip = None
+        parts = z.split()
+        if len(parts) >= 3 and parts[-1] == "files" and parts[-2].isdigit():
+            n_zip = int(parts[-2])
+        out.append((src, name, n_src, n_zip))
+    return out
+
+
+def cmd_verify_packs(args):
+    bad = 0
+    for src, name, n_src, n_zip in pack_status(read_map(args.map)):
+        if n_zip is None:
+            print(f"  UNREADABLE {name}")
+            bad += 1
+        elif n_zip < n_src:
+            print(f"  SHORT      {name}: {n_zip} entries for {n_src} files")
+            bad += 1
+        else:
+            print(f"  ok         {name}  ({n_zip} entries / {n_src} files)")
+    print(f"{'FAILED' if bad else 'all archives readable and complete'}")
+    return 1 if bad else 0
+
+
+def cmd_prune_packs(args):
+    """Delete packed source directories. Separate command because this is the
+    only path that runs rm -rf, and it should never be reachable by passing
+    the wrong map to `prune`."""
+    global WANT_WRITABLE
+    WANT_WRITABLE = not args.dry_run
+    st = pack_status(read_map(args.map))
+    safe = [(s, n, a, b) for s, n, a, b in st if b is not None and b >= a and a > 0]
+    unsafe = [(s, n, a, b) for s, n, a, b in st if (s, n, a, b) not in safe]
+
+    for s, n, a, b in unsafe:
+        print(f"  not verified, keeping: {s} (zip entries={b}, src files={a})")
+    if not safe:
+        print("nothing safe to delete")
+        return 0
+    print(f"{len(safe)} packed directories verified against their archives")
+    if args.dry_run:
+        for s, _, a, _ in safe:
+            print(f"  would rm -rf {s}  ({a} files)")
+        return 0
+
+    require_writable_source()
+    for s, _, _, _ in safe:
+        sh(f'rm -rf "{SRC}/{s}"')
+        print(f"  deleted {s}")
+    print(f"removed {len(safe)} directories")
+
+
+def require_writable_source():
+    """The source export is read-only by design; refuse rather than silently
+    deleting nothing, because a failed delete here looks like success."""
+    probe = kubectl("exec", ACTIVE_POD, "--", "sh", "-c", f'touch {SRC}/.wtest 2>&1')
+    if probe.returncode != 0 or "Read-only" in probe.stdout:
+        sys.exit(f"{SRC} is mounted read-only. Set the NFS export for\n"
+                 f"{EXPORT} to rw before pruning, then set it back.")
+    sh(f'rm -f {SRC}/.wtest', check=False)
+
+
 def cmd_prune(args):
     """Delete sources that are already verified in the library."""
+    global WANT_WRITABLE
+    WANT_WRITABLE = not args.dry_run
     pairs = read_map(args.map)
     src_sizes = sizes_at(SRC, [s for s, _ in pairs])
     lib_sizes = sizes_at(LIB, [n for _, n in pairs])
@@ -466,13 +571,7 @@ def cmd_prune(args):
             print(f"  would delete {s}")
         return 0
 
-    # The source export is read-only by design; this refuses rather than
-    # silently doing nothing, because a failed delete here looks like success.
-    probe = kubectl("exec", POD, "--", "sh", "-c", f'touch {SRC}/.wtest 2>&1')
-    if probe.returncode != 0 or "Read-only" in probe.stdout:
-        sys.exit(f"{SRC} is mounted read-only. Set the NFS export for\n"
-                 f"{EXPORT} to rw before pruning, then set it back.")
-    sh(f'rm -f {SRC}/.wtest', check=False)
+    require_writable_source()
 
     for s in safe:
         sh(f'rm -f "{SRC}/{s}"')
@@ -489,7 +588,9 @@ def main():
     sub.add_parser("audit").set_defaults(fn=cmd_audit)
     sub.add_parser("propose").set_defaults(fn=cmd_propose)
     for name, fn in (("copy", cmd_copy), ("pack", cmd_pack),
-                     ("verify", cmd_verify), ("prune", cmd_prune)):
+                     ("verify", cmd_verify), ("prune", cmd_prune),
+                     ("verify-packs", cmd_verify_packs),
+                     ("prune-packs", cmd_prune_packs)):
         s = sub.add_parser(name)
         s.add_argument("map")
         s.add_argument("-n", "--dry-run", action="store_true")
@@ -497,7 +598,8 @@ def main():
 
     args = p.parse_args()
     if args.stop:
-        kubectl("delete", "pod", POD, "--ignore-not-found", "--wait=true")
+        for p in (POD, POD_RW):
+            kubectl("delete", "pod", p, "--ignore-not-found", "--wait=true")
         return 0
     if not args.cmd:
         p.print_help()
