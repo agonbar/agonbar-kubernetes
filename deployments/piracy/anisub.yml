@@ -73,8 +73,14 @@ spec:
                         value: "true"
                       - name: UPGRADE_DRY_RUN
                         value: "false"
+                      # PARADO 2026-09-16: la fase 3c force-grabbeó "Attack on
+                      # Titan S02E01-04" pidiendo "K-ON! S02E01-04". cruncharr
+                      # devuelve releases de OTRA SERIE para algunos episodios y
+                      # el filtro de anisub solo comprueba el episodio, no la
+                      # serie. No reactivar hasta que pickCruncharrRelease
+                      # verifique que el release pertenece a la serie pedida.
                       - name: FORCE_GRAB_ENABLED
-                        value: "true"
+                        value: "false"
                       - name: FORCE_GRAB_DRY_RUN
                         value: "false"
                       - name: FORCE_GRAB_INDEXER_NAME
