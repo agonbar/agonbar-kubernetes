@@ -123,10 +123,7 @@ spec:
                   hostPath:
                       path: /proc/1/mounts
             nodeSelector:
-              # Pinned to nas02-k3s: /config, /downloads and /tv are all served
-              # by 192.168.0.29, which is this node, so imports never leave it.
-              # It is also the only lbpool node with room for the 4Gi limit.
-              kubernetes.io/hostname: nas02-k3s
+              svccontroller.k3s.cattle.io/lbpool: lamg
 ---
 apiVersion: v1
 kind: Service
