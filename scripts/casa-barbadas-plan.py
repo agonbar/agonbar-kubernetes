@@ -16,9 +16,16 @@ PRECIO = 260_000.0
 YA_PAGADO = 20_000.0        # 10.000 al dueño + 10.000 a la inmobiliaria
 EN_MANO = 30_000.0          # sale de la remunerada al empezar el alquiler
 AHORRO_HOY = 26_300.0
+# Segundo plazo del IRPF de 2025, el 5 de noviembre. Sale de este mismo ahorro.
+HACIENDA_PENDIENTE = 4_921.36
 ALQUILER = 1_500.0          # descuenta del precio
-NOMINA = 2_209.0
-GASTO_BASE = 911.82         # agosto, sin alquiler ni cuota del coche
+# Base: 12 meses completos de Abanca (sep-2025 a ago-2026), la unica cuenta con
+# historico largo. Lo gastado por Revolut aparece ahi como recargas, asi que
+# cuenta una vez. Los pagos a Hacienda quedan fuera por extraordinarios.
+NOMINA = 2_210.0            # 12 pagas, sin extras
+INGRESO_EXTRA = 350.0       # bizums y devoluciones, media del año
+GASTO_BASE = 1_104.0        # todo menos alquiler, CON la cuota del coche dentro
+ALQUILER_ACTUAL = 721.92
 COCHE_CUOTA = 558.40
 COCHE_PENDIENTE = 32_594.19
 COCHE_TIN = 4.99 / 100 / 12
@@ -41,11 +48,12 @@ def simular(entrada_mes, aporte_pareja, itp_pct, en_mano=EN_MANO):
     for m in range(1, entrada_mes + 1):
         if pendiente_coche(m - 1) > 0:
             meses_coche += 1
-    ingresos = (NOMINA + aporte_pareja) * entrada_mes
-    gastos = (GASTO_BASE + ALQUILER) * entrada_mes + COCHE_CUOTA * meses_coche
+    ingresos = (NOMINA + INGRESO_EXTRA + aporte_pareja) * entrada_mes
+    # GASTO_BASE ya incluye la cuota del coche; al liquidarlo deja de pagarse
+    gastos = (GASTO_BASE + ALQUILER) * entrada_mes - COCHE_CUOTA * (entrada_mes - meses_coche)
     cancelacion = pendiente_coche(entrada_mes) * (1 + COMISION_CANCELACION)
     impuestos = PRECIO * itp_pct / 100 + GASTOS_FIJOS_FIRMA
-    caja = AHORRO_HOY + ingresos - gastos - en_mano - cancelacion - impuestos
+    caja = AHORRO_HOY - HACIENDA_PENDIENTE + ingresos - gastos - en_mano - cancelacion - impuestos
     hipoteca = max(PRECIO - YA_PAGADO - en_mano - ALQUILER * entrada_mes, 0)
     return caja, hipoteca, cancelacion, impuestos
 
@@ -65,7 +73,9 @@ def main():
     impuestos = PRECIO * args.itp / 100 + GASTOS_FIJOS_FIRMA
     print(f"precio {PRECIO:,.0f} | ya pagado {YA_PAGADO:,.0f} | en mano {args.en_mano:,.0f} | alquiler {ALQUILER:,.0f}/mes que descuenta")
     print(f"ITP {args.itp}% -> impuestos y gastos de firma {impuestos:,.0f}")
-    print(f"tu solo: nomina {NOMINA:,.0f} - gastos {GASTO_BASE:,.0f} - alquiler {ALQUILER:,.0f} - coche {COCHE_CUOTA:,.0f} = {NOMINA-GASTO_BASE-ALQUILER-COCHE_CUOTA:+,.0f}/mes\n")
+    ahora = NOMINA + INGRESO_EXTRA - GASTO_BASE - ALQUILER_ACTUAL
+    luego = NOMINA + INGRESO_EXTRA - GASTO_BASE - ALQUILER
+    print(f"tu solo: ahora {ahora:+,.0f}/mes -> con alquiler de {ALQUILER:,.0f}: {luego:+,.0f}/mes\n")
     print(f"{'entrada':>9} {'hipoteca':>10} {'liquidar coche':>15} {'falta en total':>15} {'aporte pareja':>15}")
     for mes in (6, 12, 18, 24, 30, 36):
         need, caja = aporte_necesario(mes, args.itp, args.en_mano)
