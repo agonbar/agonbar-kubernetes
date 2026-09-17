@@ -49,6 +49,16 @@ data:
   # The static MCP_API_TOKEN (in the sealed secret) acts as this user.
   MCP_USER_EMAIL: adrian.gonzalez.barbosa@gmail.com
 
+  # Auto-categorisation and merchant detection. The model is served by the
+  # llama.cpp box behind litellm (local-llm-00.dev.senseizero.es), so the
+  # transaction descriptions never leave the estate; the `gemma-4-26b` alias
+  # there routes to Vertex instead, hence pinning the 12b. The access token
+  # lives in the sure-llm sealed secret. LLM_CONTEXT_WINDOW is left at Sure's
+  # 2048 default for custom providers: the server does not advertise n_ctx, so
+  # this trades more, smaller batches for not overflowing it.
+  OPENAI_URI_BASE: https://litellm.senseivision.ai/v1
+  OPENAI_MODEL: gemma-4-12b
+
 ---
 # Pinned to nas02-k3s, a NixOS k3s agent VM on the nas02 TrueNAS (16 GiB,
 # dotfiles nix/hosts/nas02-k3s). The first deploy landed on orange-pi5, which
@@ -94,6 +104,8 @@ spec:
                 name: sure
             - secretRef:
                 name: sure
+            - secretRef:
+                name: sure-llm
           ports:
             - containerPort: 3000
               name: http
@@ -210,6 +222,8 @@ spec:
                 name: sure
             - secretRef:
                 name: sure
+            - secretRef:
+                name: sure-llm
           volumeMounts:
             - name: storage
               mountPath: /rails/storage
