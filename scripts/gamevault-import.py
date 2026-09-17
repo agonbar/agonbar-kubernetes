@@ -353,11 +353,17 @@ def sizes_at(root, names):
 def cmd_copy(args):
     pairs = read_map(args.map)
     src_sizes = sizes_at(SRC, [s for s, _ in pairs])
-    missing = [s for s, _ in pairs if s not in src_sizes]
-    if missing:
-        sys.exit("source files not found:\n  " + "\n  ".join(missing))
-
     done = sizes_at(LIB, [n for _, n in pairs])
+
+    # A source that is gone is only a problem when its destination is gone
+    # too. After a prune the map still lists every import ever made, and the
+    # sources it names were deliberately deleted — refusing to run then made
+    # the map single-use and blocked adding a game to it later.
+    missing = [s for s, n in pairs if s not in src_sizes and n not in done]
+    if missing:
+        sys.exit("source files not found, and not in the library either:\n  "
+                 + "\n  ".join(missing))
+    pairs = [(s, n) for s, n in pairs if s in src_sizes]
     todo = [(s, n) for s, n in pairs
             if done.get(n) != src_sizes[s]]
 
@@ -451,17 +457,27 @@ def cmd_verify(args):
     pairs = read_map(args.map)
     src_sizes = sizes_at(SRC, [s for s, _ in pairs])
     lib_sizes = sizes_at(LIB, [n for _, n in pairs])
-    ok = bad = 0
+    ok = bad = pruned = 0
     for s, n in pairs:
         if lib_sizes.get(n) is None:
             print(f"  MISSING   {n}")
             bad += 1
-        elif lib_sizes[n] != src_sizes.get(s):
-            print(f"  SIZE DIFF {n}: src={src_sizes.get(s)} lib={lib_sizes[n]}")
+        elif s not in src_sizes:
+            # Source already deleted by a prune. There is nothing left to
+            # compare against, and calling that a failure would report the
+            # whole library as broken on every run after a successful prune.
+            pruned += 1
+        elif lib_sizes[n] != src_sizes[s]:
+            print(f"  SIZE DIFF {n}: src={src_sizes[s]} lib={lib_sizes[n]}")
             bad += 1
         else:
             ok += 1
-    print(f"verified {ok}/{len(pairs)}" + (f", {bad} bad" if bad else ""))
+    summary = f"verified {ok}"
+    if pruned:
+        summary += f", {pruned} already pruned (source gone, file present)"
+    if bad:
+        summary += f", {bad} BAD"
+    print(summary)
     return 1 if bad else 0
 
 

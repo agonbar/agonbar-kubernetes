@@ -44,6 +44,17 @@ Rogue.Legacy/wmt-rogl.iso	Rogue Legacy (2013).iso
 Evoland-HI2U/hi-evola.iso	Evoland (2013).iso
 Quantum.Conundrum.v1.0.multi6.cracked.READ.NFO-THETA/Quantum Conundrum.exe	Quantum Conundrum (2012).exe
 
+# --- Swords and Sandals ----------------------------------------------------
+# Four games in one folder, all standalone .exe installers. These never showed
+# up in `propose`: two of them are under the 20MB audit floor that filters out
+# cracks and patches, so the floor hid real games as well as junk.
+# The "SaS 4 Full - Cracked by Pifzar.rar" beside them is a crack, and
+# fridge.fiz is not a game. Both stay behind.
+swords and Sandals/swords_and_sandals2.exe	Swords and Sandals II (2006).exe
+swords and Sandals/swords_and_sandals_crusader.exe	Swords and Sandals Crusader (2007).exe
+swords and Sandals/swords_sandals_3_solo_ultratus.exe	Swords and Sandals III (2008).exe
+swords and Sandals/swords_sandals_4.exe	Swords and Sandals IV Tavern Quests (2009).exe
+
 # --- Monkey Island Collection ---------------------------------------------
 # One folder, five separate games. IGDB matched three of them to the wrong
 # Telltale chapter, so these titles are hand-set.
