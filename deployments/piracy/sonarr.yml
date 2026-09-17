@@ -92,10 +92,16 @@ spec:
                       failureThreshold: 3
                   resources:
                       requests:
-                          memory: 256Mi
+                          # Idles around 860Mi, so the old 256Mi request was a
+                          # lie to the scheduler: the nodeSelector below matches
+                          # nas00, which has 1.2Gi allocatable in total.
+                          memory: 1Gi
                           cpu: 100m
                       limits:
-                          memory: "2.5Gi"
+                          # OOMKilled at 2.5Gi on 2026-09-16 halfway through a
+                          # ManualImport of an 11-file pack over NFS, which also
+                          # silently dropped a queued ManualImport command.
+                          memory: 4Gi
                           cpu: 2000m
             volumes:
                 - name: config
