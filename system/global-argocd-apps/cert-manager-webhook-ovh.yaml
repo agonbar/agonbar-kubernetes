@@ -28,8 +28,8 @@ spec:
             nodeSelector:
               kubernetes.io/hostname: ovh02
           resources:
-            requests: { cpu: 10m, memory: 32Mi }
-            limits: { memory: 128Mi }
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 128Mi}
   destination:
     name: in-cluster
     namespace: cert-manager
