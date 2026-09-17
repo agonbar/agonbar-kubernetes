@@ -30,6 +30,7 @@ Workflow:
   gamevault-import.py verify-packs packmap.tsv
   gamevault-import.py prune map.tsv         # delete the sources (needs rw)
   gamevault-import.py prune-packs packmap.tsv   # rm -rf the packed dirs
+  gamevault-import.py prune-empty           # rmdir what is left with nothing in it
 
 The map is TSV: source path relative to the collection root, then the canonical
 filename. Lines starting with # are ignored, so a candidate can be parked by
@@ -534,6 +535,45 @@ def cmd_prune_packs(args):
     print(f"removed {len(safe)} directories")
 
 
+def cmd_prune_empty(args):
+    """Remove directories the import left behind with nothing in them.
+
+    Uses rmdir rather than rm -rf, which is the whole safety argument: rmdir
+    cannot remove a directory that still holds anything, so this physically
+    cannot destroy data even if the listing below is wrong. -depth walks
+    innermost-first so a nest of empty directories collapses in one pass.
+    """
+    global WANT_WRITABLE
+    WANT_WRITABLE = not args.dry_run
+    ensure_pod()
+
+    listing = sh(
+        f'cd {SRC} && for d in */; do '
+        f'  n=$(find "$d" -type f 2>/dev/null | wc -l); '
+        f'  [ "$n" -eq 0 ] && echo "${{d%/}}"; '
+        f'done', check=False).splitlines()
+    empties = [d for d in listing if d.strip()]
+    if not empties:
+        print("no empty directories")
+        return 0
+    print(f"{len(empties)} directories hold no files at all:")
+    for d in empties:
+        print(f"  {d}")
+    if args.dry_run:
+        return 0
+
+    require_writable_source()
+    sh(f'cd {SRC} && find . -mindepth 1 -depth -type d '
+       f'-exec rmdir {{}} \\; 2>/dev/null', check=False)
+    left = sh(f'cd {SRC} && for d in */; do '
+              f'  n=$(find "$d" -type f 2>/dev/null | wc -l); '
+              f'  [ "$n" -eq 0 ] && echo "${{d%/}}"; done', check=False).strip()
+    if left:
+        print(f"still empty after rmdir (unexpected):\n{left}")
+        return 1
+    print(f"removed {len(empties)} empty directories")
+
+
 def require_writable_source():
     """The source export is read-only by design; refuse rather than silently
     deleting nothing, because a failed delete here looks like success."""
@@ -586,6 +626,10 @@ def main():
     sub = p.add_subparsers(dest="cmd")
 
     sub.add_parser("audit").set_defaults(fn=cmd_audit)
+
+    pe = sub.add_parser("prune-empty")
+    pe.add_argument("-n", "--dry-run", action="store_true")
+    pe.set_defaults(fn=cmd_prune_empty)
     sub.add_parser("propose").set_defaults(fn=cmd_propose)
     for name, fn in (("copy", cmd_copy), ("pack", cmd_pack),
                      ("verify", cmd_verify), ("prune", cmd_prune),
