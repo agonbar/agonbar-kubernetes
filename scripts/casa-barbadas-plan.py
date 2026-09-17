@@ -35,6 +35,10 @@ COCHE_PENDIENTE = 32_594.19
 COCHE_TIN = 4.99 / 100 / 12
 COMISION_CANCELACION = 0.01
 GASTOS_FIJOS_FIRMA = 2_500.0      # notaría, registro, gestoría, tasación
+# Meses antes de la firma en que se cancela el coche. 0 = el mismo dia, que es
+# lo acordado. Si el banco lo exigiera antes (la CIRBE tarda uno o dos meses en
+# reflejar la cancelacion), subirlo a 3 o 4 mueve el calendario menos de un mes.
+MARGEN_COCHE = 0
 
 
 def pendiente_coche(meses):
@@ -46,7 +50,8 @@ def pendiente_coche(meses):
     return max(b, 0.0)
 
 
-def simular(espera, aporte, itp_pct, meses_alquiler=MESES_ALQUILER, detalle=False):
+def simular(espera, aporte, itp_pct, meses_alquiler=MESES_ALQUILER, detalle=False,
+            margen_coche=MARGEN_COCHE):
     """espera = meses hasta empezar el alquiler de compra. Devuelve (caja_minima, caja_final, hipoteca)."""
     caja = AHORRO_HOY - HACIENDA_PENDIENTE
     minimo = caja
@@ -60,19 +65,23 @@ def simular(espera, aporte, itp_pct, meses_alquiler=MESES_ALQUILER, detalle=Fals
     minimo = min(minimo, caja)
     if detalle:
         print(f"  mes {espera:>2}: entregas los {EN_MANO:,.0f} en mano, te quedan {caja:,.2f}")
-    for mes in range(espera + 1, espera + meses_alquiler + 1):
-        gasto = GASTO_BASE + ALQUILER_COMPRA
-        if pendiente_coche(mes - 1) <= 0:
-            gasto -= COCHE_CUOTA
-        caja += NOMINA + INGRESO_EXTRA + aporte - gasto
-        minimo = min(minimo, caja)
     fin = espera + meses_alquiler
-    cancelacion = pendiente_coche(fin) * (1 + COMISION_CANCELACION)
+    mes_coche = max(fin - margen_coche, espera)
+    cancelacion = pendiente_coche(mes_coche) * (1 + COMISION_CANCELACION)
+    for mes in range(espera + 1, fin + 1):
+        gasto = GASTO_BASE + ALQUILER_COMPRA
+        if mes > mes_coche or pendiente_coche(mes - 1) <= 0:
+            gasto -= COCHE_CUOTA          # ya cancelado, no hay cuota
+        caja += NOMINA + INGRESO_EXTRA + aporte - gasto
+        if mes == mes_coche:
+            caja -= cancelacion
+            if detalle:
+                print(f"  mes {mes:>2}: liquidas el coche, {cancelacion:,.2f} ({margen_coche} meses antes de firmar)")
+        minimo = min(minimo, caja)
     impuestos = PRECIO * itp_pct / 100 + GASTOS_FIJOS_FIRMA
     if detalle:
-        print(f"  mes {fin:>2}: antes de la firma tienes {caja:,.2f}")
-        print(f"          liquidar coche {cancelacion:,.2f} + impuestos y gastos {impuestos:,.2f}")
-    caja -= cancelacion + impuestos
+        print(f"  mes {fin:>2}: firmas con {caja:,.2f}, impuestos y gastos {impuestos:,.2f}")
+    caja -= impuestos
     minimo = min(minimo, caja)
     hipoteca = max(PRECIO - YA_PAGADO - EN_MANO - ALQUILER_COMPRA * meses_alquiler, 0)
     return minimo, caja, hipoteca
