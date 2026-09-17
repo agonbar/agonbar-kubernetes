@@ -121,6 +121,20 @@ emperor.iso	Emperor Battle for Dune [Disc 3 of 3] (2001).iso
 #   (2003), the EA action game, not the Battle for Middle-earth strategy games
 #   above. Different series, similar folder name.
 
+# --- Patches live outside both trees --------------------------------------
+# /mnt/RAID/docker/game-patches/ holds the official patch installers that came
+# with the repacks: Call of Duty World at War (2.2G, 1.2 through 1.5),
+# Call of Duty 4 (342M) and MI2SE_Update_v1.1.zip (19M).
+#
+# Deliberately NOT in the library. GameVault serves games, and naming a patch
+# "Call of Duty World at War (v1.5)" would file it as a version of the game —
+# anyone picking that version would download a patch and no game. Repacking
+# game+patches into one archive is the correct fix and costs a 9G rezip; until
+# someone wants that, the patches sit next to the library, not in it.
+#
+# The folder is a sibling of gamevault-library under the same NFS export, so
+# it is reachable without GameVault indexing it.
+
 # --- Left in _ADRIAN -------------------------------------------------------
 # Escape.From.Monkey.Island/ — CD1+CD2 of a game already imported from the
 #   Monkey Island Collection. A duplicate, not a gap.
@@ -128,8 +142,13 @@ emperor.iso	Emperor Battle for Dune [Disc 3 of 3] (2001).iso
 # Toradora[EN][1.00]/ — manual.pdf, xdelta3.exe and toradora.patch. An English
 #   translation patch, not the game.
 #
-# Nothing else in the collection is a game: four empty folders (fallout3,
-# fallout3(expansiones), Façade, Sims3v1.17(No-DVD)), a loose Assassin's Creed
-# crack, "call 4", Factorio mods, PS2 tooling under piratearps2/, and a stray
-# Hero00.pax. The CoDWaW/ and cod4/ patch installers stay too — the games
-# themselves came in as ISOs above.
+# What is left of the 137GB collection is 29.5MB: that Toradora patch, and
+# "Minecraft FTB world saves 2013.zip" — three world saves from April to July
+# 2013 found inside the feedthebeast launcher on its way to the bin. The
+# launcher and modpacks are re-downloadable; thirteen-year-old worlds are not.
+#
+# Everything else was deleted after being either imported and verified, or
+# identified as junk: cracks and keygens, release-group .nfo files, cover art
+# JPEGs, empty ReadMe.txt files, a Daemon Tools Lite installer that shipped
+# inside a visual novel folder, PS2 disc tooling, Factorio mod zips, and the
+# ESDLA .mdf that turned out to be the same disc as its .iso.
