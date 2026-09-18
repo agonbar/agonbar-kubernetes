@@ -38,7 +38,16 @@ die(){ echo "FATAL: $*" >&2; exit 1; }
 
 APP=$($K -n argocd get app "$NS" -o name >/dev/null 2>&1 && echo "$NS" || echo "")
 REPLICAS=$($K -n "$NS" get "$WL" -o jsonpath='{.spec.replicas}')
-log "ns=$NS workload=$WL replicas=$REPLICAS pvcs=${PVCS[*]} argocd-app=${APP:-<none>}"
+SEL=$($K -n "$NS" get "$WL" -o go-template='{{range $k,$v := .spec.selector.matchLabels}}{{$k}}={{$v}},{{end}}')
+SEL=${SEL%,}
+# Land the repair pod on the node the workload is running on right now. The old
+# blanket `lbpool: lamg` selector also matches nas01/nas02-k3s, whose hosts have
+# no e2fsck/findmnt on the PATH nsenter inherits -- the repair then fails at exec
+# time AND the "still mounted on host" guard silently passes. Hit 2026-09-18.
+NODE=${NODE:-$($K -n "$NS" get pods -l "$SEL" -o jsonpath='{.items[0].spec.nodeName}' 2>/dev/null)}
+SELECTOR=${NODE:+kubernetes.io/hostname: $NODE}
+SELECTOR=${SELECTOR:-svccontroller.k3s.cattle.io/lbpool: lamg}
+log "ns=$NS workload=$WL replicas=$REPLICAS pvcs=${PVCS[*]} argocd-app=${APP:-<none>} node=${NODE:-<any lamg>}"
 
 restore(){
   log "restoring: dropping repair pod, replicas=$REPLICAS, autosync"
@@ -55,8 +64,9 @@ trap restore EXIT
   -p '{"spec":{"syncPolicy":{"automated":null}}}' >/dev/null
 log "scaling $WL to 0"
 $K -n "$NS" scale "$WL" --replicas=0 >/dev/null
-until [ -z "$($K -n "$NS" get pods -l "$($K -n "$NS" get "$WL" -o jsonpath='{.spec.selector.matchLabels}' \
-      | tr -d '{}"' | tr ',' '\n' | paste -sd, -)" --no-headers 2>/dev/null)" ]; do sleep 3; done
+# matchLabels JSON flattened with tr gave `app:tdarr`, which kubectl rejects, so
+# this loop used to exit on the first pass without waiting for anything.
+until [ -z "$($K -n "$NS" get pods -l "$SEL" --no-headers 2>/dev/null)" ]; do sleep 3; done
 log "pods gone; waiting for detach"
 for p in "${PVCS[@]}"; do
   VOL=$($K -n "$NS" get pvc "$p" -o jsonpath='{.spec.volumeName}')
@@ -100,7 +110,7 @@ metadata: {name: $POD, namespace: $NS}
 spec:
   restartPolicy: Never
   hostPID: true
-  nodeSelector: {svccontroller.k3s.cattle.io/lbpool: lamg}
+  nodeSelector: {$SELECTOR}
   containers:
     - name: fsck
       image: alpine:latest
@@ -124,6 +134,12 @@ i=0; for p in "${PVCS[@]}"; do
     DEV=\$(grep ' /vol/$i ' /proc/mounts | cut -d' ' -f1)
     [ -n \"\$DEV\" ] || { echo 'FATAL: no device for /vol/$i'; exit 1; }
     echo \"  device=\$DEV\"
+    # nsenter execs with the CONTAINER's PATH, so a host that keeps these
+    # elsewhere looks identical to a host that has them. Fail before unmounting.
+    for B in findmnt e2fsck tune2fs; do
+      nsenter -t 1 -m -- sh -c \"command -v \$B\" >/dev/null 2>&1 \
+        || { echo \"FATAL: host has no \$B on PATH -- wrong node? pin with NODE=<hostname>\"; exit 1; }
+    done
     for MP in \$(nsenter -t 1 -m -- findmnt -rn -o TARGET --source \$DEV | tac); do
       nsenter -t 1 -m -- umount \"\$MP\" || { echo \"FATAL: cannot umount \$MP\"; exit 1; }
     done
