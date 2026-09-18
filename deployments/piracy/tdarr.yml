@@ -29,27 +29,33 @@ spec:
                       - -c
                       - |
                         set -e
-                        MOUNTPOINT="/app/configs"
-                        echo "[iscsi-fsck] Checking filesystem at ${MOUNTPOINT}..."
-                        if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
-                          rm -f "${MOUNTPOINT}/.rw-test"
-                          echo "[iscsi-fsck] Filesystem is writable. Nothing to do."
-                          exit 0
-                        fi
-                        echo "[iscsi-fsck] Filesystem is READ-ONLY."
-                        echo "[iscsi-fsck] Attempting a single safe remount,rw (no fsck)..."
-                        if mount -o remount,rw "${MOUNTPOINT}" 2>/dev/null && touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
-                          rm -f "${MOUNTPOINT}/.rw-test"
-                          echo "[iscsi-fsck] remount,rw succeeded — filesystem writable. Done."
-                          exit 0
-                        fi
-                        echo "[iscsi-fsck] STILL READ-ONLY. The RO state lives in the node-level CSI globalmount and cannot be repaired from inside the pod."
-                        echo "[iscsi-fsck] DO NOT run e2fsck on the mounted device — it corrupts the filesystem."
-                        echo "[iscsi-fsck] Recovery: scale this Deployment to 0, wait for the VolumeAttachment to detach, then scale back to 1 (forces a clean iSCSI re-attach that clears RO)."
-                        exit 1
+                        # /app/server is the iSCSI volume that goes read-only on a journal abort.
+                        # /app/configs is NFS and was the original (wrong) target of this check,
+                        # so the guard stayed green through the 2026-09-17 RO remount.
+                        for MOUNTPOINT in /app/server /app/configs; do
+                          echo "[iscsi-fsck] Checking filesystem at ${MOUNTPOINT}..."
+                          if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                            rm -f "${MOUNTPOINT}/.rw-test"
+                            echo "[iscsi-fsck] ${MOUNTPOINT} is writable. Nothing to do."
+                            continue
+                          fi
+                          echo "[iscsi-fsck] ${MOUNTPOINT} is READ-ONLY."
+                          echo "[iscsi-fsck] Attempting a single safe remount,rw (no fsck)..."
+                          if mount -o remount,rw "${MOUNTPOINT}" 2>/dev/null && touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
+                            rm -f "${MOUNTPOINT}/.rw-test"
+                            echo "[iscsi-fsck] remount,rw succeeded, filesystem writable. Done."
+                            continue
+                          fi
+                          echo "[iscsi-fsck] STILL READ-ONLY. The RO state lives in the node-level CSI globalmount and cannot be repaired from inside the pod."
+                          echo "[iscsi-fsck] DO NOT run e2fsck on the mounted device, it corrupts the filesystem."
+                          echo "[iscsi-fsck] Recovery: scripts/repair-iscsi-volume.sh piracy deployment/tdarr-deployment tdarr-server"
+                          exit 1
+                        done
                   volumeMounts:
                       - name: config
                         mountPath: /app/configs
+                      - name: server
+                        mountPath: /app/server
                       - name: host-proc-mounts
                         mountPath: /host-proc-mounts
             containers:
