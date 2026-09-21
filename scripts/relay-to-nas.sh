@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Copy a directory into nas02 from a machine that cannot write there itself,
+# by piping it through this one.
+#
+# Written for the t480, which sits on another network (192.168.1.x) and only
+# reaches nas02 over a Tailscale DERP relay, while its sshd refuses agent
+# forwarding. Piping through here needs no key on the source machine and no
+# private key copied anywhere. Measured 2026-09-21: t480 -> here 11 MB/s,
+# here -> nas02 8.5 MB/s.
+#
+# Lands under a directory truenas_admin can write (/mnt/RAID/docker is 777).
+# Library directories such as romm-library are root:root 755, so placing files
+# there is a second step done from a pod.
+#
+# Verifies by comparing every file's logical size at both ends, never du: ZFS
+# compression makes du report a fraction of the real size on the NAS side.
+# Re-running an item that already verifies is a no-op, so a failed transfer is
+# retried by running the same command again.
+#
+# Usage: relay-to-nas.sh <src-host> <src-parent-dir> <item> <nas-dest-dir>
+#   relay-to-nas.sh t480 /mnt/nas "ONE PIECE ODYSSEY" /mnt/RAID/docker/game-staging
+set -euo pipefail
+
+SRC_HOST=$1 SRC_DIR=$2 ITEM=$3 DEST=$4
+NAS=truenas_admin@100.72.0.41   # Tailscale IP; `Host nas02` resolves to NetBird v6
+NAS_SSH=(ssh -o BatchMode=yes -i "$HOME/.ssh/nas" "$NAS")
+
+listing_src() { ssh -o BatchMode=yes "$SRC_HOST" "cd '$SRC_DIR' && find '$ITEM' -type f -printf '%s %p\n' | sort"; }
+listing_dst() { "${NAS_SSH[@]}" "cd '$DEST' 2>/dev/null && find '$ITEM' -type f -printf '%s %p\n' 2>/dev/null | sort"; }
+
+src=$(listing_src)
+[ -n "$src" ] || { echo "nothing found at $SRC_HOST:$SRC_DIR/$ITEM" >&2; exit 1; }
+
+if [ "$src" = "$(listing_dst)" ]; then
+  echo "already there and verified: $ITEM"
+  exit 0
+fi
+
+echo "copying $ITEM ($(awk '{s+=$1} END {printf "%.1f GB", s/1e9}' <<<"$src"))"
+ssh -o BatchMode=yes "$SRC_HOST" "tar -C '$SRC_DIR' -cf - '$ITEM'" \
+  | "${NAS_SSH[@]}" "mkdir -p '$DEST' && tar -C '$DEST' -xf -"
+
+if [ "$src" = "$(listing_dst)" ]; then
+  echo "verified: $ITEM, $(wc -l <<<"$src") files"
+else
+  echo "MISMATCH after copy: $ITEM" >&2
+  diff <(echo "$src") <(listing_dst) | head -20 >&2
+  exit 1
+fi
