@@ -9,11 +9,13 @@
 #   ./nas03-mirror-series.sh status
 #   ./nas03-mirror-series.sh verify    # type/mode/owner/mtime/size of every entry
 #   ./nas03-mirror-series.sh revoke    # drop the temporary grants
+#   NAS02_SUDO_PW=... ./nas03-mirror-series.sh purge   # delete the items on nas02
 #
 # copy is resumable: rerun it. The Syncthing markers (.stfolder, .stignore) stay
 # behind, since the folders leave Syncthing as part of the move. Remove them from
 # Syncthing BEFORE deleting anything on nas02: a Send Only folder whose files
-# vanish sends the deletes to every device it is shared with.
+# vanish sends the deletes to every device it is shared with. purge refuses to
+# run while Syncthing still shares an item or while verify finds a difference.
 set -euo pipefail
 
 ITEMS=("media/SERIES/Charmed" "media/SERIES/The Mentalist")
@@ -99,7 +101,7 @@ verify() {
   if diff "$a" "$b" > /dev/null; then
     log "identical: $(grep -c '^f' "$a") files, $(awk '$1=="f"{s+=$5} END {printf "%.1f GB", s/1e9}' "$a")"
   else
-    diff "$a" "$b" | head -20; rm -f "$a" "$b"; die "nas02 and nas03 differ"
+    diff "$a" "$b" | head -20 || true; rm -f "$a" "$b"; die "nas02 and nas03 differ"
   fi
   rm -f "$a" "$b"
 }
@@ -117,11 +119,27 @@ print(f"nas03: {len(keys)} authorized keys, NOPASSWD rsync revoked")
 EOF
 }
 
+purge() {
+  # The one step with no way back: RAID/docker on nas02 has no snapshots.
+  : "${NAS02_SUDO_PW:?set NAS02_SUDO_PW (vault: projects/plex-nas02)}"
+  local cfg; cfg=$(kubectl --context lamg -n lamg exec deploy/syncthing -- cat /config/config.xml)
+  for it in "${ITEMS[@]}"; do
+    ! grep -qF "path=\"/$it\"" <<<"$cfg" || die "Syncthing still shares /$it; remove that folder first"
+  done
+  verify
+  "${N02[@]}" "/sbin/zfs list -H -o name,used,avail RAID/docker"
+  printf '%s\n' "$NAS02_SUDO_PW" | "${N02[@]}" "sudo -S -p '' rm -rf --$(printf " $ROOT/%q" "${ITEMS[@]}")"
+  "${N02[@]}" "ls -d$(printf " $ROOT/%q" "${ITEMS[@]}") 2>/dev/null" && die "still present on nas02"
+  log "deleted on nas02; ZFS frees the space in the background"
+  "${N02[@]}" "sleep 30; /sbin/zfs list -H -o name,used,avail RAID/docker"
+}
+
 case ${1:-} in
   prepare) prepare ;;
   copy) copy ;;
   status) status ;;
   verify) verify ;;
   revoke) revoke ;;
-  *) sed -n '2,16p' "$0"; exit 1 ;;
+  purge) purge ;;
+  *) sed -n '2,18p' "$0"; exit 1 ;;
 esac
