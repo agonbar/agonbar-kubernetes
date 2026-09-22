@@ -19,14 +19,22 @@
 #
 # Usage: relay-to-nas.sh <src-host> <src-parent-dir> <item> <nas-dest-dir>
 #   relay-to-nas.sh t480 /mnt/nas "ONE PIECE ODYSSEY" /mnt/RAID/docker/game-staging
+#
+# To watch it from the source machine, copy scripts/relay-progress.sh there and
+# run `watch -n 2 ./relay-progress.sh <GB>`, using the GB this script prints.
 set -euo pipefail
+# Byte order everywhere. The source, the NAS and this machine each sort by
+# their own locale (the t480 is es_ES), so names like "_crack" and "Engine"
+# came back in different orders: comm refused the input and the equality
+# check could never have matched either.
+export LC_ALL=C
 
 SRC_HOST=$1 SRC_DIR=$2 ITEM=$3 DEST=$4
 NAS=truenas_admin@100.72.0.41   # Tailscale IP; `Host nas02` resolves to NetBird v6
 NAS_SSH=(ssh -o BatchMode=yes -i "$HOME/.ssh/nas" "$NAS")
 
-listing_src() { ssh -o BatchMode=yes "$SRC_HOST" "cd '$SRC_DIR' && find '$ITEM' -type f -printf '%s %p\n' | sort"; }
-listing_dst() { "${NAS_SSH[@]}" "cd '$DEST' 2>/dev/null && find '$ITEM' -type f -printf '%s %p\n' 2>/dev/null | sort"; }
+listing_src() { ssh -o BatchMode=yes "$SRC_HOST" "cd '$SRC_DIR' && find '$ITEM' -type f -printf '%s %p\n' | LC_ALL=C sort"; }
+listing_dst() { "${NAS_SSH[@]}" "cd '$DEST' 2>/dev/null && find '$ITEM' -type f -printf '%s %p\n' 2>/dev/null | LC_ALL=C sort"; }
 
 src=$(listing_src)
 [ -n "$src" ] || { echo "nothing found at $SRC_HOST:$SRC_DIR/$ITEM" >&2; exit 1; }
@@ -41,7 +49,8 @@ fi
 # whole item over — which matters because the t480's USB enclosure dropped off
 # the bus on its own once already (2026-09-22 00:03). A half-written file has
 # the wrong size, so it lands in this list and gets rewritten whole.
-todo=$(comm -23 <(echo "$src") <(listing_dst))
+todo=$(comm --check-order -23 <(echo "$src") <(listing_dst)) \
+  || { echo "cannot diff the two listings for $ITEM; refusing to guess what to send" >&2; exit 1; }
 echo "copying $ITEM: $(wc -l <<<"$todo") of $(wc -l <<<"$src") files, $(awk '{s+=$1} END {printf "%.1f GB", s/1e9}' <<<"$todo")"
 cut -d' ' -f2- <<<"$todo" | tr '\n' '\0' \
   | ssh -o BatchMode=yes "$SRC_HOST" "tar -C '$SRC_DIR' --null -T - -cf -" \
