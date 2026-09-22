@@ -14,8 +14,8 @@
 #
 # Verifies by comparing every file's logical size at both ends, never du: ZFS
 # compression makes du report a fraction of the real size on the NAS side.
-# Re-running an item that already verifies is a no-op, so a failed transfer is
-# retried by running the same command again.
+# Re-running is the retry: an item that verifies is skipped, and a partial one
+# resumes with only the files still missing or short.
 #
 # Usage: relay-to-nas.sh <src-host> <src-parent-dir> <item> <nas-dest-dir>
 #   relay-to-nas.sh t480 /mnt/nas "ONE PIECE ODYSSEY" /mnt/RAID/docker/game-staging
@@ -36,8 +36,15 @@ if [ "$src" = "$(listing_dst)" ]; then
   exit 0
 fi
 
-echo "copying $ITEM ($(awk '{s+=$1} END {printf "%.1f GB", s/1e9}' <<<"$src"))"
-ssh -o BatchMode=yes "$SRC_HOST" "tar -C '$SRC_DIR' -cf - '$ITEM'" \
+# Only the files whose size does not already match at the destination. A
+# transfer that dies halfway then resumes file by file instead of starting the
+# whole item over — which matters because the t480's USB enclosure dropped off
+# the bus on its own once already (2026-09-22 00:03). A half-written file has
+# the wrong size, so it lands in this list and gets rewritten whole.
+todo=$(comm -23 <(echo "$src") <(listing_dst))
+echo "copying $ITEM: $(wc -l <<<"$todo") of $(wc -l <<<"$src") files, $(awk '{s+=$1} END {printf "%.1f GB", s/1e9}' <<<"$todo")"
+cut -d' ' -f2- <<<"$todo" | tr '\n' '\0' \
+  | ssh -o BatchMode=yes "$SRC_HOST" "tar -C '$SRC_DIR' --null -T - -cf -" \
   | "${NAS_SSH[@]}" "mkdir -p '$DEST' && tar -C '$DEST' -xf -"
 
 if [ "$src" = "$(listing_dst)" ]; then
