@@ -293,10 +293,28 @@ data:
     JOB_EOF
 
       # 7. wait for rsync job
+      #
+      # Sondeo, no `kubectl wait --for=condition=complete`: un Job que FALLA
+      # nunca cumple esa condicion, asi que wait se comia el deadline entero
+      # antes de darse cuenta. Medido el 2026-09-24 con tachidesk: el job hijo
+      # murio en 18 s y el padre siguio esperando sus 90 minutos, y eso por cada
+      # volumen roto. backup_local_path_pvc ya lo resolvia asi desde hace meses;
+      # esta funcion se quedo atras.
       echo "[${NS}/${PVC}] Waiting for rsync to complete..."
-      if ! kubectl wait "job/${JOB_NAME}" -n "${NS}" \
-        --for=condition=complete --timeout="${RSYNC_DEADLINE}s"; then
-        echo "[${NS}/${PVC}] ERROR: Rsync job failed"
+      END=$(( $(date +%s) + RSYNC_DEADLINE + 60 ))
+      DONE=""
+      while [ "$(date +%s)" -lt "${END}" ]; do
+        CONDS=$(kubectl get job "${JOB_NAME}" -n "${NS}" \
+          -o jsonpath='{.status.conditions[?(@.status=="True")].type}' 2>/dev/null || true)
+        case "${CONDS}" in
+          *Complete*) DONE="ok"; break ;;
+          *Failed*)   DONE="fail"; break ;;
+        esac
+        sleep 10
+      done
+      if [ "${DONE}" != "ok" ]; then
+        echo "[${NS}/${PVC}] ERROR: Rsync job ${DONE:-timed out}"
+        kubectl logs "job/${JOB_NAME}" -n "${NS}" --tail=20 2>/dev/null || true
         FAILED=1
       fi
 
@@ -374,7 +392,16 @@ data:
                   rsync -av --delete --exclude='*.db' --exclude='*.db-wal' --exclude='*.db-shm' /source/ "\$DEST/"
                   RC=\$?
                   echo "rsync exit=\$RC"
-                  [ \$RC -eq 0 ] || exit \$RC
+                  # 24 es "some files vanished before they could be transferred",
+                  # un aviso, no un error: lo copiado esta bien. Aqui el origen es
+                  # un sistema de ficheros VIVO (a diferencia del snapshot que usa
+                  # backup_pvc, que esta congelado y donde un 24 si seria raro), y
+                  # palworld rota sus propias copias mientras rsync lee. Por eso la
+                  # run nocturna llevaba en rojo desde el 2026-09-02: un servidor de
+                  # juegos haciendo su trabajo tumbaba la copia de los otros 30
+                  # volumenes. 23 sigue siendo fallo, que ese si es transferencia
+                  # parcial por error de verdad.
+                  [ \$RC -eq 0 ] || [ \$RC -eq 24 ] || exit \$RC
                   # Copiar en crudo una SQLite viva con WAL da un fichero que
                   # restaura como "malformed", que es justo el estado del que hubo
                   # que sacar houndarr. El dot-command .backup si es consistente en
@@ -519,6 +546,11 @@ data:
     backup_pvc knowledge vault-data
     backup_pvc knowledge vault-state
 
+    # sure namespace
+    # Anadido el 2026-09-24 por el mismo motivo que gamevault-data. sure vive
+    # en nas02-k3s desde f3257c5 y no tenia seccion aqui.
+    backup_pvc sure sure-storage
+
     # trek namespace
     backup_pvc trek trek-data
     backup_pvc trek trek-uploads
@@ -544,6 +576,11 @@ data:
     backup_pvc piracy bazarr-config-nfs
     backup_pvc piracy cruncharr-config
     backup_pvc piracy emulerr-config
+    # Anadido el 2026-09-24: lo montaba un pod vivo y no lo copiaba nadie, asi
+    # que el chequeo de cobertura ponia la run en rojo todas las noches. Aqui
+    # lo que importa es la base y los metadatos, no los instaladores: la
+    # biblioteca de _ADRIAN ya se importo y se vacio (137GB -> 29.5MB).
+    backup_pvc piracy gamevault-data
     # houndarr salio de iSCSI a local-path el 2026-09-02 (f2da258) porque su
     # SQLite se corrompio dos veces. El PVC viejo `houndarr-data` sigue existiendo
     # y ya no lo monta nadie: seguir copiandolo daria verde sobre datos congelados.
