@@ -105,7 +105,9 @@ spec:
                   v=$(psql -d "$check" -tAc "select count(*) from pg_extension where extname='vchord'")
                   [ "$n" -gt 0 ] && [ "$v" = "1" ] || {
                     echo "FATAL: restored $out has assets=$n vchord=$v"; rm -f "$out"; exit 1; }
-                  echo "ok -> $out ($(du -h "$out" | cut -f1)), restore verified: $n assets"
+                  # du reports allocated blocks, and this NFS export answers 512
+                  # for every file regardless of size. Ask for the real length.
+                  echo "ok -> $out ($(stat -c %s "$out") bytes), restore verified: $n assets"
 
                   find /backups -name 'immich-*.dump' -mtime +14 -print -delete
                   echo "=== current backups ==="; ls -lh /backups
