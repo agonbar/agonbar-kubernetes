@@ -40,6 +40,11 @@ spec:
                   key: dbUser
             - name: POSTGRES_DB
               value: immich
+            # initdb args only apply the first time a data directory is created,
+            # and this cluster predates the line: it ran with checksums off until
+            # 2026-09-23, when scripts/pg-enable-checksums.sh turned them on
+            # offline. Do not read this env as proof they are on -- read
+            # `pg_controldata -D /var/lib/postgresql/data | grep checksum`.
             - name: POSTGRES_INITDB_ARGS
               value: "--data-checksums"
             - name: DB_STORAGE_TYPE
