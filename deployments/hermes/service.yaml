@@ -1,0 +1,15 @@
+# ClusterIP only. Telegram is a polling client, so nothing needs to reach the
+# gateway from outside; this is here for the OpenAI-compatible API server
+# (guarded by API_SERVER_KEY) and for kubectl port-forward.
+apiVersion: v1
+kind: Service
+metadata:
+  name: hermes
+  namespace: hermes
+spec:
+  selector:
+    app: hermes
+  ports:
+    - name: gateway
+      port: 8642
+      targetPort: 8642
