@@ -26,3 +26,23 @@ data:
 
     database:
       journal_mode: wal
+  # kubectl reads this through KUBECONFIG. `tokenFile` instead of an inline
+  # token so the kubelet's rotating ServiceAccount token keeps working.
+  kubeconfig: |
+    apiVersion: v1
+    kind: Config
+    clusters:
+      - name: lamg
+        cluster:
+          server: https://kubernetes.default.svc
+          certificate-authority: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    users:
+      - name: hermes
+        user:
+          tokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+    contexts:
+      - name: lamg
+        context:
+          cluster: lamg
+          user: hermes
+    current-context: lamg
