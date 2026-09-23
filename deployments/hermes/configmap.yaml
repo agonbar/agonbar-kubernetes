@@ -14,8 +14,12 @@ data:
     # built-in "openai" provider plus OPENAI_BASE_URL. Naming a custom provider
     # under `providers:` and writing the model as `litellm/<model>` does NOT
     # work: hermes reads the unknown prefix as OpenRouter and 401s.
+    # Coste cero: gemma-4-12b-00 es el grupo de LiteLLM que apunta al
+    # llama.cpp de work-vm-00 (local-llm-00.dev.senseizero.es), la 3090 de
+    # casa. Ojo con el grupo `gemma-4-12b` a secas: su backend es
+    # local-llm.dev.senseizero.es, que era work-vm-01 y esta retirado.
     model:
-      default: "gemini-3.5-flash"
+      default: "gemma-4-12b-00"
       provider: openai
 
     # Auxiliary calls (compression, curation) default to the Nous Portal, which
