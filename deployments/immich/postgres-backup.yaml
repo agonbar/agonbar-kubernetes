@@ -76,10 +76,11 @@ spec:
                   pg_dump --clean --if-exists --dbname=immich | gzip > "$out"
 
                   # gunzip -t only proves the gzip stream is whole. A dump that
-                  # was cut off mid-table still gunzips cleanly, so check for
-                  # the trailer pg_dump writes as its last line.
+                  # was cut off mid-table still gunzips cleanly, so check for the
+                  # trailer pg_dump writes at the end. It is not the last line:
+                  # the dump closes with a "--" comment block around it.
                   gunzip -t "$out"
-                  zcat "$out" | tail -1 | grep -q 'PostgreSQL database dump complete' || {
+                  zcat "$out" | tail -5 | grep -q 'PostgreSQL database dump complete' || {
                     echo "FATAL: $out is truncated"; rm -f "$out"; exit 1; }
                   echo "ok -> $out ($(du -h "$out" | cut -f1))"
 

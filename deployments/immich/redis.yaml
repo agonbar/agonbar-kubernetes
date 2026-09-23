@@ -31,6 +31,17 @@ spec:
             requests:
               cpu: 5m
               memory: 30Mi
+      # Follow the database, same as server.yaml and machine-learning.yaml. The
+      # server hits this on every request, so a wobbly overlay hop between them
+      # is the same outage as a wobbly hop to Postgres. It holds no data, so
+      # moving it costs nothing.
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: postgre
+              topologyKey: kubernetes.io/hostname
       nodeSelector:
         svccontroller.k3s.cattle.io/lbpool: lamg
 
