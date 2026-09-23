@@ -445,7 +445,12 @@ data:
     # y al reves, 19 PVCs de la lista no tienen pod ahora mismo porque sus apps estan
     # paradas: avisar de eso seria ruido todas las noches. El caso que importa, y el
     # unico que este chequeo persigue, es migrar el volumen de algo que esta vivo.
-    COVERAGE_SKIP=""
+    # immich/immich-db-data-local is a live Postgres data directory. The
+    # coverage check counts local-path as backup-capable, and it is -- but an
+    # rsync of a running cluster's PGDATA is a torn copy, not a backup. It is
+    # covered by the immich-postgres-backup CronJob, which dumps it and restores
+    # the dump into a scratch database before calling it good.
+    COVERAGE_SKIP="immich/immich-db-data-local"
 
     check_coverage() {
       echo "========================================="
