@@ -68,33 +68,55 @@ spec:
                 - |
                   set -euo pipefail
                   ts="$(date +%Y%m%d-%H%M%S)"
-                  out="/backups/immich-${ts}.sql.gz"
+                  out="/backups/immich-${ts}.dump"
+                  check=immich_restorecheck
 
-                  # --clean --if-exists is what immich's own restore procedure
-                  # expects; plain SQL rather than -Fc because the documented
-                  # restore pipes it through sed (see RESTORE below).
-                  pg_dump --clean --if-exists --dbname=immich | gzip > "$out"
+                  cleanup() { psql -d postgres -qc "DROP DATABASE IF EXISTS $check" >/dev/null 2>&1 || true; }
+                  trap cleanup EXIT
 
-                  # gunzip -t only proves the gzip stream is whole. A dump that
-                  # was cut off mid-table still gunzips cleanly, so check for the
-                  # trailer pg_dump writes at the end. It is not the last line:
-                  # the dump closes with a "--" comment block around it.
-                  gunzip -t "$out"
-                  zcat "$out" | tail -5 | grep -q 'PostgreSQL database dump complete' || {
-                    echo "FATAL: $out is truncated"; rm -f "$out"; exit 1; }
-                  echo "ok -> $out ($(du -h "$out" | cut -f1))"
+                  # Custom format, not plain SQL, because this database cannot be
+                  # restored as a straight psql replay. See the TOC filter below.
+                  pg_dump --dbname=immich -Fc -f "$out"
 
-                  find /backups -name 'immich-*.sql.gz' -mtime +14 -print -delete
+                  # The only honest test of a backup is restoring it, and at 12MB
+                  # that costs seconds. immich's own DatabaseBackup job was failing
+                  # silently since at least March 2026 -- the evidence is a row in
+                  # this very database -- and nobody noticed, because nothing ever
+                  # tried to read a dump back.
+                  #
+                  # The filter drops TOC entries for types whose name starts with
+                  # an underscore. Postgres reserves that prefix for the array type
+                  # it creates alongside every table, and this database carries one
+                  # -- _naturalearth_countries -- whose element type was dropped out
+                  # from under it by an old geodata migration. pg_dump emits it as a
+                  # standalone base type that refers to itself, so the restore dies
+                  # on `type "_naturalearth_countries" does not exist`. The catalog
+                  # row is deliberately left alone; removing it means deleting from
+                  # pg_depend by hand on the live photo database.
+                  pg_restore --list "$out" \
+                    | grep -vE "^[0-9]+; [0-9]+ [0-9]+ TYPE [^ ]+ _" > "/tmp/toc-${ts}.list"
+
+                  psql -d postgres -qc "DROP DATABASE IF EXISTS $check" >/dev/null
+                  psql -d postgres -qc "CREATE DATABASE $check" >/dev/null
+                  pg_restore --use-list "/tmp/toc-${ts}.list" -d "$check" \
+                    --single-transaction --exit-on-error "$out"
+
+                  n=$(psql -d "$check" -tAc "select count(*) from asset")
+                  v=$(psql -d "$check" -tAc "select count(*) from pg_extension where extname='vchord'")
+                  [ "$n" -gt 0 ] && [ "$v" = "1" ] || {
+                    echo "FATAL: restored $out has assets=$n vchord=$v"; rm -f "$out"; exit 1; }
+                  echo "ok -> $out ($(du -h "$out" | cut -f1)), restore verified: $n assets"
+
+                  find /backups -name 'immich-*.dump' -mtime +14 -print -delete
                   echo "=== current backups ==="; ls -lh /backups
 
                   # RESTORE, into a postgres running the immich image:
-                  #   zcat immich-<ts>.sql.gz \
-                  #     | sed "s/SELECT pg_catalog.set_config('search_path', '', false);/SELECT pg_catalog.set_config('search_path', 'public, pg_catalog', true);/g" \
-                  #     | psql --dbname=immich --username=<dbUser> \
-                  #         --single-transaction --set ON_ERROR_STOP=on
-                  # The sed is not optional. pg_dump pins search_path to empty,
-                  # and the VectorChord types the restore needs live in public,
-                  # so without it every vector column fails to restore.
+                  #   pg_restore --list immich-<ts>.dump \
+                  #     | grep -vE "^[0-9]+; [0-9]+ [0-9]+ TYPE [^ ]+ _" > toc.list
+                  #   pg_restore --use-list toc.list -d immich \
+                  #     --single-transaction --exit-on-error immich-<ts>.dump
+                  # That is the same pair of commands this job runs every night
+                  # against a scratch database, so it is known to work.
               resources:
                 requests:
                   cpu: 50m
