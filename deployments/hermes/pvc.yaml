@@ -1,0 +1,20 @@
+# Everything hermes owns lives here: config.yaml, .env, SOUL.md, the bot
+# profiles, memories, skills and the SQLite session store.
+#
+# local-path on purpose. SQLite in WAL mode over the tailnet-iSCSI classes is
+# the failure this cluster already paid for twice (a WAN blip drops the iSCSI
+# session, ext4 aborts its journal, every write EIOs). local-path is
+# WaitForFirstConsumer, so the volume is created on whichever node the pod
+# lands on and stays there.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hermes-data
+  namespace: hermes
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 10Gi

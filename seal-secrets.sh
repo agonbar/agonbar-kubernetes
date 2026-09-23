@@ -18,6 +18,7 @@ deployments/agonbar
 deployments/aya
 deployments/dawarich
 deployments/games
+deployments/hermes
 deployments/immich
 deployments/knowledge
 deployments/lamg

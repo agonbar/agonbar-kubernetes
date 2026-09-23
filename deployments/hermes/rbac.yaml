@@ -1,0 +1,68 @@
+# Cluster access for the hermes agent, rebuilt from what openclaw had until it
+# was retired with work-vm-01 in 2026-09: wildcard read (secrets included) plus
+# restart powers. The agent reads this through its in-cluster ServiceAccount,
+# so there is no kubeconfig to keep in agenix this time.
+#
+# The secrets read is the sharp edge: anything the agent can read it can also
+# paste into a Telegram chat. Drop the `secrets` exception below to a plain
+# deny if that ever stops feeling worth it.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hermes
+  namespace: hermes
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: hermes-reader
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  - nonResourceURLs: ["*"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: hermes-pod-restarter
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["delete"]
+  - apiGroups: [""]
+    resources: ["pods/exec", "pods/log"]
+    verbs: ["get", "create"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets"]
+    verbs: ["patch", "update"]
+  - apiGroups: ["apps"]
+    resources: ["deployments/scale", "statefulsets/scale"]
+    verbs: ["patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: hermes-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hermes-reader
+subjects:
+  - kind: ServiceAccount
+    name: hermes
+    namespace: hermes
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: hermes-pod-restarter
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hermes-pod-restarter
+subjects:
+  - kind: ServiceAccount
+    name: hermes
+    namespace: hermes
