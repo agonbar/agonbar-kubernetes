@@ -52,14 +52,32 @@ spec:
             medium: Memory
             sizeLimit: 1Gi
       initContainers:
-        # First boot only. Afterwards the file is hermes' own, so editing the
-        # ConfigMap changes nothing until you delete /opt/data/config.yaml.
-        - name: seed-config
-          image: busybox:1.36
-          command:
-            - sh
-            - -c
-            - '[ -f /opt/data/config.yaml ] || cp /config/config.yaml /opt/data/config.yaml'
+        # Runs on the hermes image itself: it is already on the node and it has
+        # both a shell and curl, which the distroless kubectl image does not.
+        - name: seed-data
+          image: nousresearch/hermes-agent@sha256:fdf7ab656e9c80ed490958c4733778d8bb33396ed7ddf7e4d0a1b69635bcc8d1
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              mkdir -p /opt/data/.local/bin /opt/data/.kube
+
+              # config.yaml is seeded once and then belongs to hermes, which
+              # rewrites it on `hermes config set` and on schema migrations.
+              # Editing the ConfigMap changes nothing until you delete the file.
+              [ -f /opt/data/config.yaml ] || cp /config/config.yaml /opt/data/config.yaml
+
+              # The kubeconfig is derived, so it is refreshed every boot.
+              cp /config/kubeconfig /opt/data/.kube/config
+
+              # The image ships no kubectl, which would leave the ClusterRoles
+              # in rbac.yaml doing nothing. /opt/data/.local/bin is already on
+              # the image's PATH. Version tracks the k3s server (v1.36.4).
+              if [ ! -x /opt/data/.local/bin/kubectl ]; then
+                curl -fsSL -o /opt/data/.local/bin/kubectl \
+                  https://dl.k8s.io/release/v1.36.4/bin/linux/amd64/kubectl
+                chmod +x /opt/data/.local/bin/kubectl
+              fi
           volumeMounts:
             - name: data
               mountPath: /opt/data
@@ -89,6 +107,8 @@ spec:
                 secretKeyRef:
                   name: hermes-env
                   key: TELEGRAM_ALLOWED_USERS
+            - name: KUBECONFIG
+              value: /opt/data/.kube/config
             - name: API_SERVER_ENABLED
               value: "true"
             - name: API_SERVER_HOST
