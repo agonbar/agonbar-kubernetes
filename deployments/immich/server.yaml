@@ -103,19 +103,23 @@ spec:
           nfs:
             server: 192.168.0.29
             path: /mnt/RAID/docker/immich/upload
-      # nas00 is 2 cores / 3.4Gi and flaps under load; homeassistant already
-      # keeps off it for the same reason. On 2026-09-01 immich landed there and
-      # saturated the node, which starved the democratic-csi node pods until
-      # every CSI driver deregistered and no volume on nas00 could mount.
+      # Run on whichever node holds the database. The DB is a local-path volume
+      # now, so it cannot move, and every byte this pod reads comes from either
+      # that node or the NFS export on the host it is a VM of. Split across
+      # nodes, the boot-time geodata import crosses the tailscale-backed overlay
+      # and dies on `read ETIMEDOUT` the moment the other node wobbles -- which
+      # is exactly what happened on 2026-09-23 with the server on nas01.
+      #
+      # This also keeps it off nas00, which is 2 cores / 3.4Gi: on 2026-09-01
+      # this pod pinned that box at 100% CPU and load 22, which starved the
+      # democratic-csi node pods until every CSI driver deregistered.
       affinity:
-        nodeAffinity:
+        podAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: kubernetes.io/hostname
-                    operator: NotIn
-                    values:
-                      - nas00
+            - labelSelector:
+                matchLabels:
+                  app: postgre
+              topologyKey: kubernetes.io/hostname
       nodeSelector:
         svccontroller.k3s.cattle.io/lbpool: lamg
 

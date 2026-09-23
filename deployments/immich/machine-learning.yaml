@@ -73,20 +73,22 @@ spec:
           nfs:
             server: 192.168.0.29
             path: /mnt/RAID/docker/immich/models
-      # nas00 is 2 cores / 3.4Gi and cannot host anything real. On 2026-09-02 this
-      # pod pushed it under the 250Mi eviction threshold; the kubelet evicted the
-      # democratic-csi iscsi-ssd-lan controller, home-assistant's volume flipped to
-      # read-only, and HA was down for three hours. Same reason as the affinity
-      # server and postgre already carry (6d20abb).
+      # Follow the database, same as server.yaml: this pod reads the originals
+      # over NFS and writes embeddings straight back to Postgres, so being on
+      # the same node as the DB takes the overlay out of both paths.
+      #
+      # It also keeps it off nas00, which is 2 cores / 3.4Gi and cannot host
+      # anything real. On 2026-09-02 this pod pushed that node under the 250Mi
+      # eviction threshold; the kubelet evicted the democratic-csi iscsi-ssd-lan
+      # controller, home-assistant's volume flipped to read-only, and HA was
+      # down for three hours.
       affinity:
-        nodeAffinity:
+        podAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: kubernetes.io/hostname
-                    operator: NotIn
-                    values:
-                      - nas00
+            - labelSelector:
+                matchLabels:
+                  app: postgre
+              topologyKey: kubernetes.io/hostname
       nodeSelector:
         svccontroller.k3s.cattle.io/lbpool: lamg
 
