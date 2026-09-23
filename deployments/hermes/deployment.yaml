@@ -173,5 +173,14 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /opt/data
+            # The terminal tool sanitises the environment before running a
+            # command, so /opt/data/.local/bin drops off PATH even though the
+            # image ships it and an interactive bash still has it. The agent
+            # then reports `kubectl: command not found` and gives up. Bind the
+            # same binary where a bare PATH will find it. The init container
+            # creates the file first, so this never mounts as a directory.
+            - name: data
+              mountPath: /usr/local/bin/kubectl
+              subPath: .local/bin/kubectl
             - name: dshm
               mountPath: /dev/shm
