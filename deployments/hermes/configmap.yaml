@@ -30,6 +30,67 @@ data:
 
     database:
       journal_mode: wal
+  # Skill copied into the agent's skills dir on every boot. It tells the agent
+  # that the vault is the MCP and not a directory, and passes on the index-lag
+  # warning the MCP server itself ships in its handshake instructions.
+  knowledge-vault-skill.md: |
+    ---
+    name: knowledge-vault
+    description: Read and write the user's personal knowledge vault (agonbar). Use whenever a project, service, host or decision comes up and you need background, and whenever the user asks you to write something down. Triggers include "busca en el vault", "que sabes de X", "apunta esto", "guarda esto en el vault", "que dice la nota de X", "search the vault", "save this".
+    ---
+
+    # Knowledge vault
+
+    The vault is the `knowledge-vault` MCP server, not a folder on disk. There is no
+    vault path in this container: if you go looking for `.md` files with the terminal
+    or file tools you will find nothing. Every read and write goes through the MCP.
+
+    ## Before you answer from memory, search
+
+    When the user names a project, a host, a service or a past decision, search the
+    vault first. It is where the non-obvious things live: env vars, gotchas, why a
+    thing was built the way it was. `projects/<name>.md` and
+    `architecture/services-map.md` are the two files worth checking by default.
+
+    ## The index lags, and this will fool you
+
+    A `write` or `edit` that returns OK means the file changed. It does NOT mean
+    `search` can find it. Indexing is asynchronous and falls behind under a burst of
+    writes.
+
+    - Verify every write with `read`, never with `search`.
+    - An empty `search` result is indistinguishable from four different things: the
+      note does not exist, the phrase was never written, the index is behind, or the
+      query was bad. Do not report "there is no note about X" on an empty result
+      alone.
+    - Before trusting a search, run one you know should hit. If that comes back
+      empty too, the index is the problem, not the vault.
+    - `get_index_status` tells you directly: check `queue_depth`, `dirty_paths` and
+      `dirty_embeddings` whenever freshness matters.
+
+    ## Layout
+
+    - `projects/` - per-project stack, env vars, run commands, gotchas
+    - `runbooks/` - step-by-step procedures
+    - `architecture/` - cross-project decisions and service maps
+    - `work/` - meetings, decisions, context
+    - `raw/` - immutable source documents, never modify these
+
+    ## Writing
+
+    Run `get_conventions` before your first write of a session and follow what it
+    says. Notes are linked with `[[wikilinks]]`; link generously, a link to a note
+    that does not exist yet marks something worth writing later.
+
+    Prefer `append` or `edit` over `write` on a note that already exists. `write`
+    overwrites the whole document.
+
+    ## What you cannot do
+
+    Deleting, renaming and moving notes are deliberately not available to you, and
+    neither is forcing a git sync or a reindex. If the user asks for one of those,
+    say so plainly and let them do it from their laptop.
+
   # kubectl reads this through KUBECONFIG. `tokenFile` instead of an inline
   # token so the kubelet's rotating ServiceAccount token keeps working.
   kubeconfig: |
