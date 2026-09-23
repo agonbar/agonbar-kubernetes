@@ -12,6 +12,14 @@
 #     assigned to group `lamg-vault`.
 #   - Policy `adrian-to-lamg-vault`: src group `adrian` -> dst `lamg-vault`,
 #     tcp/8000. NetBird is default-deny, so ONLY adrian's own peers reach it.
+#   - Resource `hermes` = host 10.43.161.195/32 (the hermes ClusterIP), assigned
+#     to group `lamg-hermes`; policy `adrian-to-lamg-hermes`, tcp/9119 [2026-09-23].
+#     That is the agent's web dashboard, and it stays off the public internet on
+#     purpose: it can restart the gateway, it lists the API keys, and the agent
+#     behind it runs as root with cluster-wide read. One password is not enough
+#     of a fence for that.
+#   - Nameserver group `lamg-knowledge-dns` also forwards `hermes.svc.cluster.local`
+#     now, so the dashboard answers at hermes.hermes.svc.cluster.local:9119.
 #
 # Coexists with the Headscale path (the vault-mcp tailscale sidecar +
 # autogroup:self) — this is additive, nothing on the Headscale side changes.
