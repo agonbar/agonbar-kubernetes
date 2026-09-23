@@ -75,6 +75,7 @@ spec:
               # agent has no vault on disk and would otherwise go hunting for
               # one with the terminal tool.
               cp /config/knowledge-vault-skill.md /opt/data/skills/knowledge-vault/SKILL.md
+              cp /config/SOUL.md /opt/data/SOUL.md
 
               # MCP servers this cluster depends on are re-asserted on every
               # boot. The agent may add its own with `hermes mcp add`; these
@@ -110,6 +111,14 @@ spec:
               # The warning is wrong: agent/skill_utils.py reads skills.disabled
               # and `hermes skills list` shows the skill as disabled afterwards.
               hermes config set skills.disabled '["obsidian"]'
+
+              # Deferred tool search is off. By default hermes hides most tools
+              # behind tool_search/tool_describe, so reaching the vault costs
+              # two discovery round-trips before the first real call — and a 12B
+              # model spends its turn budget on them and answers "I don't have a
+              # tool for that". With every tool eager in the prompt, the same
+              # question is answered from the vault on the first try.
+              hermes config set tools.tool_search.enabled off
 
               # The image ships no kubectl, which would leave the ClusterRoles
               # in rbac.yaml doing nothing. /opt/data/.local/bin is already on
