@@ -1,0 +1,28 @@
+# Seeded into the PVC on first boot only (see the initContainer). After that
+# hermes owns the file: `hermes config set` writes here, and the container
+# auto-migrates the schema (_config_version 46 as of the 2026-09 image).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hermes-config
+  namespace: hermes
+data:
+  config.yaml: |
+    _config_version: 46
+
+    # LiteLLM speaks the OpenAI wire protocol, so hermes reaches it through its
+    # built-in "openai" provider plus OPENAI_BASE_URL. Naming a custom provider
+    # under `providers:` and writing the model as `litellm/<model>` does NOT
+    # work: hermes reads the unknown prefix as OpenRouter and 401s.
+    model:
+      default: "gemini-3.5-flash"
+      provider: openai
+
+    # Auxiliary calls (compression, curation) default to the Nous Portal, which
+    # this install has no account for. Point them at the same endpoint.
+    auxiliary:
+      compression:
+        provider: main
+
+    database:
+      journal_mode: wal
