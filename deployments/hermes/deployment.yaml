@@ -109,6 +109,30 @@ spec:
                   key: TELEGRAM_ALLOWED_USERS
             - name: KUBECONFIG
               value: /opt/data/.kube/config
+            # Dashboard web: lista de bots, chats y ficheros. El servicio de s6
+            # sale con 0 en silencio si HERMES_DASHBOARD no esta puesto, y se
+            # niega a arrancar sin auth cuando no escucha en loopback.
+            - name: HERMES_DASHBOARD
+              value: "1"
+            - name: HERMES_DASHBOARD_HOST
+              value: "0.0.0.0"
+            - name: HERMES_DASHBOARD_PORT
+              value: "9119"
+            - name: HERMES_DASHBOARD_BASIC_AUTH_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: hermes-env
+                  key: HERMES_DASHBOARD_BASIC_AUTH_USERNAME
+            - name: HERMES_DASHBOARD_BASIC_AUTH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: hermes-env
+                  key: HERMES_DASHBOARD_BASIC_AUTH_PASSWORD
+            - name: HERMES_DASHBOARD_BASIC_AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: hermes-env
+                  key: HERMES_DASHBOARD_BASIC_AUTH_SECRET
             - name: API_SERVER_ENABLED
               value: "true"
             - name: API_SERVER_HOST
@@ -121,6 +145,8 @@ spec:
           ports:
             - name: gateway
               containerPort: 8642
+            - name: dashboard
+              containerPort: 9119
           startupProbe:
             httpGet:
               path: /health
