@@ -1,6 +1,10 @@
 # ClusterIP only. Telegram is a polling client, so nothing needs to reach the
 # gateway from outside; this is here for the OpenAI-compatible API server
-# (guarded by API_SERVER_KEY) and for kubectl port-forward.
+# (guarded by API_SERVER_KEY) and for the dashboard.
+#
+# The dashboard answers on 80 so the URL carries no port number: over NetBird
+# it is plain http://hermes.hermes.svc.cluster.local. The container still
+# listens on 9119; only the Service port moved.
 apiVersion: v1
 kind: Service
 metadata:
@@ -14,5 +18,5 @@ spec:
       port: 8642
       targetPort: 8642
     - name: dashboard
-      port: 9119
+      port: 80
       targetPort: 9119
