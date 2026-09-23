@@ -1,0 +1,107 @@
+# The immich database used to be covered by the nightly VolumeSnapshot in
+# system/snapshots/backup.yaml. It moved to local-path on 2026-09-23 and
+# local-path has no CSI snapshotter, so the backup has to be logical from here
+# on. This is that backup. If this CronJob stops running, nothing else is
+# holding a copy of the database.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: immich-pg-backups
+  namespace: immich
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-nfs-raid
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: immich-postgres-backup
+  namespace: immich
+  labels:
+    app: immich-postgres-backup
+spec:
+  # 03:15, ahead of piracy-postgres-backup at 03:30 and the PVC snapshots at
+  # 04:00, so the three do not compete for the same NAS at the same minute.
+  schedule: "15 3 * * *"
+  timeZone: Europe/Madrid
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          # Pin to the pool, never to a single host: piracy's backup died
+          # unnoticed for four days in August 2026 because it named nas00 and
+          # nas00 went NotReady.
+          nodeSelector:
+            svccontroller.k3s.cattle.io/lbpool: lamg
+          containers:
+            - name: pg-dump
+              # Same major as the server. The client only has to be >= the
+              # server, but matching it means the dump is exactly what the
+              # immich postgres image would produce itself.
+              image: postgres:14
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: PGHOST
+                  value: postgre.immich.svc.cluster.local
+                - name: PGUSER
+                  valueFrom:
+                    secretKeyRef:
+                      name: immich
+                      key: dbUser
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: immich
+                      key: dbPassword
+              command: ["/bin/bash", "-c"]
+              args:
+                - |
+                  set -euo pipefail
+                  ts="$(date +%Y%m%d-%H%M%S)"
+                  out="/backups/immich-${ts}.sql.gz"
+
+                  # --clean --if-exists is what immich's own restore procedure
+                  # expects; plain SQL rather than -Fc because the documented
+                  # restore pipes it through sed (see RESTORE below).
+                  pg_dump --clean --if-exists --dbname=immich | gzip > "$out"
+
+                  # gunzip -t only proves the gzip stream is whole. A dump that
+                  # was cut off mid-table still gunzips cleanly, so check for
+                  # the trailer pg_dump writes as its last line.
+                  gunzip -t "$out"
+                  zcat "$out" | tail -1 | grep -q 'PostgreSQL database dump complete' || {
+                    echo "FATAL: $out is truncated"; rm -f "$out"; exit 1; }
+                  echo "ok -> $out ($(du -h "$out" | cut -f1))"
+
+                  find /backups -name 'immich-*.sql.gz' -mtime +14 -print -delete
+                  echo "=== current backups ==="; ls -lh /backups
+
+                  # RESTORE, into a postgres running the immich image:
+                  #   zcat immich-<ts>.sql.gz \
+                  #     | sed "s/SELECT pg_catalog.set_config('search_path', '', false);/SELECT pg_catalog.set_config('search_path', 'public, pg_catalog', true);/g" \
+                  #     | psql --dbname=immich --username=<dbUser> \
+                  #         --single-transaction --set ON_ERROR_STOP=on
+                  # The sed is not optional. pg_dump pins search_path to empty,
+                  # and the VectorChord types the restore needs live in public,
+                  # so without it every vector column fails to restore.
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+              volumeMounts:
+                - mountPath: /backups
+                  name: backups
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: immich-pg-backups
