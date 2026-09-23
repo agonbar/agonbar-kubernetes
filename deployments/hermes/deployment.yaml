@@ -70,6 +70,32 @@ spec:
               # The kubeconfig is derived, so it is refreshed every boot.
               cp /config/kubeconfig /opt/data/.kube/config
 
+              # MCP servers this cluster depends on are re-asserted on every
+              # boot. The agent may add its own with `hermes mcp add`; these
+              # are not its to edit. `hermes config set` instead of rewriting
+              # config.yaml because it preserves the file's comments and
+              # whatever the schema migrations did to it.
+              #
+              # The URL is the in-cluster Service and NOT
+              # vault-mcp.senseizero.lan: that name resolves through the
+              # tailnet forwarder, and the MCP client loses it halfway through
+              # the handshake ("Name or service not known" in post_writer), so
+              # discovery dies at "Connection closed" after ~15s.
+              #
+              # The token never lands in the file. What gets written is the
+              # literal ${MCP_KNOWLEDGE_VAULT_API_KEY}, which hermes resolves
+              # from the container env when it connects.
+              hermes config set mcp_servers.knowledge-vault.url \
+                http://vault-mcp.knowledge.svc.cluster.local:8000/mcp
+              hermes config set mcp_servers.knowledge-vault.headers.Authorization \
+                'Bearer ${MCP_KNOWLEDGE_VAULT_API_KEY}'
+
+              # The server exposes 39 tools. Handing all of them to a 12B model
+              # buys nothing but prompt: this is read, navigate and write, with
+              # no delete, rename, move_folder, git_sync or reindex.
+              hermes config set mcp_servers.knowledge-vault.tools.include \
+                '["search","read","list_documents","list_folders","get_recent","get_toc","get_context","get_backlinks","get_outlinks","get_similar","get_conventions","get_index_status","write","edit","append"]'
+
               # The image ships no kubectl, which would leave the ClusterRoles
               # in rbac.yaml doing nothing. /opt/data/.local/bin is already on
               # the image's PATH. Version tracks the k3s server (v1.36.4).
@@ -107,6 +133,13 @@ spec:
                 secretKeyRef:
                   name: hermes-env
                   key: TELEGRAM_ALLOWED_USERS
+            # Read by the ${MCP_KNOWLEDGE_VAULT_API_KEY} placeholder that the
+            # initContainer writes into mcp_servers.knowledge-vault.headers.
+            - name: MCP_KNOWLEDGE_VAULT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: hermes-env
+                  key: MCP_KNOWLEDGE_VAULT_API_KEY
             - name: KUBECONFIG
               value: /opt/data/.kube/config
             # Dashboard web: lista de bots, chats y ficheros. El servicio de s6
