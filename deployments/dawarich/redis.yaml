@@ -11,7 +11,7 @@ metadata:
     keel.sh/match-tag: "true"
     keel.sh/trigger: poll
 spec:
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app: dawarich-redis
