@@ -78,6 +78,15 @@ spec:
                 secretKeyRef:
                   name: cruncharr
                   key: gui-password
+            # State lives in the nas02 Postgres, not in a SQLite file on this volume.
+            # Note the tailnet address: cruncharr runs on workload=media nodes, which
+            # have no route to nas02's LAN address. Unset this and the app falls back
+            # to SQLite. See docs/DATABASE.md in the cruncharr repo.
+            - name: ANIDL_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: cruncharr
+                  key: database-url
             - name: ANIDL_SONARR_ENABLED
               value: "true"
             - name: ANIDL_SONARR_FANSUB
