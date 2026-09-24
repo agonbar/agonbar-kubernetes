@@ -536,7 +536,6 @@ data:
     echo "========================================="
 
     # agonbar namespace
-    backup_pvc agonbar homarr-appdata-nfs
     # minio-data-nfs since 2026-09-24. The old `minio-data` is still declared
     # as a rollback and no pod mounts it. Copying it would be a green check
     # over a broken, empty ext4.
