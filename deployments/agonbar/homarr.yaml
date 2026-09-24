@@ -55,7 +55,7 @@ spec:
             volumes:
                 - name: appdata
                   persistentVolumeClaim:
-                      claimName: homarr-appdata
+                      claimName: homarr-appdata-nfs
             # nodeSelector:
             #   svccontroller.k3s.cattle.io/lbpool: lamg
 ---
@@ -98,19 +98,6 @@ spec:
         - secretName: homarr.${BASE_DOMAIN}
           hosts:
               - homarr.${BASE_DOMAIN}
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: homarr-appdata
-  namespace: agonbar
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: truenas-iscsi-ssd
-  resources:
-    requests:
-      storage: 5Gi
 ---
 # truenas-nfs-ssd, not the -lan one: this Deployment has no nodeSelector, so it
 # can land on ovh02, and ovh02 does not route to 192.168.0.29 at all.

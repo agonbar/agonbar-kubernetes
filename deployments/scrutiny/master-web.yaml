@@ -44,23 +44,9 @@ spec:
       volumes:
         - name: config
           persistentVolumeClaim:
-              claimName: scrutiny-config
+              claimName: scrutiny-config-nfs
       nodeSelector:
         svccontroller.k3s.cattle.io/lbpool: lamg
-
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: scrutiny-config
-  namespace: lamg
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: truenas-iscsi-ssd
-  resources:
-    requests:
-      storage: 1Gi
 
 ---
 apiVersion: v1
