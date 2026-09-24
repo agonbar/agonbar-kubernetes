@@ -447,53 +447,6 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: restore-influxdb-data
-  namespace: lamg
-  labels:
-    app: pvc-restore
-spec:
-  backoffLimit: 2
-  activeDeadlineSeconds: 3600
-  template:
-    spec:
-      restartPolicy: Never
-      containers:
-        - name: rsync
-          image: alpine:latest
-          command:
-            - sh
-            - -c
-            - |
-              apk add --no-cache rsync
-              rsync -av /backup/lamg/influxdb-data/ /data/
-              echo "Restore complete: influxdb-data"
-          volumeMounts:
-            - name: data
-              mountPath: /data
-            - name: backup
-              mountPath: /backup
-              readOnly: true
-          resources:
-            requests:
-              cpu: 100m
-              memory: 128Mi
-            limits:
-              cpu: "1"
-              memory: 512Mi
-      volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: influxdb-data
-        - name: backup
-          nfs:
-            server: 192.168.0.29
-            path: /mnt/RAID/docker/backups-iscsi
-      nodeSelector:
-        svccontroller.k3s.cattle.io/lbpool: lamg
----
-apiVersion: batch/v1
-kind: Job
-metadata:
   name: restore-plex-config
   namespace: lamg
   labels:
@@ -531,53 +484,6 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: plex-config
-        - name: backup
-          nfs:
-            server: 192.168.0.29
-            path: /mnt/RAID/docker/backups-iscsi
-      nodeSelector:
-        svccontroller.k3s.cattle.io/lbpool: lamg
----
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: restore-scrutiny-config
-  namespace: lamg
-  labels:
-    app: pvc-restore
-spec:
-  backoffLimit: 2
-  activeDeadlineSeconds: 3600
-  template:
-    spec:
-      restartPolicy: Never
-      containers:
-        - name: rsync
-          image: alpine:latest
-          command:
-            - sh
-            - -c
-            - |
-              apk add --no-cache rsync
-              rsync -av /backup/lamg/scrutiny-config/ /data/
-              echo "Restore complete: scrutiny-config"
-          volumeMounts:
-            - name: data
-              mountPath: /data
-            - name: backup
-              mountPath: /backup
-              readOnly: true
-          resources:
-            requests:
-              cpu: 100m
-              memory: 128Mi
-            limits:
-              cpu: "1"
-              memory: 512Mi
-      volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: scrutiny-config
         - name: backup
           nfs:
             server: 192.168.0.29
