@@ -90,23 +90,6 @@ spec:
     app.vscode: "true"
 
 ---
-# Rollback for the 2026-09-02 storage class migration: holds the data as it was
-# before the cutover. Nothing mounts it. Kept declared on purpose, because ArgoCD
-# prunes what leaves git. Delete this block once the -lan volume has proven itself.
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: vscode-config
-  namespace: lamg
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: truenas-iscsi-ssd
-  resources:
-    requests:
-      storage: 5Gi
-
----
 # Moved off truenas-iscsi-ssd on 2026-09-02, same reason as
 # homeassistant-config: that class reaches nas02 over tailscale and a 120s
 # tunnel stall aborts the ext4 journal. This one takes the LAN path to the

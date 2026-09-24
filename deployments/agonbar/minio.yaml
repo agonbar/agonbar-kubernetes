@@ -89,32 +89,6 @@ spec:
         - name: dockerhub-secret
 
 ---
-# Rollback for the 2026-09-24 move off iSCSI, and nothing else: no pod mounts
-# it. It was the last live volume on truenas-iscsi-ssd, block storage reached
-# from ovh02 over the WAN, and its ext4 was already gone when it was replaced:
-# every stat under /data returned EIO or EUCLEAN, and minio answered PutObject
-# with "drive is faulty" / "Insufficient number of drives online".
-#
-# Nothing was lost with it. df said 2.2M used of 9.8G, all of it minio's own
-# metadata under .minio.sys: the single bucket, reactive-resume, held zero
-# objects. That is why this was swapped rather than fsck'd -- there was no
-# reason to repair a filesystem whose entire payload was rebuildable.
-#
-# Delete this block once the NFS volume has proven itself.
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: minio-data
-  namespace: agonbar
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: truenas-iscsi-ssd
-  resources:
-    requests:
-      storage: 10Gi
-
----
 # The live volume. NFS instead of iSCSI for the reason the whole cluster is
 # moving that way: when the link to nas02 drops, an NFS mount blocks and comes
 # back, while an ext4 journal on a network block device aborts and takes the

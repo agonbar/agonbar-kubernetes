@@ -99,35 +99,6 @@ spec:
           path: /docker/trek/uploads
           type: DirectoryOrCreate
 ---
-# RETAINED FOR ROLLBACK ONLY (2026-07-21) — TREK moved to ovh02-local hostPath.
-# These old iSCSI PVCs still hold the pre-migration SQLite; delete them once the
-# ovh02 migration is validated. The Deployment no longer references them.
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: trek-data
-  namespace: trek
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: truenas-iscsi-ssd
-  resources:
-    requests:
-      storage: 5Gi
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: trek-uploads
-  namespace: trek
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: truenas-iscsi-ssd
-  resources:
-    requests:
-      storage: 20Gi
----
 apiVersion: v1
 kind: Service
 metadata:
