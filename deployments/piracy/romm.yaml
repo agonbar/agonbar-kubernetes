@@ -315,3 +315,24 @@ spec:
     - secretName: romm.${BASE_DOMAIN}
       hosts:
         - romm.${BASE_DOMAIN}
+
+---
+# Moved off truenas-iscsi-ssd-lan on 2026-09-24. Nothing here needs a block
+# device: RomM's database is the Postgres on nas02 (see ROMM_DB_DRIVER above),
+# and this volume only holds downloaded artwork and the save/state uploads --
+# 9.7k files, no SQLite anywhere. An ext4 journal on a network block device
+# bought nothing and cost the corruption risk that has already destroyed three
+# filesystems in this cluster. The old claim stays declared until the copy is
+# verified, then it goes.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: romm-data-nfs
+  namespace: piracy
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-nfs-ssd-lan
+  resources:
+    requests:
+      storage: 20Gi

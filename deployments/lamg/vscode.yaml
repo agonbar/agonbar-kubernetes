@@ -106,3 +106,22 @@ spec:
   resources:
     requests:
       storage: 5Gi
+
+---
+# Moved off truenas-iscsi-ssd-lan on 2026-09-24. This is code-server's /config:
+# extensions and settings. It does carry a state.vscdb, but that is SQLite for
+# UI state -- open tabs, command history -- and code-server rebuilds it if it
+# goes. Nothing here justified a block device. The old claim stays declared
+# until the copy is verified, then it goes.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vscode-config-nfs
+  namespace: lamg
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-nfs-ssd-lan
+  resources:
+    requests:
+      storage: 5Gi
