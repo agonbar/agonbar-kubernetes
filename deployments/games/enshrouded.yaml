@@ -82,3 +82,22 @@ spec:
   resources:
     requests:
       storage: 10Gi
+---
+# enshrouded is pinned to the home pool, so it takes the LAN path to nas02.
+#
+# Moved off truenas-iscsi-ssd on 2026-09-24. That class is block storage reached
+# over the WAN and it has already destroyed three filesystems in this cluster;
+# when the link drops an NFS mount blocks and comes back instead. The old volume
+# is kept declared until the copy is verified, then removed.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: enshrouded-data-nfs
+  namespace: games
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-nfs-ssd-lan
+  resources:
+    requests:
+      storage: 10Gi

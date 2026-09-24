@@ -111,3 +111,23 @@ spec:
   resources:
     requests:
       storage: 5Gi
+---
+# truenas-nfs-ssd, not the -lan one: this Deployment has no nodeSelector, so it
+# can land on ovh02, and ovh02 does not route to 192.168.0.29 at all.
+#
+# Moved off truenas-iscsi-ssd on 2026-09-24. That class is block storage reached
+# over the WAN and it has already destroyed three filesystems in this cluster;
+# when the link drops an NFS mount blocks and comes back instead. The old volume
+# is kept declared until the copy is verified, then removed.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: homarr-appdata-nfs
+  namespace: agonbar
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-nfs-ssd
+  resources:
+    requests:
+      storage: 5Gi
