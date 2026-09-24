@@ -13,17 +13,22 @@
 #   ./pvc-copy.sh --namespace games --from factorio-data --to factorio-data-nfs
 #
 # The pod runs as root so cp -a can preserve ownership, and on the home pool so
-# it can reach both the tailscale and the LAN path to nas02.
+# it can reach both the tailscale and the LAN path to nas02. A local-path volume
+# lives on one node and nowhere else, so copying onto one needs that node:
+#
+#   ./pvc-copy.sh --namespace dawarich --from x --to y --node storage/local-db=true
 set -euo pipefail
 
 CONTEXT="${CONTEXT:-lamg}"
 NS="" FROM="" TO=""
+NODE_LABEL="svccontroller.k3s.cattle.io/lbpool=lamg"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --context)   CONTEXT="$2"; shift 2 ;;
     --namespace) NS="$2"; shift 2 ;;
     --from)      FROM="$2"; shift 2 ;;
     --to)        TO="$2"; shift 2 ;;
+    --node)      NODE_LABEL="$2"; shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -96,7 +101,7 @@ spec:
       persistentVolumeClaim:
         claimName: $TO
   nodeSelector:
-    svccontroller.k3s.cattle.io/lbpool: lamg
+    ${NODE_LABEL%%=*}: "${NODE_LABEL#*=}"
 EOF
 
 echo "[$NS] $FROM -> $TO"
