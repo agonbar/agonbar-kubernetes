@@ -42,9 +42,7 @@ Snapshots use the `truenas-iscsi-ssd` VolumeSnapshotClass for both storage class
 | knowledge | vault-data | 1Gi | deployments/knowledge/pvc.yaml | yes |
 | knowledge | vault-state | 1Gi | deployments/knowledge/pvc.yaml | yes |
 | lamg | homeassistant-config | 15Gi | deployments/lamg/homeassistant.yaml | yes |
-| lamg | influxdb-data | 5Gi | deployments/scrutiny/influxdb.yaml | **NO** |
 | lamg | plex-config | 30Gi | deployments/lamg/plex.yaml | yes |
-| lamg | scrutiny-config | 1Gi | deployments/scrutiny/master-web.yaml | **NO** |
 | lamg | vscode-config-nfs | 5Gi | deployments/lamg/vscode.yaml | yes |
 | lamg | zigbee2mqtt-config | 1Gi | deployments/lamg/zigbee2mqtt.yaml | yes |
 | piracy | anisub-data | 1Gi | deployments/piracy/anisub.yml | yes |
@@ -92,11 +90,6 @@ For ArgoCD-managed apps, set replicas to 0 in the deployment YAML and push, or:
 kubectl --context lamg scale deployment/<DEPLOYMENT_NAME> -n <NAMESPACE> --replicas=0
 ```
 
-For scrutiny/influxdb (no ArgoCD):
-```bash
-kubectl --context lamg scale deployment/scrutiny-master-web -n lamg --replicas=0
-kubectl --context lamg scale deployment/influxdb -n lamg --replicas=0
-```
 
 Wait for pods to terminate:
 ```bash
@@ -149,11 +142,6 @@ kubectl --context lamg wait pvc/<PVC_NAME> -n <NAMESPACE> \
 kubectl --context lamg scale deployment/<DEPLOYMENT_NAME> -n <NAMESPACE> --replicas=1
 ```
 
-For scrutiny/influxdb (no ArgoCD):
-```bash
-kubectl --context lamg apply -f deployments/scrutiny/master-web.yaml
-kubectl --context lamg apply -f deployments/scrutiny/influxdb.yaml
-```
 
 ---
 
@@ -203,11 +191,8 @@ kubectl --context lamg scale deployment/palworld -n games --replicas=0
 # Immich
 kubectl --context lamg scale deployment/immich-postgres -n immich --replicas=0
 
-# Lamg (scrutiny/influxdb have no ArgoCD)
 kubectl --context lamg scale deployment/homeassistant -n lamg --replicas=0
-kubectl --context lamg scale deployment/influxdb -n lamg --replicas=0
 kubectl --context lamg scale deployment/plex -n lamg --replicas=0
-kubectl --context lamg scale deployment/scrutiny-master-web -n lamg --replicas=0
 kubectl --context lamg scale deployment/vscode -n lamg --replicas=0
 kubectl --context lamg scale deployment/zigbee2mqtt -n lamg --replicas=0
 
@@ -239,7 +224,7 @@ kubectl --context lamg delete pvc dawarich-db-data -n dawarich --ignore-not-foun
 kubectl --context lamg delete pvc enshrouded-data factorio-data palworld-data -n games --ignore-not-found
 kubectl --context lamg delete pvc immich-db-data -n immich --ignore-not-found
 kubectl --context lamg delete pvc vault-data vault-state -n knowledge --ignore-not-found
-kubectl --context lamg delete pvc homeassistant-config influxdb-data plex-config scrutiny-config vscode-config-nfs zigbee2mqtt-config -n lamg --ignore-not-found
+kubectl --context lamg delete pvc homeassistant-config plex-config vscode-config-nfs zigbee2mqtt-config -n lamg --ignore-not-found
 kubectl --context lamg delete pvc anisub-data bazarr-config cruncharr-config emulerr-config-nfs houndarr-data jellyfin-config lidarr-config prowlarr-config qbittorrent-config radarr-config seerr-config slskd-config sonarr-config soularr-config-nfs tachidesk-data tdarr-config tdarr-server -n piracy --ignore-not-found
 kubectl --context lamg delete pvc trek-data trek-uploads -n trek --ignore-not-found
 ```
@@ -256,11 +241,6 @@ for app in agonbar dawarich games immich knowledge piracy trek lamg; do
 done
 ```
 
-For scrutiny/influxdb (no ArgoCD):
-```bash
-kubectl --context lamg apply -f deployments/scrutiny/master-web.yaml
-kubectl --context lamg apply -f deployments/scrutiny/influxdb.yaml
-```
 
 Wait for all PVCs to bind:
 ```bash
@@ -327,9 +307,7 @@ kubectl --context lamg scale deployment/immich-postgres -n immich --replicas=1
 
 # Lamg
 kubectl --context lamg scale deployment/homeassistant -n lamg --replicas=1
-kubectl --context lamg scale deployment/influxdb -n lamg --replicas=1
 kubectl --context lamg scale deployment/plex -n lamg --replicas=1
-kubectl --context lamg scale deployment/scrutiny-master-web -n lamg --replicas=1
 kubectl --context lamg scale deployment/vscode -n lamg --replicas=1
 kubectl --context lamg scale deployment/zigbee2mqtt -n lamg --replicas=1
 

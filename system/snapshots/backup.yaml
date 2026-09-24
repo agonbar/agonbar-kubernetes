@@ -606,9 +606,7 @@ data:
     # move to NFS and nothing declares it any more. Only the -nfs one is left,
     # which is what the pod mounts.
     backup_pvc lamg homeassistant-config-nfs
-    backup_pvc lamg influxdb-data-lan
     backup_pvc lamg plex-config-lan
-    backup_pvc lamg scrutiny-config-nfs
     backup_pvc lamg vscode-config-nfs
     backup_pvc lamg zigbee2mqtt-config-nfs
 
