@@ -593,7 +593,9 @@ data:
     # coverage check caught it once the run stopped dying early (59dd89e).
     # anisub-data: PVC deleted, entry removed 2026-09-10.
     backup_pvc piracy bazarr-config-nfs
-    backup_pvc piracy cruncharr-config
+    # cruncharr has no PVC since 2026-09-24: its config and downloads are both
+    # direct NFS mounts off nas02 and its database moved to Postgres. Which
+    # means this job covers none of it any more, same as knowledge and trek.
     backup_pvc piracy emulerr-config
     # Anadido el 2026-09-24: lo montaba un pod vivo y no lo copiaba nadie, asi
     # que el chequeo de cobertura ponia la run en rojo todas las noches. Aqui
