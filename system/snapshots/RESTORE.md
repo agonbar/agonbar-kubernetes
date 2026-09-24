@@ -34,7 +34,7 @@ Snapshots use the `truenas-iscsi-ssd` VolumeSnapshotClass for both storage class
 | agonbar | paperless-data | 5Gi | deployments/agonbar/paperless.yaml | yes |
 | agonbar | reactive-resume-postgres | 2Gi | deployments/agonbar/reactive-resume.yaml | yes |
 | agonbar | reactive-resume-uploads | 5Gi | deployments/agonbar/reactive-resume.yaml | yes |
-| dawarich | dawarich-db-data | 5Gi | deployments/dawarich/postgres.yaml | yes |
+| dawarich | dawarich-db-data-local | 10Gi | deployments/dawarich/db-backup.yaml (pg_dump, not rsync) | yes |
 | games | enshrouded-data | 10Gi | deployments/games/enshrouded.yaml | yes |
 | games | factorio-data | 10Gi | deployments/games/factorio.yaml | yes |
 | games | palworld-data | 10Gi | deployments/games/palworld.yaml | yes |
@@ -220,7 +220,6 @@ kubectl --context lamg get pvc --all-namespaces | grep truenas-iscsi-ssd
 
 # Delete all iSCSI PVCs
 kubectl --context lamg delete pvc homarr-appdata minio-data paperless-redis paperless-data reactive-resume-postgres reactive-resume-uploads -n agonbar --ignore-not-found
-kubectl --context lamg delete pvc dawarich-db-data -n dawarich --ignore-not-found
 kubectl --context lamg delete pvc enshrouded-data factorio-data palworld-data -n games --ignore-not-found
 kubectl --context lamg delete pvc immich-db-data -n immich --ignore-not-found
 kubectl --context lamg delete pvc vault-data vault-state -n knowledge --ignore-not-found
