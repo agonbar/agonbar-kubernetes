@@ -779,7 +779,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: restore-emulerr-config
+  name: restore-emulerr-config-nfs
   namespace: piracy
   labels:
     app: pvc-restore
@@ -797,8 +797,8 @@ spec:
             - -c
             - |
               apk add --no-cache rsync
-              rsync -av /backup/piracy/emulerr-config/ /data/
-              echo "Restore complete: emulerr-config"
+              rsync -av /backup/piracy/emulerr-config-nfs/ /data/
+              echo "Restore complete: emulerr-config-nfs"
           volumeMounts:
             - name: data
               mountPath: /data
@@ -815,7 +815,7 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: emulerr-config
+            claimName: emulerr-config-nfs
         - name: backup
           nfs:
             server: 192.168.0.29
@@ -1202,7 +1202,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: restore-soularr-config
+  name: restore-soularr-config-nfs
   namespace: piracy
   labels:
     app: pvc-restore
@@ -1220,8 +1220,8 @@ spec:
             - -c
             - |
               apk add --no-cache rsync
-              rsync -av /backup/piracy/soularr-config/ /data/
-              echo "Restore complete: soularr-config"
+              rsync -av /backup/piracy/soularr-config-nfs/ /data/
+              echo "Restore complete: soularr-config-nfs"
           volumeMounts:
             - name: data
               mountPath: /data
@@ -1238,7 +1238,7 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: soularr-config
+            claimName: soularr-config-nfs
         - name: backup
           nfs:
             server: 192.168.0.29
