@@ -100,3 +100,21 @@ spec:
   resources:
     requests:
       storage: 1Gi
+
+---
+# Moved off truenas-iscsi-ssd-lan on 2026-09-24. This volume is a config.ini,
+# a failed-imports JSON and four rotated logs: 8 files, half a megabyte. It
+# never needed a block device. The old claim and its statically bound PV stay
+# declared until the copy is verified, then both go.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: soularr-config-nfs
+  namespace: piracy
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-nfs-ssd-lan
+  resources:
+    requests:
+      storage: 1Gi

@@ -230,3 +230,22 @@ spec:
   resources:
     requests:
       storage: 5Gi
+
+---
+# Moved off truenas-iscsi-ssd-lan on 2026-09-24. aMule keeps its state in .met
+# and .dat files plus a handful of JSON, 40 files and 6 MB in total; there is no
+# database here, so a network block device with an ext4 journal bought nothing.
+# The old claim and its statically bound PV stay declared until the copy is
+# verified, then both go.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: emulerr-config-nfs
+  namespace: piracy
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-nfs-ssd-lan
+  resources:
+    requests:
+      storage: 5Gi
