@@ -100,7 +100,6 @@ counterpart is gitignored.
 | Uptime Kuma | Service uptime monitoring |
 | Web Adrian / Web Amanda | Personal websites |
 | Espuma Chat | Chat application |
-| TeamSpeak 3 | Voice communication server |
 | Factorio | Dedicated game server |
 | OpenClaw, Banderillo, Slash | Custom applications |
 
