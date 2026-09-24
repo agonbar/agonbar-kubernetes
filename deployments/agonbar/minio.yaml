@@ -22,6 +22,23 @@ spec:
       labels:
         app: minio
     spec:
+      initContainers:
+        # A bucket in this deployment is a plain directory at the root of the
+        # drive, and nothing creates it: reactive-resume only reports storage
+        # unhealthy with "The specified bucket does not exist". Replacing the
+        # volume on 2026-09-24 took the bucket with it and the app came up
+        # half broken until it was recreated by hand. Doing it here means a
+        # rebuilt volume comes back with the bucket already in place.
+        #
+        # Same image as the server on purpose: the node already has it, and
+        # agonbar has no dockerhub-secret, so pulling anything else here is a
+        # coin flip against Docker Hub's anonymous limits.
+        - name: ensure-buckets
+          image: minio/minio:RELEASE.2022-10-24T18-35-07Z
+          command: ["mkdir", "-p", "/data/reactive-resume"]
+          volumeMounts:
+            - name: minio
+              mountPath: /data
       containers:
         - image: minio/minio:RELEASE.2022-10-24T18-35-07Z
           name: minio
