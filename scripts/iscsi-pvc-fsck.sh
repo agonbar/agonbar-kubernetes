@@ -89,13 +89,23 @@ done
 say "fsck en $NODE"
 ssh -o BatchMode=yes "$NODE" "
 set -euo pipefail
-sudo iscsiadm -m node -o new -T '$IQN' -p '$PORTAL' >/dev/null
-sudo iscsiadm -m node -T '$IQN' -p '$PORTAL' --login >/dev/null
 cleanup() {
   sudo iscsiadm -m node -T '$IQN' -p '$PORTAL' --logout >/dev/null 2>&1 || true
   sudo iscsiadm -m node -o delete -T '$IQN' -p '$PORTAL' >/dev/null 2>&1 || true
 }
+# El trap va ANTES del login, no despues. Estaba al reves: un login fallido
+# mataba este shell por el set -e sin que el trap existiera todavia, y la sesion
+# se quedaba abierta. El 2026-09-24 eso dejo a orange-pi5 con una sesion viva
+# contra el LUN de reactive-resume mientras ovh02 lo remontaba en su nodo: dos
+# iniciadores sobre el mismo LUN, que es como se destroza un volumen entero.
 trap cleanup EXIT
+sudo iscsiadm -m node -o new -T '$IQN' -p '$PORTAL' >/dev/null
+# Un --login contra una sesion ya abierta devuelve 15 ('session exists'). Eso no
+# es un fallo: el device esta disponible igual, y abortar ahi es lo que dejaba la
+# sesion huerfana. Solo se aborta si despues de intentarlo no hay sesion ninguna.
+sudo iscsiadm -m node -T '$IQN' -p '$PORTAL' --login >/dev/null 2>&1 \
+  || sudo iscsiadm -m session 2>/dev/null | grep -q '$IQN' \
+  || { echo 'no se pudo abrir sesion iSCSI contra el target'; exit 1; }
 sleep 4
 DEV=\$(readlink -f \"/dev/disk/by-path/ip-${PORTAL}-iscsi-${IQN}-lun-${LUN:-0}\")
 echo \"device: \$DEV\"
