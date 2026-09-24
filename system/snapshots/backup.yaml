@@ -98,6 +98,28 @@ data:
       esac
     }
 
+    # Retention is per-PVC and only runs for volumes still named in the list
+    # below, which leaves a gap the size of every volume ever retired: drop a
+    # PVC from the list and its last 7 snapshots are stranded for good. That is
+    # not just untidy. A VolumeSnapshot holds a ZFS snapshot, ZFS will not
+    # destroy a volume that has one, so democratic-csi fails DeleteVolume with
+    # "filesystem has dependent snapshots" and the PV sits in Released forever
+    # while the zvol keeps its space. On 2026-09-24 that had happened to 156
+    # snapshots across 22 retired volumes and was holding roughly 75 GiB on
+    # nas02. This sweep is the fix: a snapshot whose source PVC is gone has
+    # nothing left to protect.
+    sweep_orphan_snapshots() {
+      echo "Sweeping snapshots whose source PVC no longer exists..."
+      kubectl get volumesnapshots -A \
+        -o jsonpath='{range .items[*]}{.metadata.namespace} {.metadata.name} {.spec.source.persistentVolumeClaimName}{"\n"}{end}' \
+      | while read -r ns name src; do
+          [ -n "${src}" ] || continue
+          kubectl get pvc "${src}" -n "${ns}" >/dev/null 2>&1 && continue
+          echo "  ${ns}/${name}: source PVC ${src} is gone, deleting"
+          kubectl delete volumesnapshot "${name}" -n "${ns}" --wait=false >/dev/null 2>&1 || true
+        done
+    }
+
     # Retention must run even when the backup fails: a PVC that errors every
     # night (deleted PVC, snapshot never ready) would otherwise never be pruned
     # and leaks snapshots forever.
@@ -480,6 +502,8 @@ data:
     COVERAGE_SKIP="immich/immich-db-data-local"
 
     check_coverage() {
+      echo "========================================="
+      sweep_orphan_snapshots
       echo "========================================="
       echo "Coverage check"
       CLASSES="$(kubectl get volumesnapshotclass -o jsonpath='{.items[*].metadata.name}') local-path"
