@@ -8,7 +8,7 @@ metadata:
 spec:
     strategy:
         type: Recreate
-    replicas: 1
+    replicas: 0
     selector:
         matchLabels:
             app: tachidesk # <--- change this to match label on the pod
@@ -238,6 +238,25 @@ spec:
     - ReadWriteOnce
   storageClassName: truenas-iscsi-ssd-lan
   volumeName: tachidesk-data-lan
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+# Moved off truenas-iscsi-ssd-lan on 2026-09-24. Suwayomi's database has been the
+# nas02 Postgres for a while (see DATABASE_TYPE above); what is left here is the
+# bundled JRE, the webUI bundle, extensions, thumbnail cache and the local
+# library. The database.mv.db files still in the root are leftovers of that
+# migration, kept as the only record of the pre-Postgres state.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tachidesk-data-nfs
+  namespace: piracy
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-nfs-ssd-lan
   resources:
     requests:
       storage: 5Gi
