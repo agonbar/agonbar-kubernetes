@@ -514,8 +514,9 @@ data:
     backup_pvc agonbar minio-data
     backup_pvc agonbar paperless-redis
     backup_pvc agonbar paperless-data
-    backup_pvc agonbar reactive-resume-postgres
-    backup_pvc agonbar reactive-resume-uploads
+    # reactive-resume ya no tiene PVC ninguno desde el 2026-09-24: su base se fue
+    # al Postgres de nas02 y /app/uploads estaba vacio (guarda en minio). Si la
+    # base hay que copiarla, se copia desde alli, no desde aqui.
 
     # dawarich namespace
     backup_pvc dawarich dawarich-db-data

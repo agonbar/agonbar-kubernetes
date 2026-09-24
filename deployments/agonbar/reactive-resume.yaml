@@ -1,87 +1,14 @@
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  labels:
-    app: reactive-resume-postgres
-  name: reactive-resume-postgres
-  namespace: agonbar
-spec:
-  strategy:
-    type: Recreate
-  replicas: 1
-  selector:
-    matchLabels:
-      app: reactive-resume-postgres
-  template:
-    metadata:
-      labels:
-        app: reactive-resume-postgres
-    spec:
-      containers:
-        - image: docker.io/library/postgres:16-alpine
-          name: postgres
-          env:
-            - name: POSTGRES_DB
-              value: reactive_resume
-            - name: POSTGRES_USER
-              value: reactive_resume
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: agonbar
-                  key: reactiveResumeDbPassword
-            - name: PGDATA
-              value: /var/lib/postgresql/data/pgdata
-          ports:
-            - containerPort: 5432
-              name: postgres
-              protocol: TCP
-          volumeMounts:
-            - name: postgres-data
-              mountPath: /var/lib/postgresql/data
-          resources:
-            requests:
-              cpu: 10m
-              memory: 50Mi
-      volumes:
-      - name: postgres-data
-        persistentVolumeClaim:
-          claimName: reactive-resume-postgres
-      nodeSelector:
-        kubernetes.io/hostname: ovh02
-      imagePullSecrets:
-        - name: dockerhub-secret
-
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: reactive-resume-postgres
-  namespace: agonbar
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: truenas-iscsi-ssd
-  resources:
-    requests:
-      storage: 2Gi
-
----
-kind: Service
-apiVersion: v1
-metadata:
-  name: reactive-resume-postgres
-  namespace: agonbar
-spec:
-  type: ClusterIP
-  selector:
-    app: reactive-resume-postgres
-  ports:
-    - protocol: TCP
-      port: 5432
-      targetPort: 5432
-      name: postgres
-
+# La base de datos vive en el Postgres de nas02 (192.168.0.29:5432) desde el
+# 2026-09-24. Antes era un postgres:16-alpine propio, en ovh02, con el PGDATA
+# en un LUN iSCSI servido desde casa por tailscale: almacenamiento de bloque
+# sobre WAN. Acabo como era de esperar, con 2431 errores de ext4 y el pod en
+# CrashLoopBackOff 1694 veces contra su propio postgresql.conf.
+#
+# Esa instancia de nas02 solo escucha en la LAN, asi que esto ya no puede vivir
+# en ovh02. Es el mismo movimiento que hizo sure en f3257c5.
+#
+# El PVC reactive-resume-uploads tambien se fue: /app/uploads estaba vacio del
+# todo (0 ficheros). Esta version guarda en S3, y S3_ENDPOINT apunta a minio.
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -219,13 +146,14 @@ spec:
             - containerPort: 3000
               name: http
               protocol: TCP
-          volumeMounts:
-            - name: uploads
-              mountPath: /app/uploads
           resources:
             requests:
-              cpu: 20m
-              memory: 100Mi
+              # 20m/100Mi era mentira para un Node en produccion, y en ovh02 daba
+              # igual porque iba clavado por hostname. Ahora compite por sitio en
+              # el pool de casa, asi que el numero tiene que significar algo.
+              # Estimacion, pendiente de medir en reposo una vez lleve un rato.
+              cpu: 100m
+              memory: 512Mi
           livenessProbe:
             httpGet:
               path: /api/health
@@ -234,28 +162,14 @@ spec:
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 6
-      volumes:
-      - name: uploads
-        persistentVolumeClaim:
-          claimName: reactive-resume-uploads
+      # Tiene que alcanzar 192.168.0.29:5432 por la LAN, asi que va al pool de
+      # casa y no a ovh02, que no enruta a esa red. amd64 porque la imagen no
+      # publica arm64 y orange-pi5 esta en este mismo pool.
       nodeSelector:
-        kubernetes.io/hostname: ovh02
+        svccontroller.k3s.cattle.io/lbpool: lamg
+        kubernetes.io/arch: amd64
       imagePullSecrets:
         - name: dockerhub-secret
-
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: reactive-resume-uploads
-  namespace: agonbar
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: truenas-iscsi-ssd
-  resources:
-    requests:
-      storage: 5Gi
 
 ---
 kind: Service
