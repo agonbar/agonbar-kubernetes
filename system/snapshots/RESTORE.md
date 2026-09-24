@@ -28,7 +28,6 @@ Snapshots use the `truenas-iscsi-ssd` VolumeSnapshotClass for both storage class
 
 | Namespace | PVC | Size | Deployment File | ArgoCD |
 |-----------|-----|------|-----------------|--------|
-| agonbar | homarr-appdata | 5Gi | deployments/agonbar/homarr.yaml | yes |
 | agonbar | minio-data | 10Gi | deployments/agonbar/minio.yaml | yes |
 | agonbar | paperless-redis | 1Gi | deployments/agonbar/paperless.yaml | yes |
 | agonbar | paperless-data | 5Gi | deployments/agonbar/paperless.yaml | yes |
@@ -177,7 +176,6 @@ done
 Then scale down all deployments:
 ```bash
 # Agonbar
-kubectl --context lamg scale deployment/homarr -n agonbar --replicas=0
 kubectl --context lamg scale deployment/paperless -n agonbar --replicas=0
 
 # Dawarich
@@ -219,7 +217,7 @@ kubectl --context lamg scale deployment/tachidesk -n piracy --replicas=0
 kubectl --context lamg get pvc --all-namespaces | grep truenas-iscsi-ssd
 
 # Delete all iSCSI PVCs
-kubectl --context lamg delete pvc homarr-appdata minio-data paperless-redis paperless-data reactive-resume-postgres reactive-resume-uploads -n agonbar --ignore-not-found
+kubectl --context lamg delete pvc minio-data paperless-redis paperless-data reactive-resume-postgres reactive-resume-uploads -n agonbar --ignore-not-found
 kubectl --context lamg delete pvc enshrouded-data factorio-data palworld-data -n games --ignore-not-found
 kubectl --context lamg delete pvc immich-db-data -n immich --ignore-not-found
 kubectl --context lamg delete pvc vault-data vault-state -n knowledge --ignore-not-found
@@ -290,7 +288,6 @@ done
 Scale deployments back (or set replicas: 1 in git and push):
 ```bash
 # Agonbar
-kubectl --context lamg scale deployment/homarr -n agonbar --replicas=1
 kubectl --context lamg scale deployment/paperless -n agonbar --replicas=1
 
 # Dawarich
