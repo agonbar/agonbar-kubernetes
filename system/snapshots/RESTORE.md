@@ -50,7 +50,7 @@ Snapshots use the `truenas-iscsi-ssd` VolumeSnapshotClass for both storage class
 | piracy | anisub-data | 1Gi | deployments/piracy/anisub.yml | yes |
 | piracy | bazarr-config | 5Gi | deployments/piracy/bazarr.yaml | yes |
 | piracy | cruncharr-config | 2Gi | deployments/piracy/cruncharr.yml | yes |
-| piracy | emulerr-config | 5Gi | deployments/piracy/emulerr.yml | yes |
+| piracy | emulerr-config-nfs | 5Gi | deployments/piracy/emulerr.yml | yes |
 | piracy | houndarr-data | 5Gi | deployments/piracy/houndarr.yml | yes |
 | piracy | jellyfin-config | 10Gi | deployments/piracy/jellyfin.yml | yes |
 | piracy | lidarr-config | 5Gi | deployments/piracy/lidarr.yml | yes |
@@ -60,7 +60,7 @@ Snapshots use the `truenas-iscsi-ssd` VolumeSnapshotClass for both storage class
 | piracy | seerr-config | 5Gi | deployments/piracy/seerr.yml | yes |
 | piracy | slskd-config | 5Gi | deployments/piracy/slskd.yml | yes |
 | piracy | sonarr-config | 5Gi | deployments/piracy/sonarr.yml | yes |
-| piracy | soularr-config | 1Gi | deployments/piracy/soularr.yml | yes |
+| piracy | soularr-config-nfs | 1Gi | deployments/piracy/soularr.yml | yes |
 | piracy | tachidesk-data | 5Gi | deployments/piracy/tachidesk.yml | yes |
 | piracy | tdarr-config | 2Gi | deployments/piracy/tdarr.yml | yes |
 | piracy | tdarr-server | 5Gi | deployments/piracy/tdarr.yml | yes |
@@ -240,7 +240,7 @@ kubectl --context lamg delete pvc enshrouded-data factorio-data palworld-data -n
 kubectl --context lamg delete pvc immich-db-data -n immich --ignore-not-found
 kubectl --context lamg delete pvc vault-data vault-state -n knowledge --ignore-not-found
 kubectl --context lamg delete pvc homeassistant-config influxdb-data plex-config scrutiny-config vscode-config-nfs zigbee2mqtt-config -n lamg --ignore-not-found
-kubectl --context lamg delete pvc anisub-data bazarr-config cruncharr-config emulerr-config houndarr-data jellyfin-config lidarr-config prowlarr-config qbittorrent-config radarr-config seerr-config slskd-config sonarr-config soularr-config tachidesk-data tdarr-config tdarr-server -n piracy --ignore-not-found
+kubectl --context lamg delete pvc anisub-data bazarr-config cruncharr-config emulerr-config-nfs houndarr-data jellyfin-config lidarr-config prowlarr-config qbittorrent-config radarr-config seerr-config slskd-config sonarr-config soularr-config-nfs tachidesk-data tdarr-config tdarr-server -n piracy --ignore-not-found
 kubectl --context lamg delete pvc trek-data trek-uploads -n trek --ignore-not-found
 ```
 

@@ -622,7 +622,7 @@ data:
     # cruncharr has no PVC since 2026-09-24: its config and downloads are both
     # direct NFS mounts off nas02 and its database moved to Postgres. Which
     # means this job covers none of it any more, same as knowledge and trek.
-    backup_pvc piracy emulerr-config
+    backup_pvc piracy emulerr-config-nfs
     # Anadido el 2026-09-24: lo montaba un pod vivo y no lo copiaba nadie, asi
     # que el chequeo de cobertura ponia la run en rojo todas las noches. Aqui
     # lo que importa es la base y los metadatos, no los instaladores: la
@@ -643,7 +643,7 @@ data:
     backup_pvc piracy seerr-config
     backup_pvc piracy slskd-config
     backup_pvc piracy sonarr-config-nfs
-    backup_pvc piracy soularr-config
+    backup_pvc piracy soularr-config-nfs
     backup_pvc piracy tachidesk-data
     backup_pvc piracy tdarr-config-nfs
     backup_pvc piracy tdarr-server
