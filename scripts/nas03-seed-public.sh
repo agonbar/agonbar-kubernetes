@@ -28,8 +28,13 @@ N02_SRC=/mnt/RAID/Public
 WORK=${WORK:-$HOME/.cache/nas03-seed}
 # nas00 first: _MABEL/_LAMG/_GUZMAN/_ADRIAN are personal and small, Shared Pictures last.
 ORDER=(_MABEL _LAMG _GUZMAN _ADRIAN "Shared Pictures")
-N00=(ssh -F /dev/null -i "$HOME/.ssh/nas" -o BatchMode=yes lamg@192.168.0.24)
-N02=(ssh -o BatchMode=yes -o HostName=192.168.0.29 -o HostKeyAlias=nas02 nas02)
+# Control-plane SSH (this box -> nas00/nas02). Defaults to the home LAN; from a host
+# off that LAN, point them at Tailscale: N00_HOST=100.72.0.24 N02_HOST=100.72.0.41.
+# The rsync endpoints below stay on LAN IPs -- nas00/nas02 reach nas03 directly.
+N00_HOST=${N00_HOST:-192.168.0.24}
+N02_HOST=${N02_HOST:-192.168.0.29}
+N00=(ssh -F /dev/null -i "$HOME/.ssh/nas" -o BatchMode=yes -o ConnectTimeout=10 lamg@"$N00_HOST")
+N02=(ssh -o BatchMode=yes -o ConnectTimeout=10 -o HostName="$N02_HOST" -o HostKeyAlias=nas02 nas02)
 RSH="ssh -i ~/.ssh/nas03_seed -o BatchMode=yes -o Ciphers=aes128-gcm@openssh.com -o ServerAliveInterval=30"
 RSYNC_OPTS="-a --chown=3000:3000 --partial-dir=.rsync-partial --info=stats2,progress2"
 
