@@ -510,13 +510,13 @@ data:
     echo "========================================="
 
     # agonbar namespace
-    backup_pvc agonbar homarr-appdata
+    backup_pvc agonbar homarr-appdata-nfs
     # minio-data-nfs since 2026-09-24. The old `minio-data` is still declared
     # as a rollback and no pod mounts it. Copying it would be a green check
     # over a broken, empty ext4.
     backup_pvc agonbar minio-data-nfs
-    backup_pvc agonbar paperless-redis
-    backup_pvc agonbar paperless-data
+    backup_pvc agonbar paperless-redis-nfs
+    backup_pvc agonbar paperless-data-nfs
     # reactive-resume ya no tiene PVC ninguno desde el 2026-09-24: su base se fue
     # al Postgres de nas02 y /app/uploads estaba vacio (guarda en minio). Si la
     # base hay que copiarla, se copia desde alli, no desde aqui.
@@ -529,8 +529,8 @@ data:
     backup_pvc dawarich dawarich-db-data-lan
 
     # games namespace
-    backup_pvc games enshrouded-data
-    backup_pvc games factorio-data
+    backup_pvc games enshrouded-data-nfs
+    backup_pvc games factorio-data-nfs
     # local-path: sin snapshotter CSI, van por backup_local_path_pvc. Los tres
     # viven en ovh02 y hasta 2026-09-02 no tenian ninguna copia.
     backup_local_path_pvc games palworld-data
@@ -582,7 +582,7 @@ data:
     backup_pvc lamg homeassistant-config-nfs
     backup_pvc lamg influxdb-data-lan
     backup_pvc lamg plex-config-lan
-    backup_pvc lamg scrutiny-config
+    backup_pvc lamg scrutiny-config-nfs
     backup_pvc lamg vscode-config-lan
     backup_pvc lamg zigbee2mqtt-config-nfs
 

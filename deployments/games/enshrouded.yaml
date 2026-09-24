@@ -48,7 +48,7 @@ spec:
       volumes:
         - name: enshrouded-data
           persistentVolumeClaim:
-            claimName: enshrouded-data
+            claimName: enshrouded-data-nfs
       nodeSelector:
         kubernetes.io/arch: amd64
         svccontroller.k3s.cattle.io/lbpool: lamg
@@ -69,19 +69,6 @@ spec:
       targetPort: 15637
       name: query-port
       protocol: UDP
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: enshrouded-data
-  namespace: games
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: truenas-iscsi-ssd
-  resources:
-    requests:
-      storage: 10Gi
 ---
 # enshrouded is pinned to the home pool, so it takes the LAN path to nas02.
 #
