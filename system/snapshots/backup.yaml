@@ -642,7 +642,7 @@ data:
     backup_pvc piracy slskd-config
     backup_pvc piracy sonarr-config-nfs
     backup_pvc piracy soularr-config-nfs
-    backup_pvc piracy tachidesk-data
+    backup_pvc piracy tachidesk-data-nfs
     backup_pvc piracy tdarr-config-nfs
     backup_pvc piracy tdarr-server
 

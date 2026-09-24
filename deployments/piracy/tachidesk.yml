@@ -8,7 +8,7 @@ metadata:
 spec:
     strategy:
         type: Recreate
-    replicas: 0
+    replicas: 1
     selector:
         matchLabels:
             app: tachidesk # <--- change this to match label on the pod
@@ -22,39 +22,6 @@ spec:
                 nameservers:
                     - 1.1.1.1
             initContainers:
-                - name: iscsi-fsck
-                  image: alpine:latest
-                  imagePullPolicy: IfNotPresent
-                  securityContext:
-                      privileged: true
-                  command:
-                      - /bin/sh
-                      - -c
-                      - |
-                        set -e
-                        MOUNTPOINT="/tachidesk-data"
-                        echo "[iscsi-fsck] Checking filesystem at ${MOUNTPOINT}..."
-                        if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
-                          rm -f "${MOUNTPOINT}/.rw-test"
-                          echo "[iscsi-fsck] Filesystem is writable. Nothing to do."
-                          exit 0
-                        fi
-                        echo "[iscsi-fsck] Filesystem is READ-ONLY."
-                        echo "[iscsi-fsck] Attempting a single safe remount,rw (no fsck)..."
-                        if mount -o remount,rw "${MOUNTPOINT}" 2>/dev/null && touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
-                          rm -f "${MOUNTPOINT}/.rw-test"
-                          echo "[iscsi-fsck] remount,rw succeeded — filesystem writable. Done."
-                          exit 0
-                        fi
-                        echo "[iscsi-fsck] STILL READ-ONLY. The RO state lives in the node-level CSI globalmount and cannot be repaired from inside the pod."
-                        echo "[iscsi-fsck] DO NOT run e2fsck on the mounted device — it corrupts the filesystem."
-                        echo "[iscsi-fsck] Recovery: scale this Deployment to 0, wait for the VolumeAttachment to detach, then scale back to 1 (forces a clean iSCSI re-attach that clears RO)."
-                        exit 1
-                  volumeMounts:
-                      - name: data
-                        mountPath: /tachidesk-data
-                      - name: host-proc-mounts
-                        mountPath: /host-proc-mounts
                 - name: fix-permissions
                   image: busybox:latest
                   command: ["sh", "-c", "chown -R 1000:1000 /home/suwayomi/.local/share/Tachidesk"]
@@ -143,10 +110,7 @@ spec:
             volumes:
                 - name: data
                   persistentVolumeClaim:
-                      claimName: tachidesk-data
-                - name: host-proc-mounts
-                  hostPath:
-                      path: /proc/1/mounts
+                      claimName: tachidesk-data-nfs
                 - name: manga
                   nfs:
                       server: 192.168.0.29
@@ -198,50 +162,6 @@ spec:
     - secretName: tachidesk.${BASE_DOMAIN}
       hosts:
         - tachidesk.${BASE_DOMAIN}
----
-# Migrated off the Tailscale iSCSI portal (100.72.0.41) onto the wired-LAN driver
-# (truenas-iscsi-ssd-lan -> 192.168.0.29). Statically bound to the retained zvol.
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: tachidesk-data-lan
-spec:
-  capacity:
-    storage: 5Gi
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: truenas-iscsi-ssd-lan
-  claimRef:
-    namespace: piracy
-    name: tachidesk-data
-  csi:
-    driver: org.democratic-csi.truenas-iscsi-ssd-lan
-    fsType: ext4
-    volumeHandle: pvc-3c8c1195-7c93-458e-9f88-9e1a3602b97d
-    volumeAttributes:
-      node_attach_driver: iscsi
-      portal: "192.168.0.29:3260"
-      portals: ""
-      interface: ""
-      iqn: "iqn.2005-10.org.freenas.ctl:csi-pvc-3c8c1195-7c93-458e-9f88-9e1a3602b97d-k8s"
-      lun: "0"
-      provisioner_driver: freenas-api-iscsi
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: tachidesk-data
-  namespace: piracy
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: truenas-iscsi-ssd-lan
-  volumeName: tachidesk-data-lan
-  resources:
-    requests:
-      storage: 5Gi
-
 ---
 # Moved off truenas-iscsi-ssd-lan on 2026-09-24. Suwayomi's database has been the
 # nas02 Postgres for a while (see DATABASE_TYPE above); what is left here is the
