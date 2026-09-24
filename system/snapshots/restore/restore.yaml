@@ -967,7 +967,7 @@ spec:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: restore-seerr-config
+  name: restore-seerr-config-nfs
   namespace: piracy
   labels:
     app: pvc-restore
@@ -985,8 +985,8 @@ spec:
             - -c
             - |
               apk add --no-cache rsync
-              rsync -av /backup/piracy/seerr-config/ /data/
-              echo "Restore complete: seerr-config"
+              rsync -av /backup/piracy/seerr-config-nfs/ /data/
+              echo "Restore complete: seerr-config-nfs"
           volumeMounts:
             - name: data
               mountPath: /data
@@ -1003,7 +1003,7 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: seerr-config
+            claimName: seerr-config-nfs
         - name: backup
           nfs:
             server: 192.168.0.29
