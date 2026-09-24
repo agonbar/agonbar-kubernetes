@@ -56,7 +56,6 @@ Snapshots use the `truenas-iscsi-ssd` VolumeSnapshotClass for both storage class
 | piracy | lidarr-config | 5Gi | deployments/piracy/lidarr.yml | yes |
 | piracy | prowlarr-config | 5Gi | deployments/piracy/prowlarr.yml | yes |
 | piracy | qbittorrent-config | 5Gi | deployments/piracy/qbittorrent.yml | yes |
-| piracy | qui-config | 2Gi | deployments/piracy/qui.yml | yes |
 | piracy | radarr-config | 5Gi | deployments/piracy/radarr.yml | yes |
 | piracy | seerr-config | 5Gi | deployments/piracy/seerr.yml | yes |
 | piracy | slskd-config | 5Gi | deployments/piracy/slskd.yml | yes |
@@ -220,7 +219,6 @@ kubectl --context lamg scale deployment/jellyfin -n piracy --replicas=0
 kubectl --context lamg scale deployment/lidarr -n piracy --replicas=0
 kubectl --context lamg scale deployment/prowlarr -n piracy --replicas=0
 kubectl --context lamg scale deployment/qbittorrent -n piracy --replicas=0
-kubectl --context lamg scale deployment/qui -n piracy --replicas=0
 kubectl --context lamg scale deployment/radarr -n piracy --replicas=0
 kubectl --context lamg scale deployment/seerr -n piracy --replicas=0
 kubectl --context lamg scale deployment/slskd -n piracy --replicas=0
@@ -242,7 +240,7 @@ kubectl --context lamg delete pvc enshrouded-data factorio-data palworld-data -n
 kubectl --context lamg delete pvc immich-db-data -n immich --ignore-not-found
 kubectl --context lamg delete pvc vault-data vault-state -n knowledge --ignore-not-found
 kubectl --context lamg delete pvc homeassistant-config influxdb-data plex-config scrutiny-config vscode-config zigbee2mqtt-config -n lamg --ignore-not-found
-kubectl --context lamg delete pvc anisub-data bazarr-config cruncharr-config emulerr-config houndarr-data jellyfin-config lidarr-config prowlarr-config qbittorrent-config qui-config radarr-config seerr-config slskd-config sonarr-config soularr-config tachidesk-data tdarr-config tdarr-server -n piracy --ignore-not-found
+kubectl --context lamg delete pvc anisub-data bazarr-config cruncharr-config emulerr-config houndarr-data jellyfin-config lidarr-config prowlarr-config qbittorrent-config radarr-config seerr-config slskd-config sonarr-config soularr-config tachidesk-data tdarr-config tdarr-server -n piracy --ignore-not-found
 kubectl --context lamg delete pvc trek-data trek-uploads -n trek --ignore-not-found
 ```
 
@@ -343,7 +341,6 @@ kubectl --context lamg scale deployment/jellyfin -n piracy --replicas=1
 kubectl --context lamg scale deployment/lidarr -n piracy --replicas=1
 kubectl --context lamg scale deployment/prowlarr -n piracy --replicas=1
 kubectl --context lamg scale deployment/qbittorrent -n piracy --replicas=1
-kubectl --context lamg scale deployment/qui -n piracy --replicas=1
 kubectl --context lamg scale deployment/radarr -n piracy --replicas=1
 kubectl --context lamg scale deployment/seerr -n piracy --replicas=1
 kubectl --context lamg scale deployment/slskd -n piracy --replicas=1
