@@ -499,7 +499,9 @@ data:
     # rsync of a running cluster's PGDATA is a torn copy, not a backup. It is
     # covered by the immich-postgres-backup CronJob, which dumps it and restores
     # the dump into a scratch database before calling it good.
-    COVERAGE_SKIP="immich/immich-db-data-local"
+    # dawarich/dawarich-db-data-local is the same case since 2026-09-24, covered by
+    # dawarich-postgres-backup.
+    COVERAGE_SKIP="immich/immich-db-data-local dawarich/dawarich-db-data-local"
 
     check_coverage() {
       echo "========================================="
@@ -546,11 +548,9 @@ data:
     # base hay que copiarla, se copia desde alli, no desde aqui.
 
     # dawarich namespace
-    # This said `dawarich-db-data` until 2026-09-24, the volume the app stopped
-    # using on 2026-09-02. So the copy was of a frozen rollback and the live
-    # PGDATA had never been backed up at all. Same trap as the piracy entries
-    # below, one namespace further down the list.
-    backup_pvc dawarich dawarich-db-data-lan
+    # Nothing here any more. The database moved to local-path on 2026-09-24 and
+    # is covered by the dawarich-postgres-backup CronJob, which dumps it and
+    # restores the dump into a scratch database before calling it good.
 
     # games namespace
     backup_pvc games enshrouded-data-nfs
