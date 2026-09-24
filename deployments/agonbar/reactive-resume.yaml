@@ -86,7 +86,9 @@ metadata:
 spec:
   strategy:
     type: Recreate
-  replicas: 0
+  # Back to 1 on 2026-09-24. It sat at 0 since July, when its own Postgres
+  # stopped coming up. The database is on nas02 now and the app starts.
+  replicas: 1
   selector:
     matchLabels:
       app: reactive-resume
