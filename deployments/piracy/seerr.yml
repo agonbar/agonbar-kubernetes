@@ -8,7 +8,7 @@ metadata:
 spec:
     strategy:
         type: Recreate
-    replicas: 0
+    replicas: 1
     selector:
         matchLabels:
             app: seerr
@@ -35,6 +35,26 @@ spec:
                         value: Europe/Madrid
                       - name: PORT
                         value: "5055"
+                      # Postgres on nas02 instead of the bundled SQLite. The
+                      # SQLite lived on an iSCSI volume, which is how it got a
+                      # 4 MB WAL sitting next to a 536 KB database after the
+                      # 2026-09-03 journal abort. DB_NAME defaults to "seerr"
+                      # and DB_PORT to 5432, both spelled out anyway.
+                      - name: DB_TYPE
+                        value: postgres
+                      - name: DB_HOST
+                        value: "192.168.0.29"
+                      - name: DB_PORT
+                        value: "5432"
+                      - name: DB_NAME
+                        value: seerr
+                      - name: DB_USER
+                        value: seerr
+                      - name: DB_PASS
+                        valueFrom:
+                            secretKeyRef:
+                                name: seerr-db
+                                key: password
                   ports:
                       - containerPort: 5055
                         protocol: TCP
