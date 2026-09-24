@@ -10,53 +10,6 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: restore-homarr-appdata
-  namespace: agonbar
-  labels:
-    app: pvc-restore
-spec:
-  backoffLimit: 2
-  activeDeadlineSeconds: 3600
-  template:
-    spec:
-      restartPolicy: Never
-      containers:
-        - name: rsync
-          image: alpine:latest
-          command:
-            - sh
-            - -c
-            - |
-              apk add --no-cache rsync
-              rsync -av /backup/agonbar/homarr-appdata/ /data/
-              echo "Restore complete: homarr-appdata"
-          volumeMounts:
-            - name: data
-              mountPath: /data
-            - name: backup
-              mountPath: /backup
-              readOnly: true
-          resources:
-            requests:
-              cpu: 100m
-              memory: 128Mi
-            limits:
-              cpu: "1"
-              memory: 512Mi
-      volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: homarr-appdata
-        - name: backup
-          nfs:
-            server: 192.168.0.29
-            path: /mnt/RAID/docker/backups-iscsi
-      nodeSelector:
-        svccontroller.k3s.cattle.io/lbpool: lamg
----
-apiVersion: batch/v1
-kind: Job
-metadata:
   name: restore-paperless-redis
   namespace: agonbar
   labels:
