@@ -18,7 +18,7 @@ spec:
             containers:
                 - name: hyperion
                   # https://hub.docker.com/r/hyperion/hyperion/tags
-                  image: sirfragalot/hyperion.ng:2.2.1
+                  image: sirfragalot/hyperion.ng:2.2.0
                   imagePullPolicy: IfNotPresent
                   env:
                       - name: TZ
