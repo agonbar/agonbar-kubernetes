@@ -186,33 +186,6 @@ spec:
         - home.${BASE_DOMAIN}
 
 ---
-# Moved off truenas-iscsi-ssd on 2026-09-02. Both classes point at nas02: that
-# one reaches it over tailscale, this one over the LAN. On 2026-09-02 at
-# 11:28:37 all five tailscale sessions on orange-pi5 ping-timed-out in the same
-# second, recovery gave up after 120s, and the ext4 journals on this volume,
-# plex-config and immich-db-data aborted. The ten LAN sessions to the very same
-# target never blinked. Wrapping WireGuard around a disk on your own network
-# buys nothing and costs a filesystem every time the tunnel stalls.
-# Moved off iSCSI entirely on 2026-09-03. With the recorder in Postgres what is
-# left here is YAML and 2507 small JSON files under .storage, which is what NFS is
-# good at. And it takes the ext4 journal out of the network path: this volume went
-# read-only or corrupt four times (6-Aug twice, 24-Aug, 2-Sep). aya's HA has been
-# on NFS all along and is the only one that never corrupted.
-# Kept declared as the rollback; nothing mounts it. Copy was md5-verified.
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: homeassistant-config-lan
-  namespace: lamg
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: truenas-iscsi-ssd-lan
-  resources:
-    requests:
-      storage: 30Gi
-
----
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

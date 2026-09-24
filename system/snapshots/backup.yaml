@@ -578,7 +578,9 @@ data:
     # Los dos a la vez mientras dura la migracion a NFS (170ca6b/e2ad12a): el
     # deployment todavia monta el -lan. Quitar el -lan en cuanto apunte al -nfs;
     # hasta entonces copiar los dos es inofensivo y no deja hueco en ningun momento.
-    backup_pvc lamg homeassistant-config-lan
+    # homeassistant-config-lan retired 2026-09-24: it was the rollback of the
+    # move to NFS and nothing declares it any more. Only the -nfs one is left,
+    # which is what the pod mounts.
     backup_pvc lamg homeassistant-config-nfs
     backup_pvc lamg influxdb-data-lan
     backup_pvc lamg plex-config-lan
