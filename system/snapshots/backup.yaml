@@ -511,7 +511,10 @@ data:
 
     # agonbar namespace
     backup_pvc agonbar homarr-appdata
-    backup_pvc agonbar minio-data
+    # minio-data-nfs since 2026-09-24. The old `minio-data` is still declared
+    # as a rollback and no pod mounts it. Copying it would be a green check
+    # over a broken, empty ext4.
+    backup_pvc agonbar minio-data-nfs
     backup_pvc agonbar paperless-redis
     backup_pvc agonbar paperless-data
     # reactive-resume ya no tiene PVC ninguno desde el 2026-09-24: su base se fue
