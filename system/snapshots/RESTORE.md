@@ -55,7 +55,7 @@ Snapshots use the `truenas-iscsi-ssd` VolumeSnapshotClass for both storage class
 | piracy | prowlarr-config | 5Gi | deployments/piracy/prowlarr.yml | yes |
 | piracy | qbittorrent-config | 5Gi | deployments/piracy/qbittorrent.yml | yes |
 | piracy | radarr-config | 5Gi | deployments/piracy/radarr.yml | yes |
-| piracy | seerr-config | 5Gi | deployments/piracy/seerr.yml | yes |
+| piracy | seerr-config-nfs | 5Gi | deployments/piracy/seerr.yml | yes |
 | piracy | slskd-config | 5Gi | deployments/piracy/slskd.yml | yes |
 | piracy | sonarr-config | 5Gi | deployments/piracy/sonarr.yml | yes |
 | piracy | soularr-config-nfs | 1Gi | deployments/piracy/soularr.yml | yes |
@@ -225,7 +225,7 @@ kubectl --context lamg delete pvc enshrouded-data factorio-data palworld-data -n
 kubectl --context lamg delete pvc immich-db-data -n immich --ignore-not-found
 kubectl --context lamg delete pvc vault-data vault-state -n knowledge --ignore-not-found
 kubectl --context lamg delete pvc homeassistant-config plex-config vscode-config-nfs zigbee2mqtt-config -n lamg --ignore-not-found
-kubectl --context lamg delete pvc anisub-data bazarr-config cruncharr-config emulerr-config-nfs houndarr-data jellyfin-config lidarr-config prowlarr-config qbittorrent-config radarr-config seerr-config slskd-config sonarr-config soularr-config-nfs tachidesk-data-nfs tdarr-config tdarr-server -n piracy --ignore-not-found
+kubectl --context lamg delete pvc anisub-data bazarr-config cruncharr-config emulerr-config-nfs houndarr-data jellyfin-config lidarr-config prowlarr-config qbittorrent-config radarr-config seerr-config-nfs slskd-config sonarr-config soularr-config-nfs tachidesk-data-nfs tdarr-config tdarr-server -n piracy --ignore-not-found
 kubectl --context lamg delete pvc trek-data trek-uploads -n trek --ignore-not-found
 ```
 
