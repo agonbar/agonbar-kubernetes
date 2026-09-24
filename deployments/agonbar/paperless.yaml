@@ -93,10 +93,10 @@ spec:
       volumes:
       - name: redis
         persistentVolumeClaim:
-          claimName: paperless-redis
+          claimName: paperless-redis-nfs
       - name: data
         persistentVolumeClaim:
-          claimName: paperless-data
+          claimName: paperless-data-nfs
       - name: media
         nfs:
           server: 192.168.0.29
@@ -114,34 +114,6 @@ spec:
       nodeSelector:
         kubernetes.io/arch: amd64
         svccontroller.k3s.cattle.io/lbpool: lamg
-
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: paperless-redis
-  namespace: agonbar
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: truenas-iscsi-ssd
-  resources:
-    requests:
-      storage: 1Gi
-
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: paperless-data
-  namespace: agonbar
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: truenas-iscsi-ssd
-  resources:
-    requests:
-      storage: 5Gi
 
 ---
 kind: Service

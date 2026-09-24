@@ -77,7 +77,7 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: factorio-data
+            claimName: factorio-data-nfs
       nodeSelector:
         kubernetes.io/arch: amd64
         svccontroller.k3s.cattle.io/lbpool: lamg
@@ -143,19 +143,6 @@ spec:
       hosts:
         - factorio.${BASE_DOMAIN}
 
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: factorio-data
-  namespace: games
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: truenas-iscsi-ssd
-  resources:
-    requests:
-      storage: 10Gi
 ---
 # factorio is pinned to the home pool, so it takes the LAN path to nas02.
 #
