@@ -17,45 +17,6 @@ spec:
       labels:
         app: cruncharr
     spec:
-      initContainers:
-        # The config PVC is ext4 over iSCSI. When that filesystem drops to read-only the
-        # app keeps running and fails silently: SQLite writes error, the state layer
-        # swallows it, and Crunchyroll tokens stop persisting. That ran unnoticed for four
-        # days from 2026-09-04. Refuse to start instead, so the failure is visible at once.
-        - name: iscsi-fsck
-          image: alpine:latest
-          imagePullPolicy: IfNotPresent
-          securityContext:
-            privileged: true
-          command:
-            - /bin/sh
-            - -c
-            - |
-              set -e
-              MOUNTPOINT="/data/config"
-              echo "[iscsi-fsck] Checking filesystem at ${MOUNTPOINT}..."
-              if touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
-                rm -f "${MOUNTPOINT}/.rw-test"
-                echo "[iscsi-fsck] Filesystem is writable. Nothing to do."
-                exit 0
-              fi
-              echo "[iscsi-fsck] Filesystem is READ-ONLY."
-              echo "[iscsi-fsck] Attempting a single safe remount,rw (no fsck)..."
-              if mount -o remount,rw "${MOUNTPOINT}" 2>/dev/null && touch "${MOUNTPOINT}/.rw-test" 2>/dev/null; then
-                rm -f "${MOUNTPOINT}/.rw-test"
-                echo "[iscsi-fsck] remount,rw succeeded. Filesystem writable. Done."
-                exit 0
-              fi
-              echo "[iscsi-fsck] STILL READ-ONLY and not repairable from inside the pod."
-              echo "[iscsi-fsck] DO NOT run e2fsck on the mounted device: it corrupts the filesystem."
-              echo "[iscsi-fsck] Recovery: suspend the ArgoCD app, scale this Deployment to 0, wait for"
-              echo "[iscsi-fsck] the iSCSI session to log out, then on the node log back into the target"
-              echo "[iscsi-fsck] and run 'fsck.ext4 -fy' on the DETACHED device before scaling back to 1."
-              echo "[iscsi-fsck] A plain scale 0/1 does NOT clear on-disk ext4 metadata corruption."
-              exit 1
-          volumeMounts:
-            - name: config
-              mountPath: /data/config
       containers:
         - name: cruncharr
           image: ghcr.io/agonbar/cruncharr:latest
@@ -120,8 +81,21 @@ spec:
               cpu: 100m
       volumes:
         - name: config
-          persistentVolumeClaim:
-            claimName: cruncharr-config
+          # NFS instead of iSCSI, same reason the rest of the cluster is moving:
+          # when the link to nas02 drops, an NFS mount blocks and resumes, where the
+          # iSCSI LUN flipped read-only and took ext4 down with it. That is what kept
+          # stopping the download queue with "disk I/O error".
+          #
+          # This only became possible once the database moved to Postgres. SQLite
+          # cannot live on NFS — the locking semantics corrupt it.
+          #
+          # Inline rather than the truenas-nfs-ssd storage class on purpose: that
+          # class binds Immediate and its CSI node plugin does not run on work-vm-00,
+          # so the pod could be scheduled onto a node where the volume cannot mount.
+          # The downloads volume below already takes this route and works.
+          nfs:
+            server: nas02
+            path: /mnt/SSD/cruncharr-config
         - name: downloads
           # nas02 is the same TrueNAS as 192.168.0.29 — using the tailnet
           # hostname lets the pod schedule on encoder VMs in the aya LAN
@@ -184,6 +158,12 @@ spec:
       hosts:
         - cruncharr.${BASE_DOMAIN}
 ---
+# RETIRED 2026-09-24 — the app now mounts /mnt/SSD/cruncharr-config over NFS (see the
+# volumes block above). Kept here, and kept on Retain, only as a rollback: it still holds
+# the last SQLite database and the original CDM keys. Delete this block once the NFS
+# volume has proven itself, then remove the PV/PVC by hand — ArgoCD cannot prune in this
+# namespace while Service/kms-aya never reports healthy.
+#
 # Config volume: an iSCSI zvol on the TrueNAS box (192.168.0.29 on the LAN,
 # 100.72.0.41 over the tailnet).
 #
