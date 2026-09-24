@@ -8,7 +8,7 @@ metadata:
 spec:
     strategy:
         type: Recreate
-    replicas: 1
+    replicas: 0
     selector:
         matchLabels:
             app: seerr
@@ -162,6 +162,24 @@ spec:
     - ReadWriteOnce
   storageClassName: truenas-iscsi-ssd-lan
   volumeName: seerr-config-lan
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+# Moved off truenas-iscsi-ssd-lan on 2026-09-24, once the database went to the
+# nas02 Postgres. What is left here is settings.json, the anime-list mapping,
+# logs and the image cache. The old db.sqlite3 stays in place as the record of
+# the pre-Postgres state; nothing reads it any more.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: seerr-config-nfs
+  namespace: piracy
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-nfs-ssd-lan
   resources:
     requests:
       storage: 5Gi
