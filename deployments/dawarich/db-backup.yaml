@@ -1,0 +1,100 @@
+# The dawarich database used to be covered by the nightly VolumeSnapshot in
+# system/snapshots/backup.yaml. It moved to local-path on 2026-09-24 and
+# local-path has no CSI snapshotter, so the backup has to be logical from here
+# on. This is that backup. If this CronJob stops running, nothing else is
+# holding a copy of the database.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dawarich-pg-backups
+  namespace: dawarich
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-nfs-raid
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: dawarich-postgres-backup
+  namespace: dawarich
+  labels:
+    app: dawarich-postgres-backup
+spec:
+  # 03:05, ahead of immich at 03:15, piracy at 03:30 and the PVC snapshots at
+  # 04:00, so none of them hit the NAS in the same minute.
+  schedule: "5 3 * * *"
+  timeZone: Europe/Madrid
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          # Pin to the pool, never to a single host.
+          nodeSelector:
+            svccontroller.k3s.cattle.io/lbpool: lamg
+          containers:
+            - name: pg-dump
+              # Same image as the server, so the client tools match its major.
+              image: postgis/postgis:17-3.5-alpine
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: PGHOST
+                  value: dawarich-db.dawarich.svc.cluster.local
+                - name: PGUSER
+                  value: dawarich
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: dawarich
+                      key: databasePassword
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  ts="$(date +%Y%m%d-%H%M%S)"
+                  out="/backups/dawarich-${ts}.dump"
+                  check=dawarich_restorecheck
+
+                  cleanup() { psql -d postgres -qc "DROP DATABASE IF EXISTS $check" >/dev/null 2>&1 || true; }
+                  trap cleanup EXIT
+
+                  pg_dump --dbname=dawarich_development -Fc -f "$out"
+
+                  # A dump nobody has read back is not a backup. Restore it into a
+                  # scratch database every night and look for the location history.
+                  psql -d postgres -qc "DROP DATABASE IF EXISTS $check" >/dev/null
+                  psql -d postgres -qc "CREATE DATABASE $check" >/dev/null
+                  pg_restore -d "$check" --single-transaction --exit-on-error "$out"
+
+                  n=$(psql -d "$check" -tAc "select count(*) from points")
+                  g=$(psql -d "$check" -tAc "select count(*) from pg_extension where extname='postgis'")
+                  [ "$n" -gt 0 ] && [ "$g" = "1" ] || {
+                    echo "FATAL: restored $out has points=$n postgis=$g"; rm -f "$out"; exit 1; }
+                  echo "ok -> $out ($(stat -c %s "$out") bytes), restore verified: $n points"
+
+                  find /backups -name 'dawarich-*.dump' -mtime +14 -print -delete
+                  echo "=== current backups ==="; ls -lh /backups
+
+                  # RESTORE, into a postgres running the postgis image:
+                  #   pg_restore -d dawarich_development --single-transaction \
+                  #     --exit-on-error dawarich-<ts>.dump
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+              volumeMounts:
+                - mountPath: /backups
+                  name: backups
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: dawarich-pg-backups

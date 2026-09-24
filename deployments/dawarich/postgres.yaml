@@ -13,7 +13,7 @@ metadata:
 spec:
   strategy:
     type: Recreate
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app: dawarich-db
@@ -22,26 +22,12 @@ spec:
       labels:
         app: dawarich-db
     spec:
+      # The data is a local-path volume on the node labelled storage/local-db
+      # (nas02-k3s), so the pod has to follow it. That node is amd64, which the
+      # postgis image needs, and it is not nas00, which evicted this pod
+      # mid-migration on 2026-09-03 -- the label covers both old constraints.
       nodeSelector:
-        kubernetes.io/arch: amd64
-        svccontroller.k3s.cattle.io/lbpool: lamg
-      # postgis is amd64-only, so on the lamg pool this can land on nas00 or
-      # nas01 and nothing else. nas00 has 1.2GB allocatable and already carries
-      # 372Mi of requests; on 2026-09-03 the kubelet evicted this pod there
-      # mid-migration (exit 137, "node was low on resource: memory") and rolled
-      # back a points backfill that had been running for seven minutes. With no
-      # resources block the scheduler saw the pod as free and kept re-picking
-      # nas00. Excluding it leaves only nas01, which does flap -- but Pending is
-      # a safe state for a Postgres and eviction mid-write is not.
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: kubernetes.io/hostname
-                    operator: NotIn
-                    values:
-                      - nas00
+        storage/local-db: "true"
       containers:
       - name: postgres
         image: postgis/postgis:17-3.5-alpine
@@ -84,7 +70,7 @@ spec:
       volumes:
       - name: dawarich-db-data
         persistentVolumeClaim:
-          claimName: dawarich-db-data-lan
+          claimName: dawarich-db-data-local
       - name: dawarich-shared
         nfs:
           server: 192.168.0.29
@@ -102,24 +88,6 @@ spec:
    - protocol: TCP
      port: 5432
      targetPort: 5432
----
-# Moved off truenas-iscsi-ssd on 2026-09-02, the last volume still on it. That
-# class reaches nas02 over tailscale (portal 100.72.0.41:3260) and it was those
-# five sessions that dropped together at 11:28 and aborted the ext4 journals.
-# This one takes the LAN path to the same box. Copied while dawarich-db was at 0,
-# so the datadir copy is consistent; verified byte count and tree md5.
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: dawarich-db-data-lan
-  namespace: dawarich
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: truenas-iscsi-ssd-lan
-  resources:
-    requests:
-      storage: 5Gi
 ---
 # The live database, on the local disk of the node labelled storage/local-db.
 #

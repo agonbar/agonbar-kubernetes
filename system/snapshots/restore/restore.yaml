@@ -147,59 +147,6 @@ spec:
             path: /mnt/RAID/docker/backups-iscsi
       nodeSelector:
         svccontroller.k3s.cattle.io/lbpool: lamg
-# ============================================================
-# dawarich namespace (1 PVC)
-# ============================================================
----
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: restore-dawarich-db-data
-  namespace: dawarich
-  labels:
-    app: pvc-restore
-spec:
-  backoffLimit: 2
-  activeDeadlineSeconds: 3600
-  template:
-    spec:
-      restartPolicy: Never
-      containers:
-        - name: rsync
-          image: alpine:latest
-          command:
-            - sh
-            - -c
-            - |
-              apk add --no-cache rsync
-              rsync -av /backup/dawarich/dawarich-db-data/ /data/
-              echo "Restore complete: dawarich-db-data"
-          volumeMounts:
-            - name: data
-              mountPath: /data
-            - name: backup
-              mountPath: /backup
-              readOnly: true
-          resources:
-            requests:
-              cpu: 100m
-              memory: 128Mi
-            limits:
-              cpu: "1"
-              memory: 512Mi
-      volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: dawarich-db-data
-        - name: backup
-          nfs:
-            server: 192.168.0.29
-            path: /mnt/RAID/docker/backups-iscsi
-      nodeSelector:
-        svccontroller.k3s.cattle.io/lbpool: lamg
-# ============================================================
-# games namespace (3 PVCs)
-# ============================================================
 ---
 apiVersion: batch/v1
 kind: Job
