@@ -16,7 +16,7 @@ metadata:
 spec:
   strategy:
     type: Recreate
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app: romm
@@ -206,7 +206,7 @@ spec:
             path: /mnt/RAID/docker/romm-library
         - name: data
           persistentVolumeClaim:
-            claimName: romm-data
+            claimName: romm-data-nfs
         - name: config
           configMap:
             name: romm-config
@@ -214,20 +214,6 @@ spec:
           emptyDir: {}
       nodeSelector:
         svccontroller.k3s.cattle.io/lbpool: lamg
-
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: romm-data
-  namespace: piracy
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: truenas-iscsi-ssd-lan
-  resources:
-    requests:
-      storage: 20Gi
 
 ---
 # config.yml lives here rather than on the volume so the platform mapping is
