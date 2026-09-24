@@ -103,23 +103,6 @@ spec:
      port: 5432
      targetPort: 5432
 ---
-# Rollback for the 2026-09-02 storage class migration: holds the datadir as it was
-# before the cutover. Nothing mounts it. Kept declared on purpose, because ArgoCD
-# prunes what leaves git. Delete this block once the -lan volume has proven itself.
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: dawarich-db-data
-  namespace: dawarich
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: truenas-iscsi-ssd
-  resources:
-    requests:
-      storage: 5Gi
-
----
 # Moved off truenas-iscsi-ssd on 2026-09-02, the last volume still on it. That
 # class reaches nas02 over tailscale (portal 100.72.0.41:3260) and it was those
 # five sessions that dropped together at 11:28 and aborted the ext4 journals.

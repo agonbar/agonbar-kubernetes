@@ -522,7 +522,11 @@ data:
     # base hay que copiarla, se copia desde alli, no desde aqui.
 
     # dawarich namespace
-    backup_pvc dawarich dawarich-db-data
+    # This said `dawarich-db-data` until 2026-09-24, the volume the app stopped
+    # using on 2026-09-02. So the copy was of a frozen rollback and the live
+    # PGDATA had never been backed up at all. Same trap as the piracy entries
+    # below, one namespace further down the list.
+    backup_pvc dawarich dawarich-db-data-lan
 
     # games namespace
     backup_pvc games enshrouded-data
@@ -552,8 +556,12 @@ data:
     # The photo library is not here either, it is an NFS path on nas02.
 
     # knowledge namespace
-    backup_pvc knowledge vault-data
-    backup_pvc knowledge vault-state
+    # Nothing here any more. vault-mcp runs on a hostPath, so these two PVCs had
+    # been frozen since the move and the copies on the share are from 2026-07-17.
+    # The PVCs were deleted on 2026-09-24; the copies stay where they are.
+    #
+    # Worth saying out loud: this job only looks at PVCs, so the vault's live
+    # data is covered by nothing here. What covers it is the git repo behind it.
 
     # sure namespace
     # Anadido el 2026-09-24 por el mismo motivo que gamevault-data. sure vive
@@ -561,8 +569,10 @@ data:
     backup_pvc sure sure-storage
 
     # trek namespace
-    backup_pvc trek trek-data
-    backup_pvc trek trek-uploads
+    # Same story as knowledge: TREK moved to a hostPath, both PVCs went frozen,
+    # and they were deleted on 2026-09-24. trek-uploads was empty on both sides.
+    # Unlike the vault, TREK has no git repo behind it, so its live data is
+    # backed up by nothing at all. That is a real gap, not a tidy-up.
 
     # lamg namespace
     # Los dos a la vez mientras dura la migracion a NFS (170ca6b/e2ad12a): el

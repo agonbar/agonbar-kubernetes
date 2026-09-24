@@ -109,20 +109,6 @@ spec:
       targetPort: 8080
 
 ---
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: zigbee2mqtt-config
-  namespace: lamg
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: truenas-iscsi-ssd
-  resources:
-    requests:
-      storage: 1Gi
-
----
 # Moved off iSCSI on 2026-09-03. Nothing here is a live database (zigbee2mqtt's
 # database.db is newline-delimited JSON, not SQLite), so an ext4 journal on a
 # network block device was pure downside. NFS has no client-side filesystem;
