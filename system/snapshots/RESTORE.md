@@ -45,7 +45,7 @@ Snapshots use the `truenas-iscsi-ssd` VolumeSnapshotClass for both storage class
 | lamg | influxdb-data | 5Gi | deployments/scrutiny/influxdb.yaml | **NO** |
 | lamg | plex-config | 30Gi | deployments/lamg/plex.yaml | yes |
 | lamg | scrutiny-config | 1Gi | deployments/scrutiny/master-web.yaml | **NO** |
-| lamg | vscode-config | 5Gi | deployments/lamg/vscode.yaml | yes |
+| lamg | vscode-config-nfs | 5Gi | deployments/lamg/vscode.yaml | yes |
 | lamg | zigbee2mqtt-config | 1Gi | deployments/lamg/zigbee2mqtt.yaml | yes |
 | piracy | anisub-data | 1Gi | deployments/piracy/anisub.yml | yes |
 | piracy | bazarr-config | 5Gi | deployments/piracy/bazarr.yaml | yes |
@@ -239,7 +239,7 @@ kubectl --context lamg delete pvc dawarich-db-data -n dawarich --ignore-not-foun
 kubectl --context lamg delete pvc enshrouded-data factorio-data palworld-data -n games --ignore-not-found
 kubectl --context lamg delete pvc immich-db-data -n immich --ignore-not-found
 kubectl --context lamg delete pvc vault-data vault-state -n knowledge --ignore-not-found
-kubectl --context lamg delete pvc homeassistant-config influxdb-data plex-config scrutiny-config vscode-config zigbee2mqtt-config -n lamg --ignore-not-found
+kubectl --context lamg delete pvc homeassistant-config influxdb-data plex-config scrutiny-config vscode-config-nfs zigbee2mqtt-config -n lamg --ignore-not-found
 kubectl --context lamg delete pvc anisub-data bazarr-config cruncharr-config emulerr-config houndarr-data jellyfin-config lidarr-config prowlarr-config qbittorrent-config radarr-config seerr-config slskd-config sonarr-config soularr-config tachidesk-data tdarr-config tdarr-server -n piracy --ignore-not-found
 kubectl --context lamg delete pvc trek-data trek-uploads -n trek --ignore-not-found
 ```
