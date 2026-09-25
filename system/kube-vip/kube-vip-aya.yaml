@@ -1,0 +1,83 @@
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kube-vip-aya
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: kube-vip
+    app.kubernetes.io/component: aya-vip
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kube-vip-aya
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kube-vip-aya
+    spec:
+      serviceAccountName: kube-vip
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: aya
+      hostNetwork: true
+      # No NoSchedule toleration, unlike kube-vip-lamg. The VIP only works on a
+      # node that runs the svclb pods, and those skip work-vm-00 (dedicated=media).
+      # If work-vm-00 won the lease, 192.168.1.26 would answer nothing.
+      tolerations:
+        - effect: NoExecute
+          operator: Exists
+      containers:
+        - name: kube-vip
+          image: ghcr.io/kube-vip/kube-vip:v1.2.2
+          args: ["manager"]
+          env:
+            # ARP mode — announce VIP via gratuitous ARP on the LAN
+            - name: vip_arp
+              value: "true"
+            # The floating virtual IP on the aya LAN
+            - name: address
+              value: "192.168.1.26"
+            # v1.x removed vip_cidr; the equivalent is vip_subnet (validated at
+            # runtime since v1.2.0). Same value.
+            - name: vip_subnet
+              value: "32"
+            # Enable control-plane VIP mode (used here as a generic static VIP)
+            # This does NOT interfere with the actual control plane on ovh02
+            - name: cp_enable
+              value: "true"
+            - name: cp_namespace
+              value: "kube-system"
+            # Do NOT manage LoadBalancer services — K3s ServiceLB handles that
+            - name: svc_enable
+              value: "false"
+            # Leader election for HA failover.
+            # Timings deliberately RELAXED (was 5/3/1) — the aggressive 1s renew
+            # made kube-vip rewrite its Lease ~1×/sec AND fatal+restart the instant
+            # the (kine/SQLite) control plane was >3s slow, producing a crashloop
+            # storm that hammered the datastore. 30/20/5 cuts lease-write traffic
+            # ~5× and tolerates ~20s of API latency before failing over (~30s
+            # failover, fine for a LAN VIP). See runbooks/ovh02-cryptojacking-incident.md.
+            - name: vip_leaderelection
+              value: "true"
+            - name: vip_leasename
+              value: "kube-vip-aya"
+            - name: vip_leaseduration
+              value: "30"
+            - name: vip_renewdeadline
+              value: "20"
+            - name: vip_retryperiod
+              value: "5"
+            # Prometheus metrics endpoint
+            - name: prometheus_server
+              value: ":2113"
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+                - NET_RAW
+          resources:
+            requests:
+              cpu: 5m
+              memory: 16Mi
+            limits:
+              memory: 32Mi
