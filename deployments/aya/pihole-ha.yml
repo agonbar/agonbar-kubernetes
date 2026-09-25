@@ -33,6 +33,11 @@ spec:
                       # deterministically after every restart (v5 used 8.8.8.8).
                       - name: FTLCONF_dns_upstreams
                         value: "8.8.8.8"
+                      # The default LOCAL mode drops queries from outside the pod's
+                      # /24, i.e. everything svclb forwards from another node, so the
+                      # VIP answered DNS only while it sat on the pod's own node.
+                      - name: FTLCONF_dns_listeningMode
+                        value: "ALL"
                   ports:
                       - containerPort: 53
                         protocol: TCP
