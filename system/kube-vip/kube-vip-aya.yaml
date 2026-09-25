@@ -20,10 +20,12 @@ spec:
       nodeSelector:
         svccontroller.k3s.cattle.io/lbpool: aya
       hostNetwork: true
-      # No NoSchedule toleration, unlike kube-vip-lamg. The VIP only works on a
-      # node that runs the svclb pods, and those skip work-vm-00 (dedicated=media).
-      # If work-vm-00 won the lease, 192.168.1.26 would answer nothing.
+      # The VIP only answers on a node running the svclb pods. On work-vm-00
+      # (dedicated=media) that holds because every lbpool=aya Service carries a
+      # svccontroller.k3s.cattle.io/tolerations annotation; a new one needs it too.
       tolerations:
+        - effect: NoSchedule
+          operator: Exists
         - effect: NoExecute
           operator: Exists
       containers:
