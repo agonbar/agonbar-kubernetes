@@ -61,3 +61,6 @@ DESIRED=$($K get ds tdarr-node -o jsonpath='{.status.desiredNumberScheduled}')
 READY=$($K get ds tdarr-node -o jsonpath='{.status.numberReady}')
 echo "daemonset      tdarr-node ready=$READY desired=$DESIRED"
 kubectl --context "${CTX:-lamg}" get nodes -l workload=media --no-headers | awk '$2 !~ /^Ready/ {print "media node     " $1 " " $2 "  <-- no tdarr-node here"}'
+# Pressure taints evict the pod while the node still reports Ready (work-vm-00 disk-pressure, 2026-09-25).
+kubectl --context "${CTX:-lamg}" get nodes -l workload=media -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.spec.taints[*].key}{"\n"}{end}' \
+  | awk '{for (i = 2; i <= NF; i++) if ($i ~ /pressure$/) print "media node     " $1 " " $i "  <-- tdarr-node evicted"}'
