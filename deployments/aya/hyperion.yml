@@ -49,7 +49,7 @@ spec:
             volumes:
               - name: config
                 nfs:
-                    server: ovh02
+                    server: 100.72.0.34
                     path: /docker/hyperion-aya/
             nodeSelector:
                 svccontroller.k3s.cattle.io/lbpool: aya
