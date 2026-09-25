@@ -24,7 +24,10 @@ spec:
                       - name: TZ
                         value: "Europe/Madrid"
                       - name: WEBPASSWORD
-                        value: zt8m*#r6E3!Q@b@nubnms$w@9
+                        valueFrom:
+                            secretKeyRef:
+                                name: aya
+                                key: hyperionPassword
                   ports:
                     - containerPort: 19445
                       protocol: TCP
