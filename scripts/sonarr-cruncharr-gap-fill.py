@@ -88,6 +88,13 @@ def torznab_items(pw, title, s, e):
         return []
 
 
+def query_numbers(ep):
+    """Sonarr searches, and parses release titles, in scene numbering when the series has an
+    XEM mapping, and cruncharr (7cdcd05) labels releases the same way. Query with it too."""
+    return {"qs": ep.get("sceneSeasonNumber") or ep["seasonNumber"],
+            "qe": ep.get("sceneEpisodeNumber") or ep["episodeNumber"]}
+
+
 def probe(pw, title, s, e):
     tag = f"S{s:02d}E{e:02d}"
     for attempt in range(2):
@@ -146,12 +153,12 @@ def imported_mismatches(only_series):
     rows, page = {}, 1
     while True:
         recs = sonarr("GET", f"history?eventType=3&pageSize=250&page={page}&includeEpisode=true&includeSeries=true",
-                      jq='[.records[] | {src: .sourceTitle, ep: (.episode | {id, seasonNumber, episodeNumber, title, hasFile, episodeFileId, monitored}), series: .series.title, sm: .series.monitored}]')
+                      jq='[.records[] | {src: .sourceTitle, ep: (.episode | {id, seasonNumber, episodeNumber, sceneSeasonNumber, sceneEpisodeNumber, title, hasFile, episodeFileId, monitored}), series: .series.title, sm: .series.monitored}]')
         for r in recs:
             ep = r["ep"] or {}
             if r["src"].startswith("[Cruncharr]") and ep.get("hasFile") and ep["id"] not in rows \
                     and (not only_series or r["series"] == only_series):
-                rows[ep["id"]] = {"id": ep["id"], "s": ep["seasonNumber"], "e": ep["episodeNumber"],
+                rows[ep["id"]] = {"id": ep["id"], "s": ep["seasonNumber"], "e": ep["episodeNumber"], **query_numbers(ep),
                                   "name": ep.get("title") or "", "efid": ep["episodeFileId"],
                                   "src": r["src"], "series": r["series"],
                                   "monitored": r["sm"] and ep.get("monitored")}
@@ -171,7 +178,7 @@ def fix_imported(a, pw, record):
     print(f"{len(suspects)} imported Cruncharr files titled differently from TVDB", file=sys.stderr)
     unreplaced = []
     for ep in sorted(suspects, key=lambda r: (r["series"], r["s"], r["e"])):
-        hits = probe(pw, ep["series"], ep["s"], ep["e"])
+        hits = probe(pw, ep["series"], ep["qs"], ep["qe"])
         if not hits and a.drop_unreplaceable and a.apply and ep["monitored"]:
             sonarr("DELETE", f"episodefile/{ep['efid']}")
             unreplaced.append(ep["id"])
@@ -232,7 +239,7 @@ def main():
     missing, page = [], 1
     while True:
         recs = sonarr("GET", f"wanted/missing?pageSize=200&page={page}&monitored=true",
-                      jq="[.records[] | {id, seriesId, seasonNumber, episodeNumber, title}]")
+                      jq="[.records[] | {id, seriesId, seasonNumber, episodeNumber, sceneSeasonNumber, sceneEpisodeNumber, title}]")
         missing += recs
         if len(recs) < 200:
             break
@@ -249,19 +256,20 @@ def main():
     for m in missing:
         if m["seriesId"] in series and m["seasonNumber"] > 0 and m["id"] not in queued and m["id"] not in done:
             seasons.setdefault((m["seriesId"], m["seasonNumber"]), []).append(
-                {"id": m["id"], "s": m["seasonNumber"], "e": m["episodeNumber"], "name": m.get("title") or ""})
+                {"id": m["id"], "s": m["seasonNumber"], "e": m["episodeNumber"], "name": m.get("title") or "",
+                 **query_numbers(m)})
     print(f"{sum(map(len, seasons.values()))} episodes in {len(seasons)} seasons", file=sys.stderr)
 
     for (sid, s), eps in sorted(seasons.items(), key=lambda kv: (series[kv[0][0]]["title"], kv[0][1])):
         title = series[sid]["title"]
         eps.sort(key=lambda x: x["e"])
-        first = probe(pw, title, s, eps[0]["e"])
+        first = probe(pw, title, eps[0]["qs"], eps[0]["qe"])
         if not first:
             for ep in eps:
                 record(ep, title, "not_on_cruncharr", [])
             continue
         for ep in eps:
-            hits = first if ep is eps[0] else probe(pw, title, s, ep["e"])
+            hits = first if ep is eps[0] else probe(pw, title, ep["qs"], ep["qe"])
             bad, why = check_hits(hits) if hits else (None, None)
             if not hits:
                 record(ep, title, "not_on_cruncharr", [])
