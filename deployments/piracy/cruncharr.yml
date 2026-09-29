@@ -52,6 +52,15 @@ spec:
               value: "true"
             - name: ANIDL_SONARR_FANSUB
               value: "Cruncharr"
+            # Search asks Sonarr which episode (TVDB title, air date) a query is for, so
+            # a release is only labelled SxxEyy when its CR episode is that episode.
+            - name: SONARR_URL
+              value: http://sonarr:8989
+            - name: SONARR_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: anisub-secrets
+                  key: SONARR_API_KEY
             - name: ANIDL_DIR_CONTENT
               value: /downloads/cruncharr
             - name: ANIDL_DIR_TRASH
