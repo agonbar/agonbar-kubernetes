@@ -5,9 +5,9 @@ For each series it samples aired episodes (first, last and evenly spaced, up to 
 and --per-series in total) and queries Cruncharr the way Sonarr does, from the Sonarr pod:
   t=tvsearch q=<title> season=S ep=E        (standard)
   t=search   q="<title> <abs:02>"           (anime absolute, when Sonarr has the number)
-Each answer must hold 0 or 1 release, labelled with the Sonarr episode, whose CR episode
-title matches the TVDB title. When the titles differ (translations), the match reasons that
-Cruncharr logs must include an air-date agreement. Generic titles ("Episode 6", "TBA") can't
+Each answer must hold 0 or 1 release, labelled with the Sonarr episode (its scene numbers
+when the series uses them), whose CR episode title matches the TVDB title. When the titles
+differ (translations), the match reasons Cruncharr logs must include an air-date agreement. Generic titles ("Episode 6", "TBA") can't
 be checked either way and are counted apart.
 
 Previous behaviour comes from the gap-fill report: "grabbed" with a CR title that fits the
@@ -165,7 +165,7 @@ def match_reasons(path):
         return found
     for line in open(path, errors="replace"):
         line = re.sub(r"\x1b\[[0-9;]*m", "", line.rstrip())
-        m = re.search(r'Matched "(.*)" S(\d+)E(\d+) to .* as S(\d+)E(\d+) \(sonarr=(\w[\w-]*); (.*)\)$', line)
+        m = re.search(r'Matched "(.*)" S(\d+)E(\d+) to .* as S(\d+)E(\d+)(?: labelled scene S\d+E\d+)? \(sonarr=(\w[\w-]*); (.*)\)$', line)
         if m:
             found[(norm(m[1]), int(m[2]), int(m[3]))] = {"sonarr": m[6], "reasons": m[7]}
     return found
@@ -179,14 +179,25 @@ def run_queries(args, series_list):
     pw = gui_password()
     for i, sr in enumerate(series_list, 1):
         eps = sonarr(f"episode?seriesId={sr['id']}",
-                     "[.[]|{s:.seasonNumber,e:.episodeNumber,a:.absoluteEpisodeNumber,t:.title,d:.airDateUtc}]")
-        by_abs = {e["a"]: e for e in eps if e.get("a")}
+                     "[.[]|{s:.seasonNumber,e:.episodeNumber,a:.absoluteEpisodeNumber,t:.title,d:.airDateUtc,"""
+                     "ss:.sceneSeasonNumber,se:.sceneEpisodeNumber,sa:.sceneAbsoluteEpisodeNumber}]")
+        scene = sr.get("useSceneNumbering")
+        for e in eps:
+            # Sonarr searches and parses a scene-numbered series with its scene numbers.
+            use = scene and e.get("ss") is not None and e.get("se") is not None
+            e["ls"], e["le"] = (e["ss"], e["se"]) if use else (e["s"], e["e"])
+            e["qa"] = (e.get("sa") or e.get("a")) if scene else e.get("a")
+        by_abs = collections.defaultdict(list)
+        for e in eps:
+            if e.get("qa"):
+                by_abs[e["qa"]].append(e)
         q = search_title(sr["title"])
         todo = []
         for e in sample(eps, args.per_series):
-            todo.append((f"{sr['id']}:tv:{e['s']}:{e['e']}", "tvsearch", q, e["s"], e["e"], e))
-            if sr["seriesType"] == "anime" and e.get("a") and e["s"] > 0:
-                todo.append((f"{sr['id']}:abs:{e['a']}", "search", f"{q} {e['a']:02d}", 1, e["a"], by_abs[e["a"]]))
+            todo.append((f"{sr['id']}:tv:{e['s']}:{e['e']}", "tvsearch", q, e["ls"], e["le"], e))
+            # A scene absolute number shared by several episodes has no single right answer.
+            if sr["seriesType"] == "anime" and e.get("qa") and e["s"] > 0 and len(by_abs[e["qa"]]) == 1:
+                todo.append((f"{sr['id']}:abs:{e['qa']}", "search", f"{q} {e['qa']:02d}", 1, e["qa"], e))
         todo = [t for t in todo if t[0] not in done]
         print(f"[{i}/{len(series_list)}] {sr['title']}: {len(todo)} queries", file=sys.stderr)
         if not todo:
@@ -248,7 +259,7 @@ def evaluate(args):
             problems.append(("multiple releases", r))
             continue
         m = re.search(r" - S(\d+)E(\d+) - (.*) \[1080p\]", rel[0])
-        if not m or (int(m[1]), int(m[2])) != (w["s"], w["e"]):
+        if not m or (int(m[1]), int(m[2])) != (w.get("ls", w["s"]), w.get("le", w["e"])):
             c["wrong"] += 1
             problems.append(("label differs from Sonarr episode", r))
             continue
@@ -297,7 +308,7 @@ def main():
     args = ap.parse_args()
     if not args.summary_only:
         names = set(args.series) if args.series else default_series()
-        all_series = sonarr("series", "[.[]|{id,title,seriesType}]")
+        all_series = sonarr("series", "[.[]|{id,title,seriesType,useSceneNumbering}]")
         chosen = sorted((s for s in all_series if s["title"] in names), key=lambda s: s["title"])
         missing = names - {s["title"] for s in chosen}
         if missing:
