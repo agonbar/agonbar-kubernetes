@@ -16,6 +16,10 @@ spec:
         metadata:
             labels:
                 app: prowlarr
+            annotations:
+                # Prowlarr reads custom definitions only at startup. Bump this with any change
+                # to prowlarr-custom-definitions so the rollout restarts it.
+                prowlarr/custom-definitions-rev: "2"
         spec:
             initContainers:
                 - name: iscsi-fsck
@@ -211,11 +215,12 @@ data:
 
         search:
           # catalogo/index/<offset>/<order>/<status>/<filter>/<language>/<query>, 18 books per page.
+          # Only the first page: results come ranked by relevance, and every extra page counts
+          # towards the site's overload redirect (/inicio/sobrecarga).
           # "disponibles" leaves out announced books that have no torrent yet. "--" is the site's own
           # empty query and returns the newest books, which is what the Prowlarr test needs.
           paths:
             - path: "catalogo/index/0/nuevo/disponibles/sin/todos/{{ if .Keywords }}{{ .Keywords }}{{ else }}--{{ end }}"
-            - path: "catalogo/index/18/nuevo/disponibles/sin/todos/{{ if .Keywords }}{{ .Keywords }}{{ else }}--{{ end }}"
           keywordsfilters:
             # The query goes in the URL path: an encoded / returns nothing and an encoded % gets a 302.
             - name: re_replace
@@ -276,17 +281,18 @@ data:
                   args: replace
             details:
               # Rows mix www. and bare-domain links; keep the path so it resolves against the configured link.
+              # The leading / matters: Prowlarr resolves a relative path against the search page URL.
               selector: a.popover-libro
               attribute: href
               filters:
                 - name: regexp
-                  args: "(libro/detalle/\\d+)"
+                  args: "(/libro/detalle/\\d+)"
             download:
               selector: a.popover-libro
               attribute: href
               filters:
                 - name: regexp
-                  args: "(libro/detalle/\\d+)"
+                  args: "(/libro/detalle/\\d+)"
             poster:
               selector: img#catalog
               attribute: src
