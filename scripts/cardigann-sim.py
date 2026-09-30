@@ -124,6 +124,8 @@ def search(d, base, query):
                 value = handle_selector(block, row, rv)
                 rv[f".Result.{name}"] = value
                 rel[name] = value
+            # Prowlarr resolves relative links against the page they came from, not the site root.
+            rel["_page"] = url
             releases.append(rel)
         time.sleep(d.get("requestDelay", 0))
     has_andmatch = any(f["name"] == "andmatch" for f in s["rows"].get("filters") or [])
@@ -160,7 +162,7 @@ def main():
         for i, r in enumerate(kept[: a.show]):
             line = f"  - {r['title']} | {r['details']} | size {r['size']} | date {r['date']}"
             if i < a.grab:
-                status, magnet = grab(d, base, r["download"])
+                status, magnet = grab(d, r["_page"], r["download"])
                 m = re.search(r"btih:([0-9A-Fa-f]{40})", magnet or "")
                 line += f" | magnet {'yes ' + m.group(1)[:12] + '…' if m else 'NO (HTTP ' + str(status) + ')'}"
                 time.sleep(d.get("requestDelay", 0))
