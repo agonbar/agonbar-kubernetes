@@ -44,7 +44,7 @@ probe() {
 }
 subs_of() { jq -r '[.streams[]|select(.codec_type=="subtitle")|.tags.language//"und"]|join(",")'; }
 
-api "$SONARR/queue?page=1&pageSize=1000" \
+api "$SONARR/queue?page=1&pageSize=5000" \
   | jq --argjson id "$QUEUE_ID" '.records[]|select(.id==$id)' > "$WORK/q.json"
 [ -s "$WORK/q.json" ] || { echo "queue id $QUEUE_ID no está en la cola"; exit 1; }
 
