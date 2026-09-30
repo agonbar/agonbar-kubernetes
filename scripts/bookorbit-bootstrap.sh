@@ -66,13 +66,15 @@ if [[ -z $AUDIO ]]; then
 fi
 
 # 3. Prowlarr. Creating it already syncs the indexers; seed goals are inherited
-# from each Prowlarr indexer and can only be changed there.
+# from each Prowlarr indexer and can only be changed there. autoExpandCategories
+# retries an empty source without categories: public trackers file many ebooks
+# under 8000 Other, not 7020.
 PM=$(find_id "$(api GET /admin/request-indexer-managers)" Prowlarr)
 if [[ -z $PM ]]; then
   key=$(k exec deploy/prowlarr-deployment -- sh -c 'sed -n "s:.*<ApiKey>\(.*\)</ApiKey>.*:\1:p" /config/config.xml')
   body=$(jq -n --arg k "$key" '{name:"Prowlarr", type:"prowlarr",
     baseUrl:"http://prowlarr.piracy.svc.cluster.local:9696", credential:$k,
-    allowPrivateAddress:true, syncNewIndexers:true, inheritSeedLimits:true}')
+    allowPrivateAddress:true, syncNewIndexers:true, inheritSeedLimits:true, autoExpandCategories:true}')
   PM=$(api POST /admin/request-indexer-managers "$body" | jq -r .id)
   echo "created Prowlarr manager ($PM)"
 fi
