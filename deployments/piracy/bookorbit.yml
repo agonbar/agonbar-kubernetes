@@ -1,0 +1,170 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: bookorbit
+    namespace: piracy
+    labels:
+        app: bookorbit
+spec:
+    strategy:
+        type: Recreate
+    replicas: 1
+    selector:
+        matchLabels:
+            app: bookorbit
+    template:
+        metadata:
+            labels:
+                app: bookorbit
+        spec:
+            containers:
+                - name: bookorbit
+                  # Pinned: one maintainer, weekly releases, two majors between May and
+                  # September 2026. Read the changelog before bumping.
+                  image: ghcr.io/bookorbit/bookorbit:3.1.0
+                  imagePullPolicy: IfNotPresent
+                  env:
+                      - name: APP_URL
+                        value: https://bookorbit.${BASE_DOMAIN}
+                      - name: TZ
+                        value: Europe/Madrid
+                      # nas02 PG17, switched to the pgvector image on 2026-09-30 for this
+                      # app. `vector` was created once by piracy_admin; BookOrbit only runs
+                      # CREATE EXTENSION IF NOT EXISTS, so its role needs no superuser.
+                      - name: POSTGRES_HOST
+                        value: 192.168.0.29
+                      - name: POSTGRES_PORT
+                        value: "5432"
+                      - name: POSTGRES_DB
+                        value: bookorbit
+                      - name: POSTGRES_USER
+                        value: bookorbit
+                      # Request imports hardlink the finished download into the dock and
+                      # fall back to fs.copyFile, which fails with EPERM on NFS (upstream
+                      # #719). Keeping the dock on the same mount as qBittorrent's
+                      # downloads makes the hardlink succeed. Dock -> library crosses
+                      # datasets, but that step streams the copy and works on NFS.
+                      - name: BOOK_DOCK_PATH
+                        value: /downloads/book-dock
+                      - name: LIBRARY_BROWSE_ROOT
+                        value: /library
+                  envFrom:
+                      # POSTGRES_PASSWORD, JWT_SECRET, SETUP_BOOTSTRAP_TOKEN,
+                      # BOOK_REQUEST_ENCRYPTION_KEY
+                      - secretRef:
+                            name: bookorbit
+                  ports:
+                      - containerPort: 3000
+                        protocol: TCP
+                  volumeMounts:
+                      - name: data
+                        mountPath: /data
+                      - name: media
+                        mountPath: /library/books
+                        subPath: books
+                      - name: media
+                        mountPath: /library/audiobooks
+                        subPath: audiobooks
+                      # Same path qBittorrent sees, so the download-client path mapping
+                      # in BookOrbit is /downloads -> /downloads.
+                      - name: torrents
+                        mountPath: /downloads
+                  startupProbe:
+                      httpGet:
+                          path: /api/v1/health
+                          port: 3000
+                      periodSeconds: 10
+                      timeoutSeconds: 5
+                      failureThreshold: 30
+                  readinessProbe:
+                      httpGet:
+                          path: /api/v1/health
+                          port: 3000
+                      periodSeconds: 15
+                      timeoutSeconds: 5
+                      failureThreshold: 3
+                  # /api/v1/health also checks the database; liveness stays on the socket
+                  # so a Postgres restart doesn't restart the pod too.
+                  livenessProbe:
+                      tcpSocket:
+                          port: 3000
+                      periodSeconds: 30
+                      timeoutSeconds: 5
+                      failureThreshold: 3
+                  resources:
+                      requests:
+                          memory: 512Mi
+                          cpu: 250m
+                      limits:
+                          memory: 2Gi
+                          cpu: "2"
+            volumes:
+                - name: data
+                  persistentVolumeClaim:
+                      claimName: bookorbit-data
+                - name: media
+                  nfs:
+                      server: 192.168.0.29
+                      path: /mnt/RAID/docker/media
+                - name: torrents
+                  nfs:
+                      server: 192.168.0.29
+                      path: /mnt/SSD/torrents
+            nodeSelector:
+                svccontroller.k3s.cattle.io/lbpool: lamg
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+    name: bookorbit
+    namespace: piracy
+spec:
+    selector:
+        app: bookorbit
+    ports:
+        - protocol: TCP
+          port: 3000
+          targetPort: 3000
+          name: http
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+    name: bookorbit-https
+    namespace: piracy
+    annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+    ingressClassName: traefik
+    rules:
+        - host: bookorbit.${BASE_DOMAIN}
+          http:
+              paths:
+                  - pathType: Prefix
+                    path: /
+                    backend:
+                        service:
+                            name: bookorbit
+                            port:
+                                number: 3000
+    tls:
+        - secretName: bookorbit.${BASE_DOMAIN}
+          hosts:
+              - bookorbit.${BASE_DOMAIN}
+
+---
+# Covers, thumbnails and upload staging. Library state lives in Postgres.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: bookorbit-data
+    namespace: piracy
+spec:
+    accessModes:
+        - ReadWriteOnce
+    storageClassName: truenas-nfs-ssd-lan
+    resources:
+        requests:
+            storage: 5Gi
