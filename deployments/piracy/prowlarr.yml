@@ -68,6 +68,11 @@ spec:
                   volumeMounts:
                       - name: config
                         mountPath: /config
+                      # Prowlarr keys custom definitions by file name and only reads them at
+                      # startup, so a change here needs a pod restart.
+                      - name: custom-definitions
+                        mountPath: /config/Definitions/Custom
+                        readOnly: true
                   livenessProbe:
                       httpGet:
                           path: /ping
@@ -98,6 +103,9 @@ spec:
                 - name: host-proc-mounts
                   hostPath:
                       path: /proc/1/mounts
+                - name: custom-definitions
+                  configMap:
+                      name: prowlarr-custom-definitions
             nodeSelector:
                 svccontroller.k3s.cattle.io/lbpool: lamg
 ---
@@ -157,3 +165,145 @@ spec:
   resources:
     requests:
       storage: 5Gi
+---
+# Indexers Prowlarr/Indexers doesn't ship. EpubLibre ports Jackett's EpubLibre.cs so the
+# biggest Spanish ebook source works without running Jackett. Test changes against the live
+# site with scripts/cardigann-sim.py before committing.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: prowlarr-custom-definitions
+    namespace: piracy
+data:
+    epublibre-custom.yml: |
+        # Custom Cardigann definition for Prowlarr. Prowlarr/Indexers ships no EpubLibre; this ports
+        # Jackett's src/Jackett.Common/Indexers/Definitions/EpubLibre.cs so Jackett is not needed.
+        # Install: copy to /config/Definitions/Custom/epublibre-custom.yml in the Prowlarr pod and restart.
+        # Prowlarr keys definitions by file name, so the -custom name keeps it apart from any future
+        # upstream epublibre.yml.
+        id: epublibre-custom
+        name: EpubLibre (custom)
+        description: "EpubLibre is a Spanish public site for EPUB ebooks. Más libros, más libres."
+        language: es-ES
+        type: public
+        encoding: UTF-8
+        requestDelay: 2
+        links:
+          - https://epublibre.org/
+          - https://www.epublibre.org/
+
+        caps:
+          categorymappings:
+            - {id: 1, cat: Books/EBook, desc: "EPUB"}
+            - {id: 1, cat: Books}
+
+          modes:
+            search: [q]
+            book-search: [q]
+
+        settings: []
+
+        download:
+          # The magnet only exists on the book's details page.
+          selectors:
+            - selector: a#en_desc
+              attribute: href
+
+        search:
+          # catalogo/index/<offset>/<order>/<status>/<filter>/<language>/<query>, 18 books per page.
+          # "disponibles" leaves out announced books that have no torrent yet. "--" is the site's own
+          # empty query and returns the newest books, which is what the Prowlarr test needs.
+          paths:
+            - path: "catalogo/index/0/nuevo/disponibles/sin/todos/{{ if .Keywords }}{{ .Keywords }}{{ else }}--{{ end }}"
+            - path: "catalogo/index/18/nuevo/disponibles/sin/todos/{{ if .Keywords }}{{ .Keywords }}{{ else }}--{{ end }}"
+          keywordsfilters:
+            # The query goes in the URL path: an encoded / returns nothing and an encoded % gets a 302.
+            - name: re_replace
+              args: ["[/%]", " "]
+
+          rows:
+            selector: "div#contenido div.span2:has(a.popover-libro)"
+            filters:
+              # The site search is a loose full-text OR ranked by relevance, so page 1 for
+              # "Crónica de una muerte anunciada" also has Stephen King's Apocalipsis. Jackett filters too.
+              - name: andmatch
+
+          fields:
+            author:
+              selector: h2
+            booktitle:
+              selector: h1
+            _language:
+              # The popover HTML lives in the data-content attribute: <div class="pull-right sprite idioma_1">.
+              # Ids from the site's language menu. English names so BookOrbit reads "Spanish EPUB" as es.
+              selector: a.popover-libro
+              attribute: data-content
+              filters:
+                - name: regexp
+                  args: "idioma_(\\d+)"
+                - name: re_replace
+                  args: ["^1$", "Spanish"]
+                - name: re_replace
+                  args: ["^2$", "Catalan"]
+                - name: re_replace
+                  args: ["^3$", "Basque"]
+                - name: re_replace
+                  args: ["^4$", "Galician"]
+                - name: re_replace
+                  args: ["^5$", "English"]
+                - name: re_replace
+                  args: ["^6$", "French"]
+                - name: re_replace
+                  args: ["^7$", "German"]
+                - name: re_replace
+                  args: ["^8$", "Swedish"]
+                - name: re_replace
+                  args: ["^9$", "Chinese"]
+                - name: re_replace
+                  args: ["^10$", "Italian"]
+                - name: re_replace
+                  args: ["^11$", "Portuguese"]
+                - name: re_replace
+                  args: ["^12$", "Esperanto"]
+            title:
+              text: "{{ .Result.author }} - {{ .Result.booktitle }} [{{ .Result._language }}] [EPUB]"
+            description:
+              # andmatch checks the query words against title and description without folding accents,
+              # so an unaccented copy lets "Pedro Paramo" keep "Pedro Páramo".
+              text: "{{ .Result.author }} - {{ .Result.booktitle }}"
+              filters:
+                - name: diacritics
+                  args: replace
+            details:
+              # Rows mix www. and bare-domain links; keep the path so it resolves against the configured link.
+              selector: a.popover-libro
+              attribute: href
+              filters:
+                - name: regexp
+                  args: "(libro/detalle/\\d+)"
+            download:
+              selector: a.popover-libro
+              attribute: href
+              filters:
+                - name: regexp
+                  args: "(libro/detalle/\\d+)"
+            poster:
+              selector: img#catalog
+              attribute: src
+            category:
+              text: 1
+            # The list has no upload date, size or swarm stats; they are only on the details page.
+            date:
+              text: now
+            size:
+              text: "5 MB"
+            # 1 seeder so clients with the default minimum of 1 do not reject every release.
+            seeders:
+              text: 1
+            leechers:
+              text: 1
+            downloadvolumefactor:
+              text: 0
+            uploadvolumefactor:
+              text: 1
+        # CodeIgniter
