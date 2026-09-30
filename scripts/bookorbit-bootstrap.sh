@@ -102,3 +102,17 @@ body=$(jq -n --argjson b "$BOOKS" --argjson a "$AUDIO" \
   '{destinations:{ebook:{libraryId:$b}, comic:{libraryId:$b}, audiobook:{libraryId:$a}}}')
 api PUT /admin/book-request-automation "$body" >/dev/null
 echo "request destinations: $(api GET /admin/book-request-automation | jq -c .destinations)"
+
+# 6. Spanish only. Auto-grab takes a release only if it matches a tier: EpubLibre first, then
+# releases that state Spanish. One that states no language matches none and goes back to a person,
+# which is what stops "Dune by Frank Herbert EPUB" (English, 94 points) being grabbed for "Dune".
+EID=$(api GET "/admin/request-indexer-managers/$PM" | jq -r '.sources[] | select(.name=="EpubLibre") | .id')
+[[ -n $EID ]] || { echo "EpubLibre not synced from Prowlarr yet" >&2; exit 1; }
+body=$(jq -n --argjson e "$EID" '{autoGrabEnabled:true, autoSearchEnabled:true, profiles:{
+  ebook:[
+    {id:"epublibre", name:"EpubLibre", conditions:{indexerIds:[$e], formats:["epub"]}},
+    {id:"es-epub", name:"Castellano declarado, EPUB", conditions:{languages:["es"], formats:["epub"]}},
+    {id:"es", name:"Castellano declarado", conditions:{languages:["es"]}}],
+  audiobook:[{id:"es", name:"Castellano declarado", conditions:{languages:["es"]}}]}}')
+api PUT /admin/book-request-automation "$body" >/dev/null
+echo "profiles: $(api GET /admin/book-request-automation | jq -c '.profiles | map_values(map(.name))')"
