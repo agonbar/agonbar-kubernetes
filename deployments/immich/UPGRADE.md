@@ -1,110 +1,99 @@
-# Immich upgrade v2.7.5 → v3.0.1
+# Upgrading Immich
 
-Immich v3.0.0 is a **major** release. This runbook covers the upgrade for this GitOps
-(ArgoCD auto-sync) deployment.
+ArgoCD auto-syncs this directory from `main`, so an upgrade is an image bump in
+`server.yaml` and `machine-learning.yaml`, committed and pushed. Server and
+machine-learning always move together, to the same tag.
 
-## Context / risk assessment for THIS deploy
+Last upgrades: v2.7.5 → v3.0.1 (major), v3.0.3 → v3.2.4 on 2026-10-01.
 
-| Breaking change in v3 | Impact here |
-|-----------------------|-------------|
-| Drops `pgvecto.rs`; VectorChord mandatory | ✅ **Already on VectorChord** (`postgres:14-vectorchord0.4.3`) — no DB extension migration needed |
-| API breaking changes → v2 mobile apps stop working | ⚠️ **Every family member must update the Immich mobile app to v3** or it will fail against the server |
-| Deprecated env vars removed | ✅ Cleaned up (`TYPESENSE_API_KEY`, `REVERSE_GEOCODING_PRECISION` were already dead/ignored) |
-| ML: requires numpy 2.4, removed deprecated envs | ✅ Handled inside the ML image |
-| Duration now in ms, star rating ≥1, OAuth secure-by-default, various endpoint removals | Affects third-party API integrations only — none used here |
+## Before bumping
 
-Schema migrations run automatically on first v3 server boot. **They are not
-auto-reversible → take a DB snapshot before syncing.**
+1. **Read the release notes** for every version you skip
+   (`https://github.com/immich-app/immich/releases`), looking for "Breaking
+   Changes", Postgres/VectorChord requirements and removed env vars.
+2. **Check the mobile apps.** The family updates the Android app on its own, so
+   the apps usually run ahead of the server. A newer app against an older server
+   fails quietly: in 2026-10 album creation broke and the server logged nothing,
+   because the request was rejected by validation. Session rows show what the
+   devices run:
 
-Postgres image is left at `14-vectorchord0.4.3` (v3-compatible). Do not downgrade
-Immich below v1.133.0 after this point.
+   ```bash
+   kubectl --context lamg -n immich exec deploy/postgre -- sh -c \
+     'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "select \"deviceOS\", \"appVersion\", max(\"updatedAt\") from session group by 1,2 order by 3 desc"'
+   ```
 
-## Pre-flight — snapshot the DB (do NOT skip)
+3. **Take a fresh database dump.** Schema migrations run on the first boot of
+   the new server and cannot be undone by reverting the manifests. The database
+   lives on `local-path` (`immich-db-data-local`), which has no CSI snapshotter,
+   so the only copy is the logical dump made by `immich-postgres-backup`. Run it
+   on demand. The job restores every dump into a scratch database, so a
+   completed job means the dump is restorable:
 
-The daily backup CronJob snapshots `immich/immich-db-data` at 04:00. Take a fresh
-on-demand snapshot right before the upgrade so rollback is a few minutes, not a day, old:
+   ```bash
+   kubectl --context lamg -n immich create job --from=cronjob/immich-postgres-backup immich-pg-preupgrade-$(date +%Y%m%d)
+   kubectl --context lamg -n immich wait --for=condition=complete job/immich-pg-preupgrade-$(date +%Y%m%d) --timeout=900s
+   kubectl --context lamg -n immich logs job/immich-pg-preupgrade-$(date +%Y%m%d) | grep "restore verified"
+   ```
 
-```bash
-kubectl --context lamg apply -f - <<'EOF'
-apiVersion: snapshot.storage.k8s.io/v1
-kind: VolumeSnapshot
-metadata:
-  name: immich-db-preupgrade-v3
-  namespace: immich
-spec:
-  volumeSnapshotClassName: truenas-iscsi-ssd
-  source:
-    persistentVolumeClaimName: immich-db-data
-EOF
+   Note the dump file name from that line. Rollback needs it.
 
-kubectl --context lamg wait volumesnapshot/immich-db-preupgrade-v3 -n immich \
-  --for=jsonpath='{.status.readyToUse}'=true --timeout=300s
-```
-
-## Execute
-
-The image bump + env cleanup is already staged in `server.yaml` and
-`machine-learning.yaml`. ArgoCD tracks `HEAD` with auto-sync, so committing +
-pushing to `main` deploys it:
+## Upgrade
 
 ```bash
-git add deployments/immich/
-git commit -m "immich: upgrade v2.7.5 -> v3.0.1 (major), drop dead typesense/geocoding envs"
-git push
-```
-
-Watch the rollout:
-
-```bash
-kubectl --context lamg -n immich rollout status deploy/server --timeout=600s
-kubectl --context lamg -n immich rollout status deploy/machine-learning --timeout=600s
-kubectl --context lamg -n immich logs deploy/server -f   # confirm migrations run clean
+sed -i 's|immich-server:vOLD|immich-server:vNEW|' deployments/immich/server.yaml
+sed -i 's|immich-machine-learning:vOLD|immich-machine-learning:vNEW|' deployments/immich/machine-learning.yaml
+git commit -am "immich: upgrade vOLD -> vNEW" && git push
+kubectl --context lamg -n argocd annotate app immich argocd.argoproj.io/refresh=hard --overwrite
 ```
 
 ## Verify
 
-- `https://immich.${BASE_DOMAIN}` loads and login works
-- Server → Administration → check version shows `v3.0.1`, no migration errors in logs
-- A photo thumbnail / timeline loads (VectorChord search still works)
-- Update the mobile app on each device to v3 and confirm sync
+```bash
+kubectl --context lamg -n immich rollout status deploy/server --timeout=600s
+kubectl --context lamg -n immich rollout status deploy/machine-learning --timeout=600s
+kubectl --context lamg -n immich logs deploy/server | grep -E 'Migration|listening on'
+curl -s https://immich.adriangonzalezbarbosa.eu/api/server/version
+```
+
+Every `Migration "..."` line must say `succeeded`, and the listening line shows
+the new version. `AssetGenerateThumbnails` errors about truncated JPEGs or HEIC
+"Security limit exceeded" come from specific broken files and predate the
+upgrade. They are not a regression.
 
 ## Rollback
 
-Config-only revert is **not enough** if schema migrations already ran — the DB must
-also be restored from the pre-upgrade snapshot.
+Reverting the manifests alone is not enough once migrations have run. The
+database has to go back to the pre-upgrade dump.
 
 ```bash
-# 1. revert the manifests
-git revert --no-edit <upgrade-commit-sha> && git push
+# 1. revert the image bump; ArgoCD redeploys the old version
+git revert --no-edit <upgrade-commit> && git push
 
-# 2. scale down server + postgres
-kubectl --context lamg -n immich scale deploy/server deploy/machine-learning deploy/postgre --replicas=0
-kubectl --context lamg -n immich wait --for=delete pod -l app=postgre --timeout=120s
+# 2. stop everything that writes to the database
+kubectl --context lamg -n immich scale deploy/server deploy/machine-learning --replicas=0
 
-# 3. restore the DB PVC from the pre-upgrade snapshot
-kubectl --context lamg -n immich delete pvc immich-db-data
-kubectl --context lamg apply -f - <<'EOF'
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: immich-db-data
-  namespace: immich
-spec:
-  accessModes: ["ReadWriteOnce"]
-  storageClassName: truenas-iscsi-ssd
-  resources:
-    requests:
-      storage: 5Gi
-  dataSource:
-    name: immich-db-preupgrade-v3
-    kind: VolumeSnapshot
-    apiGroup: snapshot.storage.k8s.io
-EOF
-kubectl --context lamg -n immich wait pvc/immich-db-data \
-  --for=jsonpath='{.status.phase}'=Bound --timeout=300s
+# 3. restore the dump into a recreated, empty database
+DUMP=immich-<ts>.dump
+kubectl --context lamg -n immich run immich-restore --rm -i --restart=Never --image=postgres:14 \
+  --overrides='{"spec":{"nodeSelector":{"svccontroller.k3s.cattle.io/lbpool":"lamg"},
+    "containers":[{"name":"immich-restore","image":"postgres:14","stdin":true,
+      "command":["bash","-c","set -euo pipefail; f=/backups/'"$DUMP"'; psql -d postgres -c \"DROP DATABASE immich\"; psql -d postgres -c \"CREATE DATABASE immich\"; pg_restore --list $f | grep -vE \"^[0-9]+; [0-9]+ [0-9]+ TYPE [^ ]+ _\" > /tmp/toc.list; pg_restore --use-list /tmp/toc.list -d immich --single-transaction --exit-on-error $f; psql -d immich -tAc \"select count(*) from asset\""],
+      "env":[{"name":"PGHOST","value":"postgre.immich.svc.cluster.local"},
+        {"name":"PGUSER","valueFrom":{"secretKeyRef":{"name":"immich","key":"dbUser"}}},
+        {"name":"PGPASSWORD","valueFrom":{"secretKeyRef":{"name":"immich","key":"dbPassword"}}}],
+      "volumeMounts":[{"name":"b","mountPath":"/backups"}]}],
+    "volumes":[{"name":"b","persistentVolumeClaim":{"claimName":"immich-pg-backups"}}]}}'
 
-# 4. ArgoCD selfHeal scales the reverted (v2.7.5) deployments back up
+# 4. hand the deployments back to ArgoCD (selfHeal restores replicas: 1)
+kubectl --context lamg -n argocd annotate app immich argocd.argoproj.io/refresh=hard --overwrite
 ```
 
-Photos/originals live on NFS (`/mnt/RAID/docker/immich/upload`) and are untouched by
-the upgrade — only the Postgres PVC needs rollback.
+The `grep -v` on the TOC drops the orphaned `_naturalearth_countries` type. The
+restore fails on it otherwise. `postgres-backup.yaml` explains why it exists.
+The restore pod prints the asset count at the end. It should match the count in
+the backup job's log.
+
+Do not downgrade Immich below v1.133.0: the database is VectorChord-only.
+
+Photos and videos live on NFS (`/mnt/RAID/docker/immich/upload`). Upgrades and
+rollbacks do not touch them. Only the database needs restoring.
