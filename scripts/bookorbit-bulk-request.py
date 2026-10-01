@@ -18,6 +18,7 @@ sent are logged next to the list (<list>.sent, title and request id) and skipped
 The list is tab-separated: title, author, series, index. Blank lines and # comments are skipped.
 """
 import argparse
+import difflib
 import json
 import os
 import sys
@@ -72,12 +73,21 @@ def grab_epublibre(api, rid, title, author):
     if not src.get("ok", True):
         return f"EpubLibre failed: {src.get('error')}"
     surname = fold(author.split()[-1]) if author else ""
+
+    def by_author(release_title):
+        # Transliterations differ between the list and the site (Dostoievski / Dostoyevski).
+        names = fold(release_title.split(" - ", 1)[0]).replace(".", " ").split()
+        return not surname or any(difflib.SequenceMatcher(None, surname, n).ratio() >= 0.8 for n in names)
+
     picks = [r for r in resp.get("releases", [])
              if r.get("indexerName") == EPUBLIBRE and r.get("tier") == 0
-             and fold(title) in fold(r["title"]) and surname in fold(r["title"])]
+             and fold(title) in fold(r["title"]) and by_author(r["title"])]
     if not picks:
         return "no EpubLibre match by this author"
-    best = max(picks, key=lambda r: r.get("score") or 0)
+    # Scores tie across editions, and EpubLibre splits some novels into "(I)" and "(II)": prefer the
+    # release titled exactly as asked, then the shortest title (fewest edition qualifiers).
+    bare = lambda r: fold(r["title"].split(" - ", 1)[-1].split(" [")[0])
+    best = max(picks, key=lambda r: (r.get("score") or 0, bare(r) == fold(title), -len(r["title"])))
     for attempt in (1, 2):  # resolving the magnet fetches EpubLibre's details page, which can time out
         status, resp = api("POST", f"/admin/book-requests/{rid}/grab",
                            {"indexerId": best["indexerId"], "releaseGuid": best["guid"]})
