@@ -36,7 +36,7 @@ import subprocess
 import time
 
 HYPERION = ("192.168.1.26", 19444)
-WLED_HOST = "192.168.1.20"  # static, set on the WLED itself; outside the router's DHCP pool
+WLED_HOST = "192.168.1.20"  # static, set on the WLED itself; the router's DHCP pool is .200-.250
 WLED_UDP = 21324
 DEPTH_H, DEPTH_V = 0.08, 0.05  # web UI defaults: top/bottom 8 %, left/right 5 %
 
