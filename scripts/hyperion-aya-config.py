@@ -6,7 +6,7 @@ Hyperion keeps its config in a SQLite db on NFS, not in git; this is the git cop
   ./hyperion-aya-config.py apply --start bl --dir cw
                                               # write device + layout into Hyperion
 
-The strip is a WLED 0.11.1 on an ESP8266, 226 LEDs. Its single pings get lost to
+The strip is a WLED 0.11.1 on an ESP8266 (mDNS wled-05f2f8), 226 LEDs. Its single pings get lost to
 WiFi power save, so a one-shot ping sweep misses it; scan with `ping -c3`.
 
 pattern: sends WLED's own UDP realtime protocol (DRGB, port 21324) with a 120 s
@@ -22,17 +22,21 @@ web UI's "classic" generator builds it (clockwise from top-left, rotated by
 `position`, then optionally reversed), and ledConfig.classic is written to match,
 so opening the LED page in the UI does not change it.
 
-Login: the admin password is Hyperion's default unless HYPERION_PASSWORD says
-otherwise. The image ignores the WEBPASSWORD env var in the manifest.
+Login: the admin password is key hyperionPassword of the sealed `aya` secret, read
+with kubectl unless HYPERION_PASSWORD is set. The image ignores the WEBPASSWORD env
+var in the manifest, so the password only exists in Hyperion's db, set through the
+API. If the db was reset and the default password works again, apply sets it back.
 """
 import argparse
+import base64
 import json
 import os
 import socket
+import subprocess
 import time
 
 HYPERION = ("192.168.1.26", 19444)
-WLED_HOST = "192.168.1.210"
+WLED_HOST = "192.168.1.20"  # static, set on the WLED itself; outside the router's DHCP pool
 WLED_UDP = 21324
 DEPTH_H, DEPTH_V = 0.08, 0.05  # web UI defaults: top/bottom 8 %, left/right 5 %
 
@@ -77,7 +81,10 @@ def apply(args):
             "host": WLED_HOST,
             "hardwareLedCount": count,
             "colorOrder": "rgb",
-            "streamProtocol": "DDP",
+            # Hyperion picks DDP for WLED >= 0.11.0, but this 0.11.1 build ignores it:
+            # live mode turns on (that goes over JSON) and the LEDs keep the last frame.
+            # RAW is WLED's own UDP realtime protocol, fine up to 490 LEDs.
+            "streamProtocol": "RAW",
             # Hand the strip back to its own preset (warm orange) when Hyperion stops.
             "restoreOriginalState": True,
             "stayOnAfterStreaming": False,
@@ -114,7 +121,15 @@ def apply(args):
             raise SystemExit(f"{msg['command']}/{msg.get('subcommand')}: {reply.get('error')} {reply.get('errorData') or ''}")
         return reply
 
-    rpc({"command": "authorize", "subcommand": "login", "password": os.environ.get("HYPERION_PASSWORD", "hyperion")})
+    password = os.environ.get("HYPERION_PASSWORD") or base64.b64decode(subprocess.run(
+        ["kubectl", "--context", "lamg", "-n", "aya", "get", "secret", "aya", "-o", "jsonpath={.data.hyperionPassword}"],
+        capture_output=True, check=True).stdout).decode()
+    try:
+        rpc({"command": "authorize", "subcommand": "login", "password": password})
+    except SystemExit:
+        rpc({"command": "authorize", "subcommand": "login", "password": "hyperion"})
+        rpc({"command": "authorize", "subcommand": "newPassword", "password": "hyperion", "newPassword": password})
+        print("admin password was the default again; set it back from the secret")
     rpc({"command": "config", "subcommand": "setconfig", "config": {"instances": [{"id": 0, "settings": settings}]}})
     got = rpc({"command": "config", "subcommand": "getconfig"})["info"]["instances"][0]["settings"]
     ok = got["device"]["type"] == "wled" and got["leds"] == settings["leds"]
@@ -130,7 +145,7 @@ def main():
     p.add_argument("--right", type=int, default=40)
     p.add_argument("--bottom", type=int, default=73)
     p.add_argument("--left", type=int, default=40)
-    p.add_argument("--start", choices=["tl", "tr", "br", "bl"], default="bl")
+    p.add_argument("--start", choices=["tl", "tr", "br", "bl"], default="br")
     p.add_argument("--dir", choices=["cw", "ccw"], default="cw")
     p.add_argument("--shift", type=int, default=0)
     p.add_argument("--minutes", type=int, default=15)
