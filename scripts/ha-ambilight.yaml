@@ -1,0 +1,53 @@
+# Brightness of the WLED behind the TV, following the sun, as a Home Assistant
+# package for the aya instance.
+#
+# WLED's master brightness also scales realtime data ("Force max brightness" is
+# off), so this one value dims everything the strip shows: Hyperion, Bazzite's
+# gamescope-led-sync, and WLED's own colour when nothing streams. WLED's timers
+# are disabled so they don't fight this; it used to run them on a clock with NTP
+# off, which drifted from 1970 on every boot.
+#
+# Talks to WLED's JSON API directly: the wled integration doesn't support 0.11.
+#
+#   kubectl --context lamg -n aya exec -i deploy/homeassistant -- \
+#       sh -c 'cat > /config/packages/ambilight.yaml' < scripts/ha-ambilight.yaml
+
+rest_command:
+  wled_tele_brillo:
+    url: http://192.168.1.20/json/state
+    method: POST
+    content_type: application/json
+    payload: '{"bri": {{ bri }}, "transition": 50}'
+
+template:
+  - sensor:
+      # 1 with the sun 6° up or higher, 127 from 6° below (civil dusk), linear
+      # in between: about an hour of ramp at dusk and dawn.
+      - name: "Tele ambilight brillo"
+        unique_id: tele_ambilight_brillo
+        availability: "{{ state_attr('sun.sun', 'elevation') is number }}"
+        state: >
+          {% set e = state_attr('sun.sun', 'elevation') %}
+          {% set day, night, lo, hi = 6, -6, 1, 127 %}
+          {% set b = hi - (e - night) / (day - night) * (hi - lo) %}
+          {{ [lo, [hi, b | round(0) | int] | min] | max }}
+
+automation:
+  - id: tele_ambilight_brillo
+    alias: "Tele ambilight: brillo según el sol"
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: sensor.tele_ambilight_brillo
+      # Re-assert after a WLED reboot or a manual change.
+      - trigger: time_pattern
+        minutes: "/15"
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: template
+        value_template: "{{ has_value('sensor.tele_ambilight_brillo') }}"
+    actions:
+      - action: rest_command.wled_tele_brillo
+        data:
+          bri: "{{ states('sensor.tele_ambilight_brillo') | int }}"
