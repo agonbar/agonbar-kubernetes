@@ -2,6 +2,13 @@
 """Ambilight from Bazzite's Game Mode: grab gamescope's PipeWire stream, shrink it
 and push it to Hyperion (ns aya, kube-vip-aya VIP) as raw RGB over JSON-RPC.
 
+UNSAFE, DO NOT INSTALL. Disconnecting from gamescope's PipeWire stream crashes
+gamescope (SEGV in libpipewire-module-client-node clear_buffers), and Game Mode
+crash-loops into Desktop Mode. pipewiresrc gives no control over teardown order.
+The working path is gamescope-led-sync with a patch that deactivates the stream
+before disconnecting, see architecture/gamescope-pipewire-ambilight-capture.md
+in the vault. `install` refuses unless --i-know-it-crashes is passed.
+
   python3 hyperion-grab.py install   # on Bazzite: copy to ~/.local/bin, enable+restart the user unit
   hyperion-grab.py                   # what the unit runs: waits for gamescope, streams while it lives
   ffmpeg -loglevel error -re -f lavfi -i testsrc2=size=64x36:rate=25 \\
@@ -139,8 +146,11 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("cmd", nargs="?", choices=["install"])
     p.add_argument("--stdin", action="store_true", help=f"read raw RGB {W}x{H} frames from stdin")
+    p.add_argument("--i-know-it-crashes", action="store_true", help="allow install despite the gamescope crash")
     args = p.parse_args()
     if args.cmd == "install":
+        if not args.i_know_it_crashes:
+            sys.exit("refusing to install: stopping this grabber crashes gamescope (see docstring)")
         return install()
     if args.stdin:
         return send(sys.stdin.buffer)
