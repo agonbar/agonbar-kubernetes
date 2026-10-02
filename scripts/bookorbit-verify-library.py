@@ -3,8 +3,9 @@
 
 For every .epub under the library root: the archive opens and its files decompress, the OPF has a
 title, author and language, and the body text is really Spanish. The language is measured from
-the text itself (share of common Spanish vs English words in the first chapters), because a
-release can be labelled Spanish and still be the English edition.
+the text itself (common Spanish, Catalan and English words in the first chapters), because a
+release can be labelled Spanish and still be another edition: Catalan passes a Spanish-vs-English
+test, so it is counted on its own.
 
 Runs where the files are, with the standard library only:
 
@@ -20,7 +21,9 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 ROOT = sys.argv[1] if len(sys.argv) > 1 else "/mnt/RAID/docker/media/books"
-ES = set("de la que el en y a los se del las un por con no una su para es al lo como más pero sus le ya o este sí porque esta entre cuando muy sin sobre también me hasta hay donde quien desde todo nos durante todos uno les ni contra otros ese eso ante ellos e esto mí antes algunos qué unos yo otro otras otra él tanto esa estos mucho quienes nada muchos cual poco ella estar estas algunas algo nosotros".split())
+ES = set("que y los se del las por con no su para es lo como más pero sus le ya o este porque esta entre cuando muy sin sobre también me hasta hay donde quien desde todo nos durante todos uno les ni contra otros ese eso ante ellos e esto mí antes algunos qué unos yo otro otras otra él tanto esa estos mucho quienes nada muchos cual poco estar estas algunas algo nosotros había".split())
+# Catalan shares most short words with Spanish, so it needs its own list or it passes as Spanish.
+CA = set("amb però molt aquest aquesta perquè els seva seu seus jo havia també fer quan més tot sense dels pel pels cap mai encara ja ell ella elles ells".split())
 EN = set("the of and to a in is it you that he was for on are with as his they be at one have this from or had by not word but what some we can out other were all there when up use your how said an each she which do their time if will way about many then them would".split())
 NS = {"opf": "http://www.idpf.org/2007/opf", "dc": "http://purl.org/dc/elements/1.1/"}
 
@@ -28,8 +31,11 @@ NS = {"opf": "http://www.idpf.org/2007/opf", "dc": "http://purl.org/dc/elements/
 def text_language(words):
     es = sum(w in ES for w in words)
     en = sum(w in EN for w in words)
+    ca = sum(w in CA for w in words)
     if es + en < 50:
         return "?", es, en
+    if ca > es / 3:  # Spanish text has a few Catalan-list words ("ella", "ya"), never this many
+        return "ca", es, en
     return ("es" if es > 2 * en else "en" if en > 2 * es else "mixed"), es, en
 
 
@@ -55,7 +61,7 @@ def check(path):
         except KeyError:
             continue
         body = html.unescape(re.sub(r"<[^>]+>", " ", raw))
-        words += re.findall(r"[a-záéíóúñü]+", body.lower())
+        words += re.findall(r"[a-záéíóúñüàèòïç]+", body.lower())
         if len(words) > 20000:
             break
     lang, es, en = text_language(words)

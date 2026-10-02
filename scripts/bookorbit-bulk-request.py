@@ -21,6 +21,7 @@ import argparse
 import difflib
 import json
 import os
+import re
 import sys
 import time
 import unicodedata
@@ -48,6 +49,11 @@ def call(method, path, body=None, token=None):
 
 def fold(s):
     return "".join(c for c in unicodedata.normalize("NFKD", s.lower()) if not unicodedata.combining(c))
+
+
+def norm(s):
+    # Punctuation differs between the list and the site ("Sapiens. De..." / "Sapiens: De...").
+    return re.sub(r"[^a-z0-9]+", " ", fold(s)).strip()
 
 
 class Session:
@@ -79,15 +85,17 @@ def grab_epublibre(api, rid, title, author):
         names = fold(release_title.split(" - ", 1)[0]).replace(".", " ").split()
         return not surname or any(difflib.SequenceMatcher(None, surname, n).ratio() >= 0.8 for n in names)
 
+    # EpubLibre also carries Catalan and English editions under the same title; the definition
+    # puts the language in brackets, so require it here as well as in the profile tier.
     picks = [r for r in resp.get("releases", [])
-             if r.get("indexerName") == EPUBLIBRE and r.get("tier") == 0
-             and fold(title) in fold(r["title"]) and by_author(r["title"])]
+             if r.get("indexerName") == EPUBLIBRE and r.get("tier") == 0 and "[Spanish]" in r["title"]
+             and norm(title) in norm(r["title"]) and by_author(r["title"])]
     if not picks:
         return "no EpubLibre match by this author"
     # Scores tie across editions, and EpubLibre splits some novels into "(I)" and "(II)": prefer the
     # release titled exactly as asked, then the shortest title (fewest edition qualifiers).
-    bare = lambda r: fold(r["title"].split(" - ", 1)[-1].split(" [")[0])
-    best = max(picks, key=lambda r: (r.get("score") or 0, bare(r) == fold(title), -len(r["title"])))
+    bare = lambda r: norm(r["title"].split(" - ", 1)[-1].split(" [")[0])
+    best = max(picks, key=lambda r: (r.get("score") or 0, bare(r) == norm(title), -len(r["title"])))
     for attempt in (1, 2):  # resolving the magnet fetches EpubLibre's details page, which can time out
         status, resp = api("POST", f"/admin/book-requests/{rid}/grab",
                            {"indexerId": best["indexerId"], "releaseGuid": best["guid"]})
