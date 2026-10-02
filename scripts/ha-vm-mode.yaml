@@ -1,0 +1,82 @@
+# Mode buttons for proxmox-agb00, as a Home Assistant package for the aya instance.
+#
+# The switch itself is /usr/local/sbin/vm-mode on the host (scripts/pve-vm-mode.sh).
+# HA runs on work-vm-00, VM 111, so a script in here that shuts 111 down dies
+# halfway; these scripts only send the mode over SSH and return.
+#
+# The SSH key lives in /config/.ssh/vm_mode and the host's authorized_keys pins it
+# to vm-mode, so it can't run anything else.
+#
+#   kubectl -n aya exec -i deploy/homeassistant -- \
+#       sh -c 'cat > /config/packages/vm_mode.yaml' < scripts/ha-vm-mode.yaml
+
+shell_command:
+  vm_mode: >-
+    ssh -i /config/.ssh/vm_mode -o UserKnownHostsFile=/config/.ssh/known_hosts
+    -o BatchMode=yes -o ConnectTimeout=10
+    root@proxmox-agb00.adriangonzalezbarbosa.eu {{ mode }}
+
+# Read straight from the Proxmox API rather than the proxmoxve integration, which
+# has no entities for VM 104 and gets stuck in reauth after any outage.
+rest:
+  - resource: https://proxmox-agb00.adriangonzalezbarbosa.eu:8006/api2/json/nodes/proxmox-agb00/qemu
+    headers:
+      Authorization: !secret proxmox_ha_token_header
+    scan_interval: 15
+    sensor:
+      - name: "Proxmox VMs encendidas"
+        unique_id: pve_agb00_running_vms
+        value_template: >
+          {{ value_json.data | selectattr('status', 'eq', 'running')
+             | map(attribute='vmid') | sort | join(' ') or 'ninguna' }}
+
+template:
+  - sensor:
+      - name: "VM mode"
+        unique_id: vm_mode
+        availability: "{{ has_value('sensor.proxmox_vms_encendidas') }}"
+        state: >
+          {% set on = states('sensor.proxmox_vms_encendidas').split() %}
+          {% if on == ['111'] %}Encoding
+          {% elif on == ['103'] %}Gaming Full
+          {% elif on == ['101', '104'] %}Híbrido
+          {% elif on == ['ninguna'] %}Off
+          {% else %}Mixed
+          {% endif %}
+        icon: >
+          {% set s = states('sensor.vm_mode') %}
+          {% if s == 'Gaming Full' %}mdi:gamepad-variant
+          {% elif s == 'Encoding' %}mdi:video-vintage
+          {% elif s == 'Híbrido' %}mdi:monitor-multiple
+          {% elif s == 'Off' %}mdi:power
+          {% else %}mdi:help-circle
+          {% endif %}
+
+script:
+  modo_gaming:
+    alias: "Modo: Gaming (TINY11-FULL)"
+    icon: mdi:gamepad-variant
+    sequence:
+      - action: shell_command.vm_mode
+        data: {mode: gaming}
+
+  modo_encoding:
+    alias: "Modo: Encoding (WORK-00-ENCODE)"
+    icon: mdi:video-vintage
+    sequence:
+      - action: shell_command.vm_mode
+        data: {mode: encoding}
+
+  modo_both:
+    alias: "Modo: Híbrido (WORK-00 + Bazzite)"
+    icon: mdi:monitor-multiple
+    sequence:
+      - action: shell_command.vm_mode
+        data: {mode: hybrid}
+
+  modo_off:
+    alias: "Modo: Off (todo apagado)"
+    icon: mdi:power
+    sequence:
+      - action: shell_command.vm_mode
+        data: {mode: "off"}
