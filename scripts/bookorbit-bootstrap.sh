@@ -3,7 +3,7 @@
 # libraries, Prowlarr, qBittorrent and the per-medium request destinations.
 # Every step skips what already exists, so rerunning it is safe.
 #
-#   BOOKORBIT_ADMIN_PASSWORD=... scripts/bookorbit-bootstrap.sh
+#   BOOKORBIT_ADMIN_PASSWORD=... [BOOKORBIT_ADMIN_EMAIL=... on the first run] scripts/bookorbit-bootstrap.sh
 #
 # Secrets come from the cluster: the setup token from secret piracy/bookorbit,
 # the qBittorrent password from piracy/qbit-creds, the Prowlarr API key from its
@@ -32,9 +32,11 @@ find_id() { jq -r --arg n "$2" '(if type=="array" then . else (.managers // .cli
 
 # 1. Admin
 if [[ $(curl -sS "$B/auth/setup-status" | jq -r .needsSetup) == true ]]; then
+  # Only the first run creates the admin, so only it needs an email (kept out of this public repo).
+  : "${BOOKORBIT_ADMIN_EMAIL:?set BOOKORBIT_ADMIN_EMAIL for the first admin}"
   echo "creating admin $ADMIN_USER"
-  body=$(jq -n --arg u "$ADMIN_USER" --arg p "$BOOKORBIT_ADMIN_PASSWORD" \
-    '{username:$u, name:"Adrián", email:"admin@example.invalid", password:$p}')
+  body=$(jq -n --arg u "$ADMIN_USER" --arg p "$BOOKORBIT_ADMIN_PASSWORD" --arg e "$BOOKORBIT_ADMIN_EMAIL" \
+    '{username:$u, name:$u, email:$e, password:$p}')
   TOKEN=$(curl -sS -X POST "$B/auth/setup" -H "$J" -H "x-setup-token: $(secret bookorbit SETUP_BOOTSTRAP_TOKEN)" -d "$body" | jq -r .accessToken)
 else
   body=$(jq -n --arg u "$ADMIN_USER" --arg p "$BOOKORBIT_ADMIN_PASSWORD" '{username:$u, password:$p}')
@@ -103,14 +105,15 @@ body=$(jq -n --argjson b "$BOOKS" --argjson a "$AUDIO" \
 api PUT /admin/book-request-automation "$body" >/dev/null
 echo "request destinations: $(api GET /admin/book-request-automation | jq -c .destinations)"
 
-# 6. Spanish only. Auto-grab takes a release only if it matches a tier: EpubLibre first, then
-# releases that state Spanish. One that states no language matches none and goes back to a person,
+# 6. Spanish only. Auto-grab takes a release only if it matches a tier: EpubLibre in Spanish first
+# (EpubLibre also carries Catalan and English editions under the same titles), then releases that
+# state Spanish. One that states no language matches none and goes back to a person,
 # which is what stops "Dune by Frank Herbert EPUB" (English, 94 points) being grabbed for "Dune".
 EID=$(api GET "/admin/request-indexer-managers/$PM" | jq -r '.sources[] | select(.name=="EpubLibre") | .id')
 [[ -n $EID ]] || { echo "EpubLibre not synced from Prowlarr yet" >&2; exit 1; }
 body=$(jq -n --argjson e "$EID" '{autoGrabEnabled:true, autoSearchEnabled:true, profiles:{
   ebook:[
-    {id:"epublibre", name:"EpubLibre", conditions:{indexerIds:[$e], formats:["epub"]}},
+    {id:"epublibre", name:"EpubLibre, castellano", conditions:{indexerIds:[$e], formats:["epub"], languages:["es"]}},
     {id:"es-epub", name:"Castellano declarado, EPUB", conditions:{languages:["es"], formats:["epub"]}},
     {id:"es", name:"Castellano declarado", conditions:{languages:["es"]}}],
   audiobook:[{id:"es", name:"Castellano declarado", conditions:{languages:["es"]}}]}}')
