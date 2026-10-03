@@ -19,6 +19,22 @@
 #       sh -c 'cat > /config/packages/panel_mix2.yaml' < scripts/ha-panel-mix2-presence.yaml
 #   then: automation.reload
 
+# Wifi adb on the phone (Android 9, no root) lasts until it reboots, and once it
+# runs off a MagSafe receiver nothing on USB re-arms it. This only tells you it's
+# gone: plug the phone into work-vm-00 for a few seconds and udev re-arms it
+# (dotfiles, mix2-adb-tcpip.service).
+command_line:
+  - binary_sensor:
+      name: "Panel Mi MIX 2 adb wifi"
+      unique_id: panel_mix2_adb_wifi
+      device_class: connectivity
+      scan_interval: 120
+      command: >-
+        python3 -c "import socket; s=socket.socket(); s.settimeout(3);
+        print('ON' if s.connect_ex(('192.168.1.217', 5555)) == 0 else 'OFF')"
+      payload_on: "ON"
+      payload_off: "OFF"
+
 input_boolean:
   panel_mix2_manual_off:
     name: "Panel Mi MIX 2: apagado a mano"
@@ -93,6 +109,24 @@ automation:
             target: { entity_id: input_boolean.panel_mix2_manual_off }
       # one wave = one toggle, even if the sensor flickers near/far
       - delay: "00:00:02"
+
+  - id: panel_mix2_adb_lost
+    alias: "Panel Mi MIX 2: aviso de adb wifi perdido"
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.panel_mi_mix_2_adb_wifi
+        to: "off"
+        for: "00:10:00"
+    actions:
+      - variables:
+          msg: >-
+            El Mi MIX 2 ha perdido adb por wifi (¿se ha reiniciado?). Enchúfalo
+            unos segundos a work-vm-00 por USB y se rearma solo.
+      - action: persistent_notification.create
+        data: { title: "Panel Mi MIX 2", message: "{{ msg }}", notification_id: panel_mix2_adb }
+      - action: notify.mobile_app_mi_9_adrian
+        data: { title: "Panel Mi MIX 2", message: "{{ msg }}" }
+        continue_on_error: true
 
   # IP Webcam forgets the front camera whenever its server restarts (reboot, app
   # update); the back camera faces the wall and sees nothing.
