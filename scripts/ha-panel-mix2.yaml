@@ -26,11 +26,38 @@ views:
 
               {{ ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'][now().weekday()] }},
               {{ now().day }} de {{ ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'][now().month - 1] }}
-          - type: weather-forecast
-            entity: weather.forecast_home
-            forecast_type: daily
-            show_current: true
-            show_forecast: true
+              · {{ state_attr('weather.forecast_home', 'temperature') | round(0) }} °C
+              · {{ {'sunny':'despejado','clear-night':'despejado','partlycloudy':'parcialmente nublado','cloudy':'nublado','rainy':'lluvia','pouring':'lluvia fuerte','fog':'niebla','windy':'viento','snowy':'nieve','lightning-rainy':'tormenta'}.get(states('weather.forecast_home'), states('weather.forecast_home')) }}
+          # work-vm-00, from console-panel's /state.json (scripts/ha-panel-mix2-work.yaml).
+          # Hidden in desktop mode, when the endpoint doesn't exist.
+          - type: tile
+            entity: sensor.rtx_3090_uso
+            name: 3090
+            visibility: &encoding
+              - condition: state
+                entity: sensor.work_vm_00
+                state_not: unavailable
+          - type: tile
+            entity: sensor.rtx_3090_vram
+            name: VRAM
+            visibility: *encoding
+          - type: tile
+            entity: sensor.rtx_3090_consumo
+            name: Consumo
+            visibility: *encoding
+          - type: tile
+            entity: sensor.rtx_3090_temperatura
+            name: Temperatura
+            visibility: *encoding
+          - type: markdown
+            visibility: *encoding
+            content: >-
+              {% set l = state_attr('sensor.work_vm_00', 'llm') %}
+              {% set d = state_attr('sensor.work_vm_00', 'docling') %}
+              **LLM** {{ 'trabajando' if l.busy else 'en espera' }} · {{ l.busy }}/{{ l.slots }} slots
+              · {{ l.gen_tps | round(0) }} tok/s · {{ l.requests_last_hour }}/h
+              <br>**docling** {{ 'trabajando' if d.active else 'en espera' }} · {{ d.requests_last_hour }}/h
+              · disco libre {{ states('sensor.work_vm_00_disco_libre') }} GB
 
       - type: grid
         cards:
@@ -81,6 +108,26 @@ views:
       - type: grid
         cards:
           - type: heading
+            heading: Tdarr
+            icon: mdi:movie-cog
+          - type: markdown
+            visibility:
+              - condition: state
+                entity: sensor.work_vm_00
+                state_not: unavailable
+            content: >-
+              {% set t = state_attr('sensor.work_vm_00', 'tdarr') %}
+              **{{ t.queue }}** en cola · **{{ t.fps | round(0) }}** fps · {{ t.workers | count }} workers
+              {% for w in t.workers | sort(attribute='node') %}
+
+              **{{ w.node }}** · {{ w.kind }} · {{ w.pct | round(0) | int }} % · {{ w.eta }}<br>
+              <code>{{ '█' * ((w.pct / 10) | int) }}{{ '░' * (10 - (w.pct / 10) | int) }}</code>
+              {{ w.file | regex_replace(' WEBDL.*| WEB-DL.*| \\[.*', '') | truncate(48, true, '…') }}
+              {%- endfor %}
+
+      - type: grid
+        cards:
+          - type: heading
             heading: Tele
             icon: mdi:television-ambient-light
           - type: tile
@@ -116,15 +163,18 @@ views:
 
       - type: grid
         cards:
+          - type: weather-forecast
+            entity: weather.forecast_home
+            name: Tiempo
+            forecast_type: daily
+            show_current: false
+            show_forecast: true
+
+      - type: grid
+        cards:
           - type: heading
             heading: Sistema
             icon: mdi:chart-box-outline
-          - type: tile
-            entity: sensor.tdarr_active_workers
-            name: Tdarr workers
-          - type: tile
-            entity: sensor.tdarr_total_fps
-            name: Tdarr FPS
           - type: tile
             entity: sensor.node_proxmox_agb00_cpu_used
             name: agb00 CPU
@@ -158,9 +208,9 @@ views:
                 style: slider
           # Voice satellite indicator: a thin animated bar pinned to the bottom edge
           # while VACA is not idle (VACA itself draws nothing). Needs card-mod
-          # (HACS) for the fixed positioning. One static card per state because
-          # card-mod templates go through render_template, which HA only allows
-          # for admins, and the phone logs in as the non-admin "panel" user.
+          # (HACS) for the fixed positioning. One static card per state: the
+          # first, templated version didn't style on the phone and static cards
+          # did; not chased further.
           # Blue = listening, amber = thinking, green = speaking.
           # The bar is position:fixed, but the card still takes a grid cell when it
           # shows up, so these cards live at the very end of the last section: the

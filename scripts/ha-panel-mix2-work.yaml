@@ -1,0 +1,61 @@
+# work-vm-00's live state for the Mi MIX 2 wall panel, as a Home Assistant
+# package for the aya instance.
+#
+# The numbers come from console-panel's /state.json on work-vm-00 (dotfiles
+# nix/pkgs/console-panel, -http :9105), the same samples it draws on the
+# monitors: GPUs via NVML, llama-server slots, docling, Tdarr workers, host.
+# Only exists in encoding mode; in desktop mode these go unavailable and the
+# panel hides them.
+#
+#   kubectl -n aya exec -i deploy/homeassistant -- \
+#       sh -c 'cat > /config/packages/work_vm_00.yaml' < scripts/ha-panel-mix2-work.yaml
+#   then: rest.reload
+
+rest:
+  - resource: http://192.168.1.214:9105/state.json
+    scan_interval: 10
+    timeout: 5
+    sensor:
+      # State = Tdarr workers running; the whole snapshot rides in attributes
+      # for the panel's markdown cards.
+      - name: "work-vm-00"
+        unique_id: work_vm_00_console_state
+        icon: mdi:server
+        value_template: "{{ value_json.tdarr.workers | count }}"
+        json_attributes: [gpus, llm, docling, tdarr, host, errors]
+      - name: "RTX 3090 uso"
+        unique_id: work_vm_00_3090_util
+        unit_of_measurement: "%"
+        state_class: measurement
+        value_template: "{{ (value_json.gpus | selectattr('name', 'search', '3090') | first).util }}"
+      - name: "RTX 3090 VRAM"
+        unique_id: work_vm_00_3090_vram
+        unit_of_measurement: "GB"
+        state_class: measurement
+        value_template: "{{ (value_json.gpus | selectattr('name', 'search', '3090') | first).used_gb | round(1) }}"
+      - name: "RTX 3090 consumo"
+        unique_id: work_vm_00_3090_power
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        value_template: "{{ (value_json.gpus | selectattr('name', 'search', '3090') | first).power_w | round(0) }}"
+      - name: "RTX 3090 temperatura"
+        unique_id: work_vm_00_3090_temp
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        value_template: "{{ (value_json.gpus | selectattr('name', 'search', '3090') | first).temp }}"
+      - name: "LLM generación"
+        unique_id: work_vm_00_llm_gen
+        unit_of_measurement: "tok/s"
+        state_class: measurement
+        value_template: "{{ value_json.llm.gen_tps | round(0) }}"
+      - name: "LLM slots ocupados"
+        unique_id: work_vm_00_llm_busy
+        state_class: measurement
+        value_template: "{{ value_json.llm.busy }}"
+      - name: "work-vm-00 disco libre"
+        unique_id: work_vm_00_disk_free
+        unit_of_measurement: "GB"
+        state_class: measurement
+        value_template: "{{ (value_json.host.disk_total_gb - value_json.host.disk_used_gb) | round(0) }}"
