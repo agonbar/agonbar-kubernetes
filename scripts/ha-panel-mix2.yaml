@@ -1,0 +1,154 @@
+# Wall panel for the old Mi MIX 2 (1080x2160 portrait, ~390 css px wide), shown by
+# the VACA app on Home Assistant aya. One sections view: on a phone-width screen
+# every section stacks into a single column, so cards are ordered by how often
+# they get touched.
+#
+# Apply (creates the dashboard on first run, overwrites its config after):
+#   scripts/ha-panel-mix2.sh
+title: Panel
+views:
+  - title: Casa
+    path: casa
+    icon: mdi:home
+    type: sections
+    max_columns: 1
+    sections:
+      - type: grid
+        cards:
+          - type: markdown
+            text_only: true
+            content: >-
+              # {{ now().strftime('%H:%M') }}
+
+              {{ ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'][now().weekday()] }},
+              {{ now().day }} de {{ ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'][now().month - 1] }}
+          - type: weather-forecast
+            entity: weather.forecast_home
+            forecast_type: daily
+            show_current: true
+            show_forecast: true
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Modo de VMs
+            icon: mdi:server
+          - type: tile
+            entity: sensor.vm_mode
+            name: Modo actual
+            grid_options: { columns: full }
+          - type: button
+            name: Gaming
+            icon: mdi:gamepad-variant
+            show_state: false
+            tap_action:
+              action: perform-action
+              perform_action: script.turn_on
+              target: { entity_id: script.modo_gaming }
+              confirmation: { text: "¿Cambiar a Gaming (TINY11-FULL)?" }
+          - type: button
+            name: Encoding
+            icon: mdi:video-vintage
+            show_state: false
+            tap_action:
+              action: perform-action
+              perform_action: script.turn_on
+              target: { entity_id: script.modo_encoding }
+              confirmation: { text: "¿Cambiar a Encoding (WORK-00-ENCODE)?" }
+          - type: button
+            name: Híbrido
+            icon: mdi:monitor-multiple
+            show_state: false
+            tap_action:
+              action: perform-action
+              perform_action: script.turn_on
+              target: { entity_id: script.modo_both }
+              confirmation: { text: "¿Cambiar a Híbrido (WORK-00 + Bazzite)?" }
+          - type: button
+            name: "Off"
+            icon: mdi:power
+            show_state: false
+            tap_action:
+              action: perform-action
+              perform_action: script.turn_on
+              target: { entity_id: script.modo_off }
+              confirmation: { text: "¿Apagar todas las VMs?" }
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Tele
+            icon: mdi:television-ambient-light
+          - type: tile
+            entity: light.tele
+            name: Ambilight
+            grid_options: { columns: full }
+            features:
+              - type: light-brightness
+          - type: picture-entity
+            entity: camera.tele
+            camera_view: auto
+            show_name: false
+            show_state: false
+            grid_options: { columns: full }
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Cámara del panel
+            icon: mdi:cctv
+          - type: picture-entity
+            entity: camera.mix2
+            camera_view: auto
+            show_name: false
+            show_state: false
+            grid_options: { columns: full }
+          - type: tile
+            entity: switch.mix2_front_facing_camera
+            name: Frontal
+          - type: tile
+            entity: switch.mix2_torch
+            name: Linterna
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Sistema
+            icon: mdi:chart-box-outline
+          - type: tile
+            entity: sensor.tdarr_active_workers
+            name: Tdarr workers
+          - type: tile
+            entity: sensor.tdarr_total_fps
+            name: Tdarr FPS
+          - type: tile
+            entity: sensor.node_proxmox_agb00_cpu_used
+            name: agb00 CPU
+          - type: tile
+            entity: sensor.node_proxmox_agb00_memory_used_percentage
+            name: agb00 RAM
+          - type: tile
+            entity: switch.pi_hole
+            name: Pi-hole
+          - type: tile
+            entity: sensor.pi_hole_ads_blocked
+            name: Anuncios bloqueados
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Satélite
+            icon: mdi:microphone-message
+          - type: tile
+            entity: switch.vaca_a203991c0_mute
+            name: Micro silenciado
+          - type: tile
+            entity: sensor.vaca_a203991c0_battery
+            name: Batería
+          - type: tile
+            entity: number.vaca_a203991c0_voice_volume
+            name: Volumen voz
+            grid_options: { columns: full }
+            features:
+              - type: numeric-input
+                style: slider
