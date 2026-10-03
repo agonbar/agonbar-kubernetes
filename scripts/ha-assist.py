@@ -10,6 +10,7 @@ Modes:
     <entity_id> [...]        expose those entities to the "conversation" assistant
     --check <entity_id>      print current exposure
     --ask "<frase>" [agent]  run a sentence through the agent (default: built-in)
+    --ws '<json>' [...]      send raw websocket messages (no "id"), print each result
 """
 import asyncio, json, sys, time, jwt, aiohttp
 
@@ -53,6 +54,9 @@ def main():
         exposed = r["result"]["exposed_entities"]
         for eid in args[1:]:
             print(eid, "->", json.dumps(exposed.get(eid, "NOT LISTED")))
+    elif args and args[0] == "--ws":
+        for r in asyncio.run(ws_call([json.loads(a) for a in args[1:]])):
+            print(json.dumps(r))
     elif args and args[0] == "--ask":
         agent = args[2] if len(args) > 2 else None
         payload = {"type": "conversation/process", "text": args[1], "language": "es"}
