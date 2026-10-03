@@ -1,0 +1,75 @@
+# Presence-driven screen for the Mi MIX 2 wall panel, as a Home Assistant package
+# for the aya instance.
+#
+# Presence comes from IP Webcam's motion detection on the front camera. VACA has
+# its own camera-based motion detection, but Android 9 lets only one app hold a
+# camera, and IP Webcam already does. IP Webcam keeps detecting with the screen
+# off; it needs "Registro de datos" enabled in the app, or sensors.json is empty
+# and binary_sensor.mix2_motion_active stays unavailable.
+#
+# VACA's own timeout is disabled (screen_always_on) so HA is the only thing that
+# turns the screen off. Wake word and proximity can still turn it on; the "stale"
+# trigger turns it back off if nobody shows up.
+#
+#   kubectl -n aya exec -i deploy/homeassistant -- \
+#       sh -c 'cat > /config/packages/panel_mix2.yaml' < scripts/ha-panel-mix2-presence.yaml
+#   then: automation.reload
+
+automation:
+  - id: panel_mix2_screen_presence
+    alias: "Panel Mi MIX 2: pantalla según presencia"
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.mix2_motion_active
+        to: "on"
+        id: motion
+      - trigger: state
+        entity_id: binary_sensor.mix2_motion_active
+        to: "off"
+        for: "00:05:00"
+        id: idle
+      - trigger: state
+        entity_id: switch.vaca_a203991c0_screen
+        to: "on"
+        for: "00:05:00"
+        id: idle
+    actions:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: motion
+            sequence:
+              - action: switch.turn_on
+                target: { entity_id: switch.vaca_a203991c0_screen }
+          - conditions:
+              - condition: trigger
+                id: idle
+              - condition: state
+                entity_id: binary_sensor.mix2_motion_active
+                state: "off"
+                for: "00:05:00"
+            sequence:
+              - action: switch.turn_off
+                target: { entity_id: switch.vaca_a203991c0_screen }
+
+  # IP Webcam forgets the front camera whenever its server restarts (reboot, app
+  # update); the back camera faces the wall and sees nothing.
+  - id: panel_mix2_front_camera
+    alias: "Panel Mi MIX 2: mantener cámara frontal"
+    triggers:
+      - trigger: state
+        entity_id: switch.mix2_front_facing_camera
+        to: "off"
+        for: "00:00:10"
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: switch.mix2_front_facing_camera
+        state: "off"
+    actions:
+      - action: switch.turn_on
+        target: { entity_id: switch.mix2_front_facing_camera }
+      - action: switch.turn_on
+        target: { entity_id: switch.mix2_motion_detection }
