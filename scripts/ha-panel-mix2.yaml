@@ -1,17 +1,21 @@
-# Wall panel for the old Mi MIX 2 (1080x2160 portrait, ~390 css px wide), shown by
-# the VACA app on Home Assistant aya. One sections view: on a phone-width screen
-# every section stacks into a single column, so cards are ordered by how often
-# they get touched.
+# Wall panel for the old Mi MIX 2, shown by the VACA app on Home Assistant aya.
+# The phone sits in landscape (2160x1080, ~785x393 css px), which fits two
+# section columns. kiosk-mode (HACS) hides the header and sidebar for non-admin
+# users only, i.e. for the "panel" user the phone logs in as; admins still get
+# the normal UI on this dashboard.
 #
 # Apply (creates the dashboard on first run, overwrites its config after):
 #   scripts/ha-panel-mix2.sh
 title: Panel
+kiosk_mode:
+  non_admin_settings:
+    kiosk: true
 views:
   - title: Casa
     path: casa
     icon: mdi:home
     type: sections
-    max_columns: 1
+    max_columns: 2
     sections:
       - type: grid
         cards:
