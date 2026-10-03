@@ -11,6 +11,7 @@ Modes:
     --check <entity_id>      print current exposure
     --ask "<frase>" [agent]  run a sentence through the agent (default: built-in)
     --ws '<json>' [...]      send raw websocket messages (no "id"), print each result
+    --flow <handler> '<json>' [...]  start a config flow, submit each json as a step
 """
 import asyncio, json, sys, time, jwt, aiohttp
 
@@ -47,6 +48,19 @@ async def ws_call(messages):
     return out
 
 
+async def flow(handler, steps):
+    headers = {"Authorization": "Bearer " + mint_token()}
+    base = URL + "/api/config/config_entries/flow"
+    async with aiohttp.ClientSession(headers=headers) as s:
+        async with s.post(base, json={"handler": handler}) as r:
+            res = await r.json()
+        print(json.dumps(res))
+        for step in steps:
+            async with s.post(f"{base}/{res['flow_id']}", json=step) as r:
+                res = await r.json()
+            print(json.dumps(res))
+
+
 def main():
     args = sys.argv[1:]
     if args and args[0] == "--check":
@@ -57,6 +71,8 @@ def main():
     elif args and args[0] == "--ws":
         for r in asyncio.run(ws_call([json.loads(a) for a in args[1:]])):
             print(json.dumps(r))
+    elif args and args[0] == "--flow":
+        asyncio.run(flow(args[1], [json.loads(a) for a in args[2:]]))
     elif args and args[0] == "--ask":
         agent = args[2] if len(args) > 2 else None
         payload = {"type": "conversation/process", "text": args[1], "language": "es"}
