@@ -7,13 +7,22 @@
 # off; it needs "Registro de datos" enabled in the app, or sensors.json is empty
 # and binary_sensor.mix2_motion_active stays unavailable.
 #
-# VACA's own timeout is disabled (screen_always_on) so HA is the only thing that
-# turns the screen off. Wake word and proximity can still turn it on; the "stale"
-# trigger turns it back off if nobody shows up.
+# VACA's own timeout and proximity wake are disabled (screen_always_on on,
+# screen_on_with_proximity off) so HA alone drives the screen. Waving over the
+# proximity sensor toggles it. A wave-off sets panel_mix2_manual_off, which makes
+# motion ignored until the room has been empty for five minutes; otherwise the
+# person who just turned it off would turn it straight back on. The wake word can
+# still turn the screen on; the second "idle" trigger turns it back off if nobody
+# shows up.
 #
 #   kubectl -n aya exec -i deploy/homeassistant -- \
 #       sh -c 'cat > /config/packages/panel_mix2.yaml' < scripts/ha-panel-mix2-presence.yaml
 #   then: automation.reload
+
+input_boolean:
+  panel_mix2_manual_off:
+    name: "Panel Mi MIX 2: apagado a mano"
+    icon: mdi:hand-back-right-off
 
 automation:
   - id: panel_mix2_screen_presence
@@ -39,6 +48,9 @@ automation:
           - conditions:
               - condition: trigger
                 id: motion
+              - condition: state
+                entity_id: input_boolean.panel_mix2_manual_off
+                state: "off"
             sequence:
               - action: switch.turn_on
                 target: { entity_id: switch.vaca_a203991c0_screen }
@@ -52,6 +64,35 @@ automation:
             sequence:
               - action: switch.turn_off
                 target: { entity_id: switch.vaca_a203991c0_screen }
+              - action: input_boolean.turn_off
+                target: { entity_id: input_boolean.panel_mix2_manual_off }
+
+  - id: panel_mix2_screen_wave
+    alias: "Panel Mi MIX 2: pasar la mano enciende o apaga"
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: event.vaca_a203991c0_proximity
+    conditions:
+      - condition: template
+        value_template: "{{ trigger.to_state.attributes.event_type == 'proximity_near' }}"
+    actions:
+      - if:
+          - condition: state
+            entity_id: switch.vaca_a203991c0_screen
+            state: "on"
+        then:
+          - action: switch.turn_off
+            target: { entity_id: switch.vaca_a203991c0_screen }
+          - action: input_boolean.turn_on
+            target: { entity_id: input_boolean.panel_mix2_manual_off }
+        else:
+          - action: switch.turn_on
+            target: { entity_id: switch.vaca_a203991c0_screen }
+          - action: input_boolean.turn_off
+            target: { entity_id: input_boolean.panel_mix2_manual_off }
+      # one wave = one toggle, even if the sensor flickers near/far
+      - delay: "00:00:02"
 
   # IP Webcam forgets the front camera whenever its server restarts (reboot, app
   # update); the back camera faces the wall and sees nothing.
