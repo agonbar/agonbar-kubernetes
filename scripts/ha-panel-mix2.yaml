@@ -19,69 +19,6 @@ views:
     sections:
       - type: grid
         cards:
-          # Voice satellite indicator: a thin animated bar pinned to the top edge
-          # while VACA is not idle (VACA itself draws nothing). Needs card-mod
-          # (HACS) for the fixed positioning. One static card per state because
-          # card-mod templates go through render_template, which HA only allows
-          # for admins, and the phone logs in as the non-admin "panel" user.
-          # Blue = listening, amber = thinking, green = speaking.
-          - type: conditional
-            conditions:
-              - condition: state
-                entity: assist_satellite.vaca_a203991c0
-                state: listening
-            card:
-              type: markdown
-              content: "&nbsp;"
-              card_mod:
-                style: |
-                  ha-card {
-                    position: fixed !important; inset: 0 0 auto 0 !important; z-index: 9;
-                    height: 8px !important; min-height: 0 !important; max-height: 8px !important; padding: 0; overflow: hidden;
-                    border: none; border-radius: 0;
-                    background: linear-gradient(90deg, #03a9f4, #7c4dff, #03a9f4, #7c4dff);
-                    background-size: 200% 100%;
-                    animation: va-slide 1.2s linear infinite;
-                  }
-                  @keyframes va-slide { from { background-position: 0 0; } to { background-position: 200% 0; } }
-          - type: conditional
-            conditions:
-              - condition: state
-                entity: assist_satellite.vaca_a203991c0
-                state: processing
-            card:
-              type: markdown
-              content: "&nbsp;"
-              card_mod:
-                style: |
-                  ha-card {
-                    position: fixed !important; inset: 0 0 auto 0 !important; z-index: 9;
-                    height: 8px !important; min-height: 0 !important; max-height: 8px !important; padding: 0; overflow: hidden;
-                    border: none; border-radius: 0;
-                    background: linear-gradient(90deg, #ffb300, #ff6f00, #ffb300, #ff6f00);
-                    background-size: 200% 100%;
-                    animation: va-slide 1.2s linear infinite;
-                  }
-                  @keyframes va-slide { from { background-position: 0 0; } to { background-position: 200% 0; } }
-          - type: conditional
-            conditions:
-              - condition: state
-                entity: assist_satellite.vaca_a203991c0
-                state: responding
-            card:
-              type: markdown
-              content: "&nbsp;"
-              card_mod:
-                style: |
-                  ha-card {
-                    position: fixed !important; inset: 0 0 auto 0 !important; z-index: 9;
-                    height: 8px !important; min-height: 0 !important; max-height: 8px !important; padding: 0; overflow: hidden;
-                    border: none; border-radius: 0;
-                    background: linear-gradient(90deg, #00e676, #00bfa5, #00e676, #00bfa5);
-                    background-size: 200% 100%;
-                    animation: va-slide 1.2s linear infinite;
-                  }
-                  @keyframes va-slide { from { background-position: 0 0; } to { background-position: 200% 0; } }
           - type: markdown
             text_only: true
             content: >-
@@ -219,3 +156,72 @@ views:
             features:
               - type: numeric-input
                 style: slider
+          # Voice satellite indicator: a thin animated bar pinned to the bottom edge
+          # while VACA is not idle (VACA itself draws nothing). Needs card-mod
+          # (HACS) for the fixed positioning. One static card per state because
+          # card-mod templates go through render_template, which HA only allows
+          # for admins, and the phone logs in as the non-admin "panel" user.
+          # Blue = listening, amber = thinking, green = speaking.
+          # The bar is position:fixed, but the card still takes a grid cell when it
+          # shows up, so these cards live at the very end of the last section: the
+          # cell opens below everything else and nothing visible moves.
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: assist_satellite.vaca_a203991c0
+                state: listening
+            grid_options: { columns: full, rows: auto }
+            card:
+              type: markdown
+              content: "&nbsp;"
+              card_mod:
+                style: |
+                  ha-card {
+                    position: fixed !important; inset: auto 0 0 0 !important; z-index: 9;
+                    height: 8px !important; min-height: 0 !important; max-height: 8px !important; padding: 0; overflow: hidden;
+                    border: none; border-radius: 0;
+                    background: linear-gradient(90deg, #03a9f4, #7c4dff, #03a9f4, #7c4dff);
+                    background-size: 200% 100%;
+                    animation: va-slide 1.2s linear infinite;
+                  }
+                  @keyframes va-slide { from { background-position: 0 0; } to { background-position: 200% 0; } }
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: assist_satellite.vaca_a203991c0
+                state: processing
+            grid_options: { columns: full, rows: auto }
+            card:
+              type: markdown
+              content: "&nbsp;"
+              card_mod:
+                style: |
+                  ha-card {
+                    position: fixed !important; inset: auto 0 0 0 !important; z-index: 9;
+                    height: 8px !important; min-height: 0 !important; max-height: 8px !important; padding: 0; overflow: hidden;
+                    border: none; border-radius: 0;
+                    background: linear-gradient(90deg, #ffb300, #ff6f00, #ffb300, #ff6f00);
+                    background-size: 200% 100%;
+                    animation: va-slide 1.2s linear infinite;
+                  }
+                  @keyframes va-slide { from { background-position: 0 0; } to { background-position: 200% 0; } }
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: assist_satellite.vaca_a203991c0
+                state: responding
+            grid_options: { columns: full, rows: auto }
+            card:
+              type: markdown
+              content: "&nbsp;"
+              card_mod:
+                style: |
+                  ha-card {
+                    position: fixed !important; inset: auto 0 0 0 !important; z-index: 9;
+                    height: 8px !important; min-height: 0 !important; max-height: 8px !important; padding: 0; overflow: hidden;
+                    border: none; border-radius: 0;
+                    background: linear-gradient(90deg, #00e676, #00bfa5, #00e676, #00bfa5);
+                    background-size: 200% 100%;
+                    animation: va-slide 1.2s linear infinite;
+                  }
+                  @keyframes va-slide { from { background-position: 0 0; } to { background-position: 200% 0; } }
