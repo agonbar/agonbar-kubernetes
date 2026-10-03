@@ -21,8 +21,11 @@ URL = "http://127.0.0.1:8123"
 
 def mint_token():
     auth = json.load(open(STORAGE + "auth"))["data"]
-    # any refresh_token carrying a jwt_key works; avoid system tokens
-    cands = [r for r in auth["refresh_tokens"] if r.get("jwt_key") and r.get("token_type") != "system"]
+    # any admin's refresh_token carrying a jwt_key works; avoid system tokens and
+    # non-admin users (the wall panel logs in as one and would win on last_used_at)
+    admins = {u["id"] for u in auth["users"] if "system-admin" in u.get("group_ids", [])}
+    cands = [r for r in auth["refresh_tokens"]
+             if r.get("jwt_key") and r.get("token_type") != "system" and r["user_id"] in admins]
     if not cands:
         raise SystemExit("no usable refresh_token with a jwt_key")
     rt = sorted(cands, key=lambda r: r.get("last_used_at") or "", reverse=True)[0]
