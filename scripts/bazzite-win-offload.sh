@@ -68,7 +68,10 @@ case ${1:-} in
     "${B[@]}" "ssh -i ~/$KEY -o StrictHostKeyChecking=accept-new $NAS02 sudo -n rsync --version | head -1"
     ;;
   run)
-    script=$(printf '#!/bin/bash\nset -u\nrc=0\n'; rsync_lines "--info=stats1" | sed 's/$/ || rc=$?/'
+    # The NetBird path to nas02 drops now and then (No route to host, rc 255); rsync
+    # resumes, so each folder retries for up to ~2 h before the run gives up on it.
+    script=$(printf '#!/bin/bash\nset -u\nrc=0\ntry(){ for i in $(seq 24); do "$@" && return 0; r=$?; echo "== $(date -Is) rc=$r, retry $i"; sleep 300; done; rc=$r; }\n'
+             rsync_lines "--info=stats1" | sed 's/^/try /'
              printf 'echo "== $(date -Is) done rc=$rc"\n')
     "${B[@]}" "cat > ~/win-offload.sh && chmod +x ~/win-offload.sh" <<<"$script"
     # Game Mode idle-suspends the VM, which would freeze the transfer for hours.
@@ -101,7 +104,9 @@ case ${1:-} in
     set_keys "nopasswd = []"
     ;;
   finish)  # unattended: wait for run, then clean (only if verify is empty), always revoke
-    while "${B[@]}" "XDG_RUNTIME_DIR=/run/user/1000 systemctl --user is-active -q $UNIT"; do sleep 300; done
+    # An unreachable Bazzite (reboot, Encoding mode) prints nothing, which keeps us waiting.
+    until state=$("${B[@]}" "XDG_RUNTIME_DIR=/run/user/1000 systemctl --user is-active $UNIT" || true)
+          [[ $state == inactive || $state == failed ]]; do sleep 300; done
     "${B[@]}" "tail -n 1 ~/win-offload.log"
     "$0" clean || echo "clean skipped, sources left on C:"
     "$0" revoke
