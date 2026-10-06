@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """The RTX 3090's LEDs follow GPU load on Bazzite (VM 104).
 
-Idle, the card breathes slowly in purple. As the load climbs it stops
-breathing and slides through magenta into orange, so a game at full tilt is a
+Idle, the card breathes in purple, between full and a quarter, never dark. As
+the load climbs it stops breathing and slides through magenta into orange, so a game at full tilt is a
 steady bright orange. The load is smoothed over ~1.5 s, so it flows instead of
 flickering with every frame.
 
 Every I2C write busy-waits in the NVIDIA driver, so animating from here cost
-~8 % of a core at 45 writes/s. The breathing is the chip's own mode instead,
-and under load the colour is only rewritten when it visibly changes.
+~8 % of a core at 45 writes/s. The breathing is the chip's own fade-in mode
+instead, which fades between colours 2 and 3 (its breathing mode goes to black,
+there is no floor), and the colour is only rewritten when it visibly changes.
 
 The card is an MSI RTX 3090 Gaming X Trio: its RGB chip sits at 0x68 on the
 NVIDIA driver's I2C port 1, and the protocol is OpenRGB's MSIGPUController,
@@ -42,7 +43,8 @@ HZ = 4
 SMOOTH_S = 1.5
 STEP = 6          # rewrite a colour only when a channel moves more than this
 IDLE = (0.12, 0.18)  # breathe below the first load, stop above the second
-BREATHING, STATIC, SLOW = 0x04, 0x13, 0x04
+FLOOR = 0.25      # the dim end of the breathing
+FADEIN, STATIC, MEDIUM = 0x14, 0x13, 0x02
 # purple at idle, magenta at half load, orange at full.
 PALETTE = [(0.0, (90, 0, 255)), (0.5, (255, 0, 150)), (1.0, (255, 70, 0))]
 UNIT = """[Unit]
@@ -79,7 +81,7 @@ class Card:
         self.fd = os.open(find_bus(), os.O_RDWR)
         fcntl.ioctl(self.fd, I2C_SLAVE, ADDR)
         self.write(0x36, 100)  # brightness
-        self.write(0x38, SLOW)  # effect speed, for breathing
+        self.write(0x38, MEDIUM)  # effect speed, for breathing
         self.write(0x26, 0)
         self.mode, self.rgb = None, None
 
@@ -89,9 +91,14 @@ class Card:
     def show(self, mode, rgb):
         if mode != self.mode:
             self.write(0x22, mode)
-            self.mode = mode
+            self.mode, self.rgb = mode, None  # the two modes read different registers
         if self.rgb is None or max(abs(a - b) for a, b in zip(rgb, self.rgb)) > STEP:
-            for reg, v in zip((0x30, 0x31, 0x32), rgb):
+            if mode == FADEIN:
+                dim = tuple(round(v * FLOOR) for v in rgb)
+                regs, vals = (0x27, 0x28, 0x29, 0x2A, 0x2B, 0x2C), rgb + dim
+            else:
+                regs, vals = (0x30, 0x31, 0x32), rgb
+            for reg, v in zip(regs, vals):
                 self.write(reg, v)
             self.rgb = rgb
 
@@ -123,7 +130,7 @@ def run(target):
     while True:
         u += (target() - u) * alpha
         idle = u < IDLE[1] if idle else u < IDLE[0]
-        card.show(BREATHING if idle else STATIC, palette(u))
+        card.show(FADEIN if idle else STATIC, palette(u))
         time.sleep(1 / HZ)
 
 
