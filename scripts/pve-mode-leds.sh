@@ -5,7 +5,7 @@
 #   Encoding (111)      blue
 #   Híbrido (101+104)   purple
 #   Gaming Full (103)   orange
-#   Off (no VM)         LEDs off
+#   Off (no VM)         red
 #   anything else       left as they are (a vm-mode switch in progress)
 #
 # Same mode table as sensor.vm_mode in scripts/ha-vm-mode.yaml.
@@ -66,21 +66,17 @@ check_chip() {
 	[[ $name == LED-0116 ]] || { echo "i2c-$BUS $ADDR is '$name', expected LED-0116" >&2; return 1; }
 }
 
-# paint RRGGBB, or "off"
+# paint RRGGBB
 paint() {
 	local i r g b
-	if [[ $1 == off ]]; then
-		reg_write 0x8021 0 # ENE_MODE_OFF
-	else
-		r=$((16#${1:0:2})) g=$((16#${1:2:2})) b=$((16#${1:4:2}))
-		for i in 0 1 2 3 4; do
-			reg_write $((0x8010 + 3 * i)) $r
-			reg_write $((0x8011 + 3 * i)) $b
-			reg_write $((0x8012 + 3 * i)) $g
-		done
-		reg_write 0x8020 0 # not direct mode
-		reg_write 0x8021 1 # ENE_MODE_STATIC
-	fi
+	r=$((16#${1:0:2})) g=$((16#${1:2:2})) b=$((16#${1:4:2}))
+	for i in 0 1 2 3 4; do
+		reg_write $((0x8010 + 3 * i)) $r
+		reg_write $((0x8011 + 3 * i)) $b
+		reg_write $((0x8012 + 3 * i)) $g
+	done
+	reg_write 0x8020 0 # not direct mode
+	reg_write 0x8021 1 # ENE_MODE_STATIC
 	reg_write 0x80a0 1 # apply
 }
 
@@ -96,7 +92,7 @@ mode_colour() {
 		111) echo 0000ff ;;
 		"101 104") echo 8000ff ;;
 		103) echo ff4000 ;;
-		"") echo off ;;
+		"") echo ff0000 ;;
 		*) echo keep ;;
 	esac
 }
