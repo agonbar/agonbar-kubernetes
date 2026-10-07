@@ -36,10 +36,11 @@ s02(){ printf '%s\n' "${NAS02_SUDO:?}" | "${N02[@]}" "sudo -S -p '' sh -c '$1'";
 
 # One rsync per folder. -rt only: NTFS through lowntfs-3g has no meaningful owners or modes,
 # and RAID/adrian has a restricted NFSv4 ACL (chmod is EPERM even for root), files inherit it.
-rsync_lines() {
-  local extra=$1 s name path
+rsync_lines() {  # $2 = skip-keep: only the folders clean will delete
+  local extra=$1 s name path mode
   for s in "${SRCS[@]}"; do
-    IFS='|' read -r name path _ <<<"$s"
+    IFS='|' read -r name path mode <<<"$s"
+    [[ ${2:-} == skip-keep && $mode == keep ]] && continue
     printf 'rsync -rt %s --chown=adrian:adrian --partial-dir=.rsync-partial -e "ssh -i $HOME/%s -o BatchMode=yes" --rsync-path="sudo rsync" "%s/%s/" "%s:%s/%s/"\n' \
       "$extra" "$KEY" "$C" "$path" "$NAS02" "$DEST" "$name"
   done
@@ -84,7 +85,8 @@ case ${1:-} in
     ;;
   verify)
     # Any rsync failure prints a line, so an empty result really means "all there".
-    "${B[@]}" "bash -s" <<<"{ $(rsync_lines "-n --itemize-changes" | sed 's/$/ 2>\&1 || echo "rsync failed: $?";/'); } | grep -v '^skipping non-regular' || true"
+    # Documents is skipped: it stays on C: and games keep writing to it.
+    "${B[@]}" "bash -s" <<<"{ $(rsync_lines "-n --itemize-changes" skip-keep | sed 's/$/ 2>\&1 || echo "rsync failed: $?";/') } | grep -v '^skipping non-regular' || true"
     ;;
   clean)
     out=$("$0" verify)
