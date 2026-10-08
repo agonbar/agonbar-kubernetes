@@ -23,7 +23,7 @@ spec:
         app: palworld
     spec:
       containers:
-        - image: thijsvanloef/palworld-server-docker:v2.7.1
+        - image: thijsvanloef/palworld-server-docker:v2.8.0
           name: palworld
           env:
             # v2.0 switched the wrapper's control backend from RCON to the REST
@@ -61,6 +61,14 @@ spec:
               value: "Europe/Madrid"
             - name: PUBLIC_IP
               value: "80.241.214.254"
+            # The wrapper only updates the game on boot, so a pod that stays up
+            # drifts behind Steam and clients get a version mismatch. This checks
+            # hourly and restarts on a new build, warning players 30 min before.
+            - name: AUTO_UPDATE_ENABLED
+              value: "true"
+            # v2.8 turned UE4SS mod loading on by default. Keep the server vanilla.
+            - name: MOD_ENABLED
+              value: "false"
           ports:
             - containerPort: 8211
               name: steamport
