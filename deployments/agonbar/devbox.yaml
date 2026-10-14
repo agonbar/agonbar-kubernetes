@@ -1,0 +1,164 @@
+# Dev box: a container that behaves like a small VM. SSH in (VS Code
+# Remote-SSH), apt install whatever, and it survives restarts because the whole
+# root filesystem that matters lives on ovh02 under /docker/devbox. The image
+# is only used once, to seed that directory. After that, upgrades happen with
+# apt inside the box, not by bumping the image tag.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: devbox-keys
+  namespace: agonbar
+data:
+  # One public key per line. Restart the pod after changing it.
+  authorized_keys: |
+    ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJlNtO6gRYFKiP7/O/I2i56NLZCf4KD1nmgbckN4GryU panda@DESKTOP-0UKOTOH
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: devbox-scripts
+  namespace: agonbar
+data:
+  seed.sh: |
+    #!/bin/sh
+    set -eu
+    [ -e /persist/.seeded ] && exit 0
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y --no-install-recommends \
+      openssh-server sudo ca-certificates curl git nano less
+    echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/ubuntu
+    chmod 440 /etc/sudoers.d/ubuntu
+    cat > /etc/ssh/sshd_config.d/devbox.conf <<'EOF'
+    PasswordAuthentication no
+    KbdInteractiveAuthentication no
+    PermitRootLogin no
+    AuthorizedKeysFile .ssh/authorized_keys /etc/ssh/authorized_keys.d/%u
+    EOF
+    cp -a /usr /etc /var /opt /home /root /srv /persist/
+    touch /persist/.seeded
+  start.sh: |
+    #!/bin/sh
+    set -eu
+    mkdir -p /run/sshd /etc/ssh/authorized_keys.d
+    install -m 644 /keys/authorized_keys /etc/ssh/authorized_keys.d/ubuntu
+    # No systemd in here. Services that must come back after a restart
+    # (apache, mysql) go in an executable /etc/rc.local.
+    if [ -x /etc/rc.local ]; then /etc/rc.local || true; fi
+    exec /usr/sbin/sshd -D -e
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: devbox
+  name: devbox
+  namespace: agonbar
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: devbox
+  template:
+    metadata:
+      labels:
+        app: devbox
+    spec:
+      hostname: devbox
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      # pause becomes PID 1 and reaps the daemons started by hand.
+      shareProcessNamespace: true
+      initContainers:
+        - image: ubuntu:24.04
+          name: seed
+          command: [sh, /scripts/seed.sh]
+          volumeMounts:
+            - name: devbox
+              mountPath: /persist
+            - name: scripts
+              mountPath: /scripts
+      containers:
+        - image: ubuntu:24.04
+          name: devbox
+          command: [sh, /scripts/start.sh]
+          ports:
+            - containerPort: 22
+              name: ssh
+              protocol: TCP
+          volumeMounts:
+            - name: devbox
+              mountPath: /usr
+              subPath: usr
+            - name: devbox
+              mountPath: /etc
+              subPath: etc
+            - name: devbox
+              mountPath: /var
+              subPath: var
+            - name: devbox
+              mountPath: /opt
+              subPath: opt
+            - name: devbox
+              mountPath: /home
+              subPath: home
+            - name: devbox
+              mountPath: /root
+              subPath: root
+            - name: devbox
+              mountPath: /srv
+              subPath: srv
+            - name: scripts
+              mountPath: /scripts
+            - name: keys
+              mountPath: /keys
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 8Gi
+          livenessProbe:
+            tcpSocket:
+              port: 22
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 6
+      volumes:
+      - name: devbox
+        hostPath:
+          path: /docker/devbox
+          type: DirectoryOrCreate
+      - name: scripts
+        configMap:
+          name: devbox-scripts
+      - name: keys
+        configMap:
+          name: devbox-keys
+      nodeSelector:
+        kubernetes.io/hostname: "ovh02"
+      imagePullSecrets:
+        - name: dockerhub-secret
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: devbox-lb
+  namespace: agonbar
+spec:
+  type: LoadBalancer
+
+  selector:
+    app: devbox
+
+  ports:
+    - protocol: TCP
+      port: 2222
+      targetPort: 22
+      name: ssh
