@@ -1,0 +1,61 @@
+# Anuncia nvidia.com/gpu en los nodos gpu=nvidia (hoy solo kubernetes-10, A2000).
+# En NixOS no hay /usr/bin/nvidia-container-runtime: el nodo pone el runtime en el
+# PATH de k3s (RuntimeClass nvidia) en modo cdi, que traduce NVIDIA_VISIBLE_DEVICES
+# a nvidia.com/gpu=N del spec CDI que genera NixOS. Por eso index y no uuid: el
+# spec de NixOS nombra las GPUs por índice. Los pods con GPU van con
+# runtimeClassName: nvidia.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nvidia-device-plugin
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: nvidia-device-plugin
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nvidia-device-plugin
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nvidia-device-plugin
+    spec:
+      priorityClassName: system-node-critical
+      runtimeClassName: nvidia
+      nodeSelector:
+        gpu: nvidia
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      containers:
+      - name: nvidia-device-plugin
+        image: nvcr.io/nvidia/k8s-device-plugin:v0.20.1
+        env:
+        - name: FAIL_ON_INIT_ERROR
+          value: "false"
+        - name: DEVICE_ID_STRATEGY
+          value: index
+        - name: NVIDIA_VISIBLE_DEVICES
+          value: all
+        - name: NVIDIA_DRIVER_CAPABILITIES
+          value: utility
+        resources:
+          requests:
+            cpu: 10m
+            memory: 30Mi
+          limits:
+            memory: 100Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+        - name: device-plugin
+          mountPath: /var/lib/kubelet/device-plugins
+      volumes:
+      - name: device-plugin
+        hostPath:
+          path: /var/lib/kubelet/device-plugins
