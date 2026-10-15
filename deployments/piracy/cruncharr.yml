@@ -65,6 +65,10 @@ spec:
               value: /downloads/cruncharr
             - name: ANIDL_DIR_TRASH
               value: /downloads/cruncharr/_trash
+            # Japanese plus the Castilian dub when CR has one; a missing dub is skipped.
+            # spa-ES is Castilian, spa/spa-419 are Latin American. The default is jpn only.
+            - name: ANIDL_DOWNLOAD_DUBLANG
+              value: "jpn,spa-ES"
           ports:
             - containerPort: 3000
               protocol: TCP
