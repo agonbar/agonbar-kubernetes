@@ -1,0 +1,155 @@
+# ArchiSteamFarm idles Steam trading cards. Bots are added from ASF-ui
+# (asf.${BASE_DOMAIN}), which writes <Bot>.json into the config volume.
+#
+# Headless: there is no console in the pod, so ASF asks for Steam Guard codes
+# and passwords through ASF-ui instead.
+#
+# The init container writes IPC.config every start (bind on all interfaces,
+# trust Traefik's pod network so the anti-bruteforce ban hits the real client
+# and not the proxy) and seeds ASF.json only once, because ASF-ui rewrites it.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: archisteamfarm
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: archisteamfarm
+  namespace: games
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: archisteamfarm
+  template:
+    metadata:
+      labels:
+        app: archisteamfarm
+    spec:
+      initContainers:
+        - name: seed-config
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              cat > /config/IPC.config <<'EOF'
+              {
+                "Kestrel": {
+                  "Endpoints": {
+                    "HTTP": {
+                      "Url": "http://*:1242"
+                    }
+                  },
+                  "KnownNetworks": ["10.42.0.0/16"]
+                }
+              }
+              EOF
+              if [ ! -f /config/ASF.json ]; then
+                printf '{\n  "Headless": true,\n  "IPCPassword": "%s"\n}\n' "$IPC_PASSWORD" > /config/ASF.json
+              fi
+          env:
+            - name: IPC_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: archisteamfarm
+                  key: ipcPassword
+          volumeMounts:
+            - name: data
+              mountPath: /config
+              subPath: config
+      containers:
+        - image: justarchi/archisteamfarm:stable
+          name: archisteamfarm
+          ports:
+            - containerPort: 1242
+              name: ipc
+              protocol: TCP
+          volumeMounts:
+            - name: data
+              mountPath: /app/config
+              subPath: config
+            - name: data
+              mountPath: /app/logs
+              subPath: logs
+          resources:
+            requests:
+              cpu: 50m
+              memory: 192Mi
+          livenessProbe:
+            tcpSocket:
+              port: 1242
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 6
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: archisteamfarm-data
+      nodeSelector:
+        kubernetes.io/arch: amd64
+        svccontroller.k3s.cattle.io/lbpool: lamg
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: archisteamfarm
+  namespace: games
+spec:
+  selector:
+    app: archisteamfarm
+  ports:
+    - protocol: TCP
+      port: 1242
+      targetPort: 1242
+      name: ipc
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: archisteamfarm-https
+  namespace: games
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: asf.${BASE_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: archisteamfarm
+                port:
+                  number: 1242
+  tls:
+    - secretName: asf.${BASE_DOMAIN}
+      hosts:
+        - asf.${BASE_DOMAIN}
+
+---
+# NFS over the LAN to nas02, like the other game servers pinned to the home
+# pool. Config and bot databases only, a few MB.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: archisteamfarm-data
+  namespace: games
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-nfs-ssd-lan
+  resources:
+    requests:
+      storage: 1Gi
