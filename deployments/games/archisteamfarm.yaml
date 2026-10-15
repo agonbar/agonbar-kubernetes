@@ -64,6 +64,32 @@ spec:
             - name: data
               mountPath: /config
               subPath: config
+        # ASFAchievementManager adds the alist/aset/areset commands. The release
+        # is pinned by version and SHA512 and kept on the volume, so a restart
+        # does not depend on GitHub. To upgrade, bump both values.
+        - name: achievement-manager
+          image: alpine:3.22
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              dir=/plugins/ASFAchievementManager
+              [ "$(cat "$dir/.version" 2>/dev/null)" = "$VERSION" ] && exit 0
+              wget -qO /tmp/p.zip "https://github.com/CatPoweredPlugins/ASFAchievementManager/releases/download/$VERSION/ASFAchievementManager.zip"
+              echo "$SHA512  /tmp/p.zip" | sha512sum -c -
+              rm -rf "$dir" && mkdir -p "$dir"
+              unzip -q /tmp/p.zip -d "$dir"
+              echo "$VERSION" > "$dir/.version"
+          env:
+            - name: VERSION
+              value: "1.1.0.0"
+            - name: SHA512
+              value: cd13fd93b8758b6259001b98bf38f68054101e26b81714e86caf01106a30f86f4ab886250343ff7f2f886f9d4d6a687c8ed973858b28005524cfef2f3b77e358
+          volumeMounts:
+            - name: data
+              mountPath: /plugins
+              subPath: plugins
       containers:
         - image: justarchi/archisteamfarm:stable
           name: archisteamfarm
@@ -78,6 +104,9 @@ spec:
             - name: data
               mountPath: /app/logs
               subPath: logs
+            - name: data
+              mountPath: /app/plugins
+              subPath: plugins
           resources:
             requests:
               cpu: 50m
