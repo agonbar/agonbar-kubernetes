@@ -1,0 +1,14 @@
+<!-- Mando en reproduccion: A pausa, B parar, X lista de subtitulos, Y menu, LB/RB saltos.
+     1147 es la lista de pistas de subtitulos de Arctic Fuse 3. -->
+<keymap>
+  <FullscreenVideo>
+    <joystick profile="game.controller.default">
+      <a>Pause</a>
+      <b>Stop</b>
+      <x>ActivateWindow(1147)</x>
+      <y>OSD</y>
+      <leftbumper>Seek(-10)</leftbumper>
+      <rightbumper>Seek(30)</rightbumper>
+    </joystick>
+  </FullscreenVideo>
+</keymap>
