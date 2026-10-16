@@ -16,7 +16,7 @@ metadata:
   labels:
     app: strata
 spec:
-  replicas: 0  # parado mientras se copia el modelo al SSD; volver a 1
+  replicas: 1
   strategy:
     type: Recreate  # una GPU y un hostPath
   selector:
