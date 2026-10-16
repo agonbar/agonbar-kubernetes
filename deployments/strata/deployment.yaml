@@ -1,9 +1,12 @@
 # Strata (github.com/Niko1221/Strata): Qwen3.8-Flash-Next IQ3_XXS a 256K de
 # contexto en la A2000 de kubernetes-10. Los modelos y la config que escribe el
-# setup del primer arranque viven en el disco scsi1 del nodo (/var/lib/strata).
+# setup del primer arranque viven en el SSD raíz del nodo (/var/lib/strata-ssd).
+# No en el HDD (scsi1, /var/lib/strata): el prefill lee el shard PLE con E/S
+# directa, y con prompts largos el raidz2 mecánico dejaba al motor 60 s sin
+# avanzar, y el vigilante de Strata lo reiniciaba.
 # Con 70 GiB de VM el setup no usa el modo low-RAM: copia los ~43 GB de expertos
 # a RAM fijada (mlock, por eso k3s corre con LimitMEMLOCK=infinity) en cada
-# arranque, leyendo de un HDD, de ahí la startupProbe larga.
+# arranque, de ahí la startupProbe larga.
 # Imagen construida en el propio nodo (código CPU nativo de Zen 4, sm_86).
 apiVersion: apps/v1
 kind: Deployment
@@ -13,7 +16,7 @@ metadata:
   labels:
     app: strata
 spec:
-  replicas: 1
+  replicas: 0  # parado mientras se copia el modelo al SSD; volver a 1
   strategy:
     type: Recreate  # una GPU y un hostPath
   selector:
@@ -77,5 +80,5 @@ spec:
       volumes:
         - name: data
           hostPath:
-            path: /var/lib/strata/data
+            path: /var/lib/strata-ssd/data
             type: Directory
