@@ -10,10 +10,17 @@
 # 1. fstab: mount each partition at boot, at the same path udisks used
 #    (/run/media/$USER/<UUID>) and with the same lowntfs-3g options, ordered
 #    before sddm so Steam never starts without them. nofail + a short device
-#    timeout keep a missing disk from blocking boot.
+#    timeout keep a missing disk from blocking boot. A disk that came up
+#    read-only because Windows did not close its journal gets ntfsfix.
 # 2. libraryfolders.vdf: add every "<mount>/Program Files (x86)/Steam" that is
 #    missing, with its apps read from the appmanifests. Steam must be stopped,
 #    or it overwrites the file from memory on exit.
+#
+# Stopping Steam: `sudo systemctl stop sddm`, then check that no steam process
+# is left before starting sddm again. A desktop-mode Steam runs as
+# app-steam@autostart.service and outlives sddm; with it alive the game session
+# fails on every start until gamescope-session-plus untars bootstrap_steam.tar.gz
+# over ~/.local/share/Steam, which resets config.vdf and libraryfolders.vdf.
 #
 # Idempotent: re-run whenever Steam drops the libraries again.
 set -euo pipefail
@@ -27,6 +34,7 @@ STEAM=${STEAM:-$HOME/.local/share/Steam}
 OPTS="rw,nosuid,nodev,noatime,lazytime,uid=$USER_UID,gid=$USER_GID,umask=0022,big_writes,windows_names,nofail,x-systemd.device-timeout=15s,x-systemd.before=sddm.service"
 
 step() { printf '\n== %s\n' "$*"; }
+is_ro() { [[ ,$(findmnt -no OPTIONS "$1"), == *,ro,* ]]; }
 
 step "fstab"
 for uuid in "$@"; do
@@ -49,6 +57,17 @@ for uuid in "$@"; do
     sudo umount "$mnt"
   fi
   sudo systemctl start "$unit"
+  # Windows left its journal open (hard power-off, fast startup), so lowntfs-3g
+  # fell back to read-only and Steam dropped the library. ntfsfix resets the
+  # journal and flags the volume for chkdsk on the next Windows boot. It
+  # refuses a hibernated volume, which is the case that must go through Windows.
+  if is_ro "$mnt"; then
+    echo "$mnt is read-only, resetting the NTFS journal"
+    sudo umount "$mnt"
+    sudo ntfsfix "/dev/disk/by-uuid/$uuid"
+    sudo systemctl start "$unit"
+    ! is_ro "$mnt" || { echo "$mnt is still read-only" >&2; exit 1; }
+  fi
   echo "$mnt mounted by $unit"
 done
 
