@@ -1,0 +1,168 @@
+# Series de la biblioteca Calibre "75.452" que son colecciones editoriales, no sagas.
+#
+# La 75.452 (metadatos de epublibre) guarda la colección de la editorial en el campo
+# "serie" cuando el libro no pertenece a ninguna saga: "Nova #247" para El marciano,
+# "Bolsilibros - Servicio Secreto #1796". Importadas como serie, BookOrbit mostraría una
+# "saga" Nova con 119 libros de 78 autores. bookorbit-calibre.py las convierte en la
+# etiqueta "Colección: <nombre>" y deja el libro sin serie.
+#
+# Una expresión regular por línea, sin distinguir mayúsculas, anclada al principio del
+# nombre de la serie. Lo que no casa aquí se trata como saga, así que en la duda se deja
+# fuera: una colección tratada como saga se ve rara, una saga tratada como colección
+# pierde el orden de lectura.
+#
+# Una línea que empieza por "!" es una excepción: la serie que case se queda como saga
+# aunque también case con una colección (series de un personaje dentro de un bolsilibro).
+#
+# La romántica mete la saga entre paréntesis: "Jazmín (Matrimonio de conveniencia, 2)" es
+# la colección Jazmín y la saga "Matrimonio de conveniencia" número 2. El script hace esa
+# separación solo, no hace falta listarlas.
+#
+# Revisado contra las 358 series con 3+ autores el 2026-10-17. Las franquicias con muchos
+# autores (Star Wars, Warhammer, Dragonlance, Reinos Olvidados, Star Trek, BattleTech,
+# Conan, James Bond, Mundo de tinieblas...) son sagas y no están aquí.
+
+# Excepciones: sagas que viven dentro de una colección
+!Bolsilibros - Indiana James$
+!Bolsilibros - El Orden Estelar$
+!Gran Super Ficción - Crónicas de Cadwal$
+!Colección Iris - 
+
+# Bolsilibros, quiosco y pulp
+Bolsilibros?\b
+Luchadores del Espacio$
+Rodeo Extra$
+Tam-tam$
+Selecciones (eróticas Sileno|Fotón|Séptimo Círculo)
+Biblioteca del Terror$
+(Gran )?Super (Ficción|Terror)
+Super Ficción 2$
+
+# Romántica (Harlequin, HQ, etc.)
+Bianca$
+Súper Bianca$
+Miniserie\b
+Jazm[ií]n\b
+Super Jazmín$
+Deseo$
+Deseo, chicos malos$
+Julia$
+HQ[NÑ]$
+Harlequ[ií]n\b
+Tentación$
+Sensaciones$
+Pasión$
+Novias$
+Medianoche$
+Rendición$
+Segundas oportunidades$
+Almas gemelas$
+Para siempre$
+Quédate$
+eLit$
+American Love$
+Top Novel$
+Oro$
+Fuego$
+Mujeres en la ciudad$
+Tesoros de Época$
+Misterios de Época$
+Escándalos de sociedad$
+Beldades problemáticas$
+Colección Dreams$
+Sabrina$
+Romance de un millonario$
+HIghlands$
+Medieval$
+
+# Ciencia ficción, fantasía y terror
+Nova\b
+Nebulae\b
+Colección Nebulae\b
+Solaris\b
+Galaxia$
+Ciencia Ficción - Grandes Éxitos
+Antologías de Ciencia Ficción
+Infinitum$
+Etiqueta Futura$
+Otros Mundos$
+Edaf Ciencia ficción$
+Robots & aliens$
+Futurópolis$
+Géminis Ciencia ficción$
+Ciencia Ficción$
+Acervo Ciencia ficción$
+Fantaciencia$
+Albia ficción$
+Bizarro$
+Zona límite\b
+Valdemar\b
+La Biblioteca de Babel$
+DC Icons$
+La sonrisa vertical$
+
+# Policiaca y misterio
+El séptimo círculo\b
+Club del Misterio$
+Círculo del Crimen$
+Rastros$
+El ojo sin párpado$
+Detective$
+Crimen & C[ií]a\b
+Etiqueta negra$
+DestinoSuspense$
+dÉpoca Noir$
+Biblioteca Oro\b
+
+# Clásicos, ensayo, divulgación e historia
+Penguin\b
+Biblioteca\b
+Narrativa breve$
+Clásicos de historia$
+Para dummies$
+Metatemas$
+Descubrir la filosofía$
+Breve historia\b
+Cenit$
+Tus libros$
+al margen$
+Internacional$
+Áncora & Delfín$
+Frontera$
+Cuadernos\b
+Grandes (Autoras|ideas de la ciencia)$
+Mitos Poesía$
+Colección\b
+Esfinge$
+Lonely Planet$
+Guías del escritor$
+Crónicas de América$
+50 cosas$
+historia - Omnia sunt communia
+¡Vaya timo!$
+Siruela\b
+Historia Universal Siglo XXI$
+Maestros de la Literatura Japonesa$
+La ciencia para todos$
+Historia incógnita$
+Memoria de la Historia$
+Historia de España\b
+Delicatessen$
+La máquina del tiempo$
+Kadingir$
+Sin Fronteras$
+Foton$
+erus$
+LASDAOALPLAY
+
+# Infantil y juvenil
+El barco de vapor\b
+Gran angular$
+Altea Junior$
+Alandar$
+Club Joven$
+Ala delta\b
+Mi primera biblioteca$
+Joyas Literarias Juveniles$
+Elige tu propia aventura$
+D&D Aventura sin fin\b

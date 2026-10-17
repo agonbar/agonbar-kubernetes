@@ -1,0 +1,19 @@
+# Correcciones a mano para `bookorbit-calibre.py conform`, por id de libro en BookOrbit.
+#
+# cal=N        este libro es el N de la 75.452 (cuando título o autor no casan solos:
+#              "Homer" frente a "Homero", "Leo Tolstoy" frente a "Tolstói")
+# series=X     saga para un libro que no está en la 75.452 ("series=" la quita)
+# index=N      número dentro de esa saga
+#
+# Las sagas siguen el nombre que usa la 75.452 para el resto de la serie: Los juegos del
+# hambre se llama allí "Distritos".
+82	cal=8395
+81	cal=8411
+83	cal=7841
+74	cal=13510
+115	cal=7447
+1	cal=7434
+16	series=Nacidos de la Bruma	index=7
+37	series=Distritos	index=0
+38	series=Distritos	index=0.5
+24	series=
