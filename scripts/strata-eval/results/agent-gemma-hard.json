@@ -1,0 +1,95 @@
+{
+ "summary": {
+  "target": "gemma",
+  "model": "gemma-4-12B-it-qat-UD-Q4_K_XL.gguf",
+  "pass": 0,
+  "total": 2,
+  "wallSec": 825,
+  "run": "/tmp/strata-agent/gemma-hard-20261016-230010"
+ },
+ "results": [
+  {
+   "task": "rootcause",
+   "pass": false,
+   "check": "tests=True tests_untouched=True hidden=False [2.68, 0.13, 1.01, 10.5, 2.67, 1.0]",
+   "wallSec": 52,
+   "rc": 0,
+   "timedOut": false,
+   "turns": 9,
+   "toolCalls": 8,
+   "toolErrors": 1,
+   "apiErrors": 0,
+   "resultSubtype": "success",
+   "isError": false,
+   "finalText": "The `round_half_up` function in `inv/money.py` was using the built-in `round()` function, which uses \"round half to even\" (banker's rounding) instead of the \"round half up\" (commercial rounding) required by the project. This caused `0.125` to be rounded to `0.12` instead of `0.13`.\n\nI replaced the i",
+   "toolErrorSamples": [
+    "Exit code 1\ntest_half_cent_rounds_up (test_invoice.InvoiceTest.test_half_cent_rounds_up) ... FAIL\ntest_simple (test_invoice.InvoiceTest.test_simple) ... ok\n\n==="
+   ],
+   "usage": {
+    "input_tokens": 16121,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 121569,
+    "output_tokens": 717,
+    "output_tokens_details": {
+     "thinking_tokens": 0
+    },
+    "server_tool_use": {
+     "web_search_requests": 0,
+     "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+     "ephemeral_1h_input_tokens": 0,
+     "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "",
+    "iterations": [],
+    "speed": "standard"
+   },
+   "log": "/tmp/strata-agent/gemma-hard-20261016-230010/rootcause.jsonl"
+  },
+  {
+   "task": "multifile",
+   "pass": false,
+   "check": "tests=True hidden=False tests_cover_priority=True [['1. [normal] legacy (done)', '2. [low] low one', '3. [high] urgent', '4. [normal] plain', '5. [high] urgent two'], ['3. [high] urgent', '5. [high] urgent two', '4. [normal] plain', '1. [normal] lega",
+   "wallSec": 773,
+   "rc": 0,
+   "timedOut": false,
+   "turns": 23,
+   "toolCalls": 20,
+   "toolErrors": 6,
+   "apiErrors": 1,
+   "resultSubtype": "success",
+   "isError": false,
+   "finalText": "All requirements have been met:\n\n1.  **Priority Support for `add`**: Added the `--priority` option with choices `low`, `normal`, `high` (defaulting to `normal`).\n2.  **Updated `list` Format**: Items are now printed as `<id>. [<priority>] <title> (done)`.\n3.  **Priority Sorting**: Implemented sorting",
+   "toolErrorSamples": [
+    "<tool_use_error>String to replace not found in file.\nString:     sub.add_parser(\"list\")\n    dn = sub.add_parser(\"done\")\n    dn.add_argument(\"id\", type=int)\n    ",
+    "<tool_use_error>String to replace not found in file.\nString:     a = sub.add_parser(\"add\")\n    a.add_argument(\"title\")\n    a.add_argument(\"--priority\", choices=",
+    "<tool_use_error>String to replace not found in file.\nString:     a = sub.add_parser(\"add\")\n    a.add_argument(\"title\")\n    a.add_argument(\"--priority\", choices=",
+    "Exit code 1\ntest_add_list_done (test_todo.TodoTest.test_add_list_done) ... ERROR\ntest_old_data_loading (test_todo.TodoTest.test_old_data_loading) ... ERROR\ntest"
+   ],
+   "usage": {
+    "input_tokens": 89057,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 677598,
+    "output_tokens": 69794,
+    "output_tokens_details": {
+     "thinking_tokens": 0
+    },
+    "server_tool_use": {
+     "web_search_requests": 0,
+     "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+     "ephemeral_1h_input_tokens": 0,
+     "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "",
+    "iterations": [],
+    "speed": "standard"
+   },
+   "log": "/tmp/strata-agent/gemma-hard-20261016-230010/multifile.jsonl"
+  }
+ ]
+}

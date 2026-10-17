@@ -1,0 +1,165 @@
+{
+ "summary": {
+  "target": "claude",
+  "model": "sonnet",
+  "pass": 4,
+  "total": 4,
+  "wallSec": 99,
+  "run": "/tmp/strata-agent/claude-20261016-224944",
+  "note": "shell rerun with RFC 5737 fixture IPs in agent-claude-shell.json"
+ },
+ "results": [
+  {
+   "task": "bugfix",
+   "pass": true,
+   "check": "tests=True test_file_untouched=True ['OK']",
+   "wallSec": 13,
+   "rc": 0,
+   "timedOut": false,
+   "turns": 4,
+   "toolCalls": 3,
+   "toolErrors": 0,
+   "apiErrors": 0,
+   "resultSubtype": "success",
+   "isError": false,
+   "finalText": "All 3 tests pass now.",
+   "toolErrorSamples": [],
+   "usage": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 10479,
+    "cache_read_input_tokens": 102673,
+    "output_tokens": 649,
+    "output_tokens_details": {
+     "thinking_tokens": 78
+    },
+    "server_tool_use": {
+     "web_search_requests": 0,
+     "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+     "ephemeral_1h_input_tokens": 10479,
+     "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [],
+    "speed": "standard"
+   },
+   "log": "/tmp/strata-agent/claude-20261016-224944/bugfix.jsonl"
+  },
+  {
+   "task": "feature",
+   "pass": true,
+   "check": "tests=True hidden=True () slugify_asserts=10",
+   "wallSec": 23,
+   "rc": 0,
+   "timedOut": false,
+   "turns": 5,
+   "toolCalls": 4,
+   "toolErrors": 0,
+   "apiErrors": 0,
+   "resultSubtype": "success",
+   "isError": false,
+   "finalText": "All 11 tests pass. Added `slugify` to textutils.py (accent-stripping via NFKD normalization, regex collapse of non-alphanumeric runs, hyphen trimming, and truncation) plus corresponding unit tests in test_textutils.py.",
+   "toolErrorSamples": [],
+   "usage": {
+    "input_tokens": 10,
+    "cache_creation_input_tokens": 11562,
+    "cache_read_input_tokens": 131627,
+    "output_tokens": 1738,
+    "output_tokens_details": {
+     "thinking_tokens": 325
+    },
+    "server_tool_use": {
+     "web_search_requests": 0,
+     "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+     "ephemeral_1h_input_tokens": 11562,
+     "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [],
+    "speed": "standard"
+   },
+   "log": "/tmp/strata-agent/claude-20261016-224944/feature.jsonl"
+  },
+  {
+   "task": "refactor",
+   "pass": true,
+   "check": "tests=True helper=True used_by_all=True fmt_copies=1 tests_untouched=True",
+   "wallSec": 13,
+   "rc": 0,
+   "timedOut": false,
+   "turns": 4,
+   "toolCalls": 3,
+   "toolErrors": 0,
+   "apiErrors": 0,
+   "resultSubtype": "success",
+   "isError": false,
+   "finalText": "Extracted the repeated logic into `_format_row(row)` and updated all three report functions to use it. Tests pass.",
+   "toolErrorSamples": [],
+   "usage": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 10268,
+    "cache_read_input_tokens": 102326,
+    "output_tokens": 600,
+    "output_tokens_details": {
+     "thinking_tokens": 10
+    },
+    "server_tool_use": {
+     "web_search_requests": 0,
+     "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+     "ephemeral_1h_input_tokens": 10268,
+     "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [],
+    "speed": "standard"
+   },
+   "log": "/tmp/strata-agent/claude-20261016-224944/refactor.jsonl"
+  },
+  {
+   "task": "readqa",
+   "pass": true,
+   "check": "answer=['port=8443', 'callers=gateway,notifier'] other_changes=[]",
+   "wallSec": 21,
+   "rc": 0,
+   "timedOut": false,
+   "turns": 13,
+   "toolCalls": 12,
+   "toolErrors": 0,
+   "apiErrors": 0,
+   "resultSubtype": "success",
+   "isError": false,
+   "finalText": "Written to `ANSWER.txt`:\n\n```\nport=8443\ncallers=gateway,notifier\n```\n\nReasoning: `billing/main.py` has `BILLING_PORT` env override win over `config.yaml`'s port 8080, and `deploy/overrides.env` sets `BILLING_PORT=8443` (the `9443` line is commented out as an old value). Both `gateway/routes.py` and ",
+   "toolErrorSamples": [],
+   "usage": {
+    "input_tokens": 8,
+    "cache_creation_input_tokens": 11780,
+    "cache_read_input_tokens": 102985,
+    "output_tokens": 1799,
+    "output_tokens_details": {
+     "thinking_tokens": 618
+    },
+    "server_tool_use": {
+     "web_search_requests": 0,
+     "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+     "ephemeral_1h_input_tokens": 11780,
+     "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [],
+    "speed": "standard"
+   },
+   "log": "/tmp/strata-agent/claude-20261016-224944/readqa.jsonl"
+  }
+ ]
+}

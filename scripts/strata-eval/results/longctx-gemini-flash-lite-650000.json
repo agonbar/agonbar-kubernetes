@@ -1,0 +1,75 @@
+{
+ "summary": {
+  "target": "gemini-flash-lite",
+  "chars": 602618,
+  "promptTokens": 164569,
+  "completionTokens": 152,
+  "latencySec": 2.7,
+  "lookupOk": "4/5",
+  "aggregateOk": [
+   false
+  ],
+  "validJson": true,
+  "error": null,
+  "finish": "stop",
+  "timings": null
+ },
+ "results": [
+  {
+   "id": "q1",
+   "depth": 0.09,
+   "ok": true,
+   "want": "pihole/pihole:2026.07.2",
+   "got": "pihole/pihole:2026.07.2"
+  },
+  {
+   "id": "q2",
+   "depth": 0.29,
+   "ok": true,
+   "want": "lscr.io/linuxserver/netbootxyz:latest",
+   "got": "lscr.io/linuxserver/netbootxyz:latest"
+  },
+  {
+   "id": "q3",
+   "depth": 0.53,
+   "ok": true,
+   "want": "rommapp/romm:5.2.0",
+   "got": "rommapp/romm:5.2.0"
+  },
+  {
+   "id": "q4",
+   "depth": 0.69,
+   "ok": false,
+   "want": "ghcr.io/agonbar/argocd-cmp-envsubst:v1",
+   "got": "argoproj/argocd:v2.14.2"
+  },
+  {
+   "id": "q5",
+   "depth": 0.98,
+   "ok": true,
+   "want": "registry.k8s.io/sig-storage/snapshot-controller:v8.2.0",
+   "got": "registry.k8s.io/sig-storage/snapshot-controller:v8.2.0"
+  },
+  {
+   "id": "q6",
+   "ok": false,
+   "want": [
+    "jellyfin-deployment",
+    "plex",
+    "slskd-deployment",
+    "tdarr-deployment"
+   ],
+   "got": [
+    "plex",
+    "slskd-deployment",
+    "tdarr-deployment"
+   ],
+   "missing": [
+    "jellyfin-deployment"
+   ],
+   "extra": []
+  }
+ ],
+ "rawAnswer": "{\n  \"q1\": \"pihole/pihole:2026.07.2\",\n  \"q2\": \"lscr.io/linuxserver/netbootxyz:latest\",\n  \"q3\": \"rommapp/romm:5.2.0\",\n  \"q4\": \"argoproj/argocd:v2.14.2\",\n  \"q5\": \"registry.k8s.io/sig-storage/snapshot-controller:v8.2.0\",\n  \"q6\": [\n    \"plex\",\n    \"slskd-deployment\",\n    \"tdarr-deployment\"\n  ]\n}",
+ "reasoningChars": 0
+}

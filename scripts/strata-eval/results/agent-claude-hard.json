@@ -1,0 +1,90 @@
+{
+ "summary": {
+  "target": "claude",
+  "model": "sonnet",
+  "pass": 2,
+  "total": 2,
+  "wallSec": 59,
+  "run": "/tmp/strata-agent/claude-hard-20261016-231354"
+ },
+ "results": [
+  {
+   "task": "rootcause",
+   "pass": true,
+   "check": "tests=True tests_untouched=True hidden=True [2.68, 0.13, 1.01, 11.0, 2.67, 1.0]",
+   "wallSec": 21,
+   "rc": 0,
+   "timedOut": false,
+   "turns": 8,
+   "toolCalls": 7,
+   "toolErrors": 1,
+   "apiErrors": 0,
+   "resultSubtype": "success",
+   "isError": false,
+   "finalText": "Both tests pass. Root cause: `round_half_up` in `inv/money.py` delegated to Python's `round()`, which uses round-half-to-even and operates on imprecise binary floats (e.g. `round(0.125, 2) == 0.12`, `round(2.675, 2) == 2.67`), contradicting its own docstring. Fixed by converting through `Decimal(str",
+   "toolErrorSamples": [
+    "Exit code 1\ntest_half_cent_rounds_up (test_invoice.InvoiceTest.test_half_cent_rounds_up) ... FAIL\ntest_simple (test_invoice.InvoiceTest.test_simple) ... ok\n\n==="
+   ],
+   "usage": {
+    "input_tokens": 12,
+    "cache_creation_input_tokens": 11943,
+    "cache_read_input_tokens": 162017,
+    "output_tokens": 1497,
+    "output_tokens_details": {
+     "thinking_tokens": 251
+    },
+    "server_tool_use": {
+     "web_search_requests": 0,
+     "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+     "ephemeral_1h_input_tokens": 11943,
+     "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [],
+    "speed": "standard"
+   },
+   "log": "/tmp/strata-agent/claude-hard-20261016-231354/rootcause.jsonl"
+  },
+  {
+   "task": "multifile",
+   "pass": true,
+   "check": "tests=True hidden=True tests_cover_priority=True ",
+   "wallSec": 38,
+   "rc": 0,
+   "timedOut": false,
+   "turns": 9,
+   "toolCalls": 8,
+   "toolErrors": 0,
+   "apiErrors": 0,
+   "resultSubtype": "success",
+   "isError": false,
+   "finalText": "All 7 tests pass. Changes: `add --priority {low,normal,high}` (default normal) in `todo/cli.py` and `todo/storage.py`, `list` output format `<id>. [<priority>] <title>` with `(done)` suffix, `list --sort priority` (stable sort, high→normal→low), missing `priority` field defaults to `normal` on load,",
+   "toolErrorSamples": [],
+   "usage": {
+    "input_tokens": 16,
+    "cache_creation_input_tokens": 14460,
+    "cache_read_input_tokens": 225802,
+    "output_tokens": 3515,
+    "output_tokens_details": {
+     "thinking_tokens": 237
+    },
+    "server_tool_use": {
+     "web_search_requests": 0,
+     "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+     "ephemeral_1h_input_tokens": 14460,
+     "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [],
+    "speed": "standard"
+   },
+   "log": "/tmp/strata-agent/claude-hard-20261016-231354/multifile.jsonl"
+  }
+ ]
+}

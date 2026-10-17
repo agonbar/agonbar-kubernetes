@@ -1,0 +1,86 @@
+{
+ "summary": {
+  "target": "strata-nothink",
+  "chars": 397446,
+  "promptTokens": 105510,
+  "completionTokens": 140,
+  "latencySec": 148.4,
+  "lookupOk": "5/5",
+  "aggregateOk": [
+   true
+  ],
+  "validJson": true,
+  "error": null,
+  "finish": "stop",
+  "timings": {
+   "cache_n": 0,
+   "prompt_n": 105510,
+   "prompt_ms": 144483.8,
+   "prompt_per_token_ms": 1.369,
+   "prompt_per_second": 730.3,
+   "predicted_n": 140,
+   "predicted_ms": 3274.2,
+   "predicted_per_token_ms": 23.387,
+   "predicted_per_second": 42.8,
+   "draft_n": 121,
+   "draft_n_accepted": 97
+  }
+ },
+ "results": [
+  {
+   "id": "q1",
+   "depth": 0.1,
+   "ok": true,
+   "want": "louislam/uptime-kuma:1",
+   "got": "louislam/uptime-kuma:1"
+  },
+  {
+   "id": "q2",
+   "depth": 0.3,
+   "ok": true,
+   "want": "ghcr.io/immich-app/immich-machine-learning:v3.2.4",
+   "got": "ghcr.io/immich-app/immich-machine-learning:v3.2.4"
+  },
+  {
+   "id": "q3",
+   "depth": 0.5,
+   "ok": true,
+   "want": "matrixdotorg/synapse:latest",
+   "got": "matrixdotorg/synapse:latest"
+  },
+  {
+   "id": "q4",
+   "depth": 0.7,
+   "ok": true,
+   "want": "ghcr.io/agonbar/mokuro-reader:latest",
+   "got": "ghcr.io/agonbar/mokuro-reader:latest"
+  },
+  {
+   "id": "q5",
+   "depth": 0.9,
+   "ok": true,
+   "want": "mrusse08/soularr:latest",
+   "got": "mrusse08/soularr:latest"
+  },
+  {
+   "id": "q6",
+   "ok": true,
+   "want": [
+    "jellyfin-deployment",
+    "plex",
+    "slskd-deployment",
+    "tdarr-deployment"
+   ],
+   "got": [
+    "jellyfin-deployment",
+    "plex",
+    "slskd-deployment",
+    "tdarr-deployment"
+   ],
+   "missing": [],
+   "extra": []
+  }
+ ],
+ "rawAnswer": "{\n  \"q1\": \"louislam/uptime-kuma:1\",\n  \"q2\": \"ghcr.io/immich-app/immich-machine-learning:v3.2.4\",\n  \"q3\": \"matrixdotorg/synapse:latest\",\n  \"q4\": \"ghcr.io/agonbar/mokuro-reader:latest\",\n  \"q5\": \"mrusse08/soularr:latest\",\n  \"q6\": [\n    \"plex\",\n    \"jellyfin-deployment\",\n    \"slskd-deployment\",\n    \"tdarr-deployment\"\n  ]\n}",
+ "reasoningChars": 0
+}

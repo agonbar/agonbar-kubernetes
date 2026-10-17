@@ -1,0 +1,86 @@
+{
+ "summary": {
+  "target": "strata-nothink",
+  "chars": 602618,
+  "promptTokens": 158794,
+  "completionTokens": 138,
+  "latencySec": 95.8,
+  "lookupOk": "4/5",
+  "aggregateOk": [
+   true
+  ],
+  "validJson": true,
+  "error": null,
+  "finish": "stop",
+  "timings": {
+   "cache_n": 98304,
+   "prompt_n": 60490,
+   "prompt_ms": 91995.3,
+   "prompt_per_token_ms": 1.521,
+   "prompt_per_second": 657.5,
+   "predicted_n": 138,
+   "predicted_ms": 3172.1,
+   "predicted_per_token_ms": 22.986,
+   "predicted_per_second": 43.5,
+   "draft_n": 119,
+   "draft_n_accepted": 96
+  }
+ },
+ "results": [
+  {
+   "id": "q1",
+   "depth": 0.09,
+   "ok": true,
+   "want": "pihole/pihole:2026.07.2",
+   "got": "pihole/pihole:2026.07.2"
+  },
+  {
+   "id": "q2",
+   "depth": 0.29,
+   "ok": true,
+   "want": "lscr.io/linuxserver/netbootxyz:latest",
+   "got": "lscr.io/linuxserver/netbootxyz:latest"
+  },
+  {
+   "id": "q3",
+   "depth": 0.53,
+   "ok": true,
+   "want": "rommapp/romm:5.2.0",
+   "got": "rommapp/romm:5.2.0"
+  },
+  {
+   "id": "q4",
+   "depth": 0.69,
+   "ok": false,
+   "want": "ghcr.io/agonbar/argocd-cmp-envsubst:v1",
+   "got": null
+  },
+  {
+   "id": "q5",
+   "depth": 0.98,
+   "ok": true,
+   "want": "registry.k8s.io/sig-storage/snapshot-controller:v8.2.0",
+   "got": "registry.k8s.io/sig-storage/snapshot-controller:v8.2.0"
+  },
+  {
+   "id": "q6",
+   "ok": true,
+   "want": [
+    "jellyfin-deployment",
+    "plex",
+    "slskd-deployment",
+    "tdarr-deployment"
+   ],
+   "got": [
+    "jellyfin-deployment",
+    "plex",
+    "slskd-deployment",
+    "tdarr-deployment"
+   ],
+   "missing": [],
+   "extra": []
+  }
+ ],
+ "rawAnswer": "{\n  \"q1\": \"pihole/pihole:2026.07.2\",\n  \"q2\": \"lscr.io/linuxserver/netbootxyz:latest\",\n  \"q3\": \"rommapp/romm:5.2.0\",\n  \"q4\": null,\n  \"q5\": \"registry.k8s.io/sig-storage/snapshot-controller:v8.2.0\",\n  \"q6\": [\n    \"plex\",\n    \"jellyfin-deployment\",\n    \"slskd-deployment\",\n    \"tdarr-deployment\"\n  ]\n}",
+ "reasoningChars": 0
+}

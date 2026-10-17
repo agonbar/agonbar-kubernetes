@@ -1,0 +1,757 @@
+{
+ "summary": {
+  "target": "gemini-3.5-flash",
+  "model": "gemini-3.5-flash",
+  "api": "anthropic",
+  "pass": 21,
+  "total": 21,
+  "formatErrors": 0,
+  "requestErrors": 0,
+  "medianLatencySec": 2.1,
+  "totalSec": 57.7
+ },
+ "results": [
+  {
+   "id": "select-weather-enum",
+   "pass": true,
+   "why": "",
+   "turns": 1,
+   "latencySec": 1.6,
+   "formatErrors": [],
+   "error": null,
+   "modelGroups": [],
+   "trace": [
+    {
+     "calls": [
+      {
+       "name": "get_weather",
+       "args": {
+        "unit": "fahrenheit",
+        "city": "Bilbao"
+       }
+      }
+     ],
+     "text": "",
+     "finish": "tool_use",
+     "usage": {
+      "input_tokens": 471,
+      "output_tokens": 131
+     },
+     "reasoning_chars": 0
+    }
+   ]
+  },
+  {
+   "id": "select-currency-number",
+   "pass": true,
+   "why": "",
+   "turns": 1,
+   "latencySec": 1.6,
+   "formatErrors": [],
+   "error": null,
+   "modelGroups": [],
+   "trace": [
+    {
+     "calls": [
+      {
+       "name": "convert_currency",
+       "args": {
+        "from_currency": "EUR",
+        "to_currency": "USD",
+        "amount": 250
+       }
+      }
+     ],
+     "text": "",
+     "finish": "tool_use",
+     "usage": {
+      "input_tokens": 465,
+      "output_tokens": 138
+     },
+     "reasoning_chars": 0
+    }
+   ]
+  },
+  {
+   "id": "select-ticket-array",
+   "pass": true,
+   "why": "",
+   "turns": 1,
+   "latencySec": 1.8,
+   "formatErrors": [],
+   "error": null,
+   "modelGroups": [],
+   "trace": [
+    {
+     "calls": [
+      {
+       "name": "create_ticket",
+       "args": {
+        "labels": [
+         "db",
+         "prod"
+        ],
+        "title": "Database down in prod",
+        "priority": "critical"
+       }
+      }
+     ],
+     "text": "",
+     "finish": "tool_use",
+     "usage": {
+      "input_tokens": 471,
+      "output_tokens": 216
+     },
+     "reasoning_chars": 0
+    }
+   ]
+  },
+  {
+   "id": "args-flights-types",
+   "pass": true,
+   "why": "",
+   "turns": 1,
+   "latencySec": 2.0,
+   "formatErrors": [],
+   "error": null,
+   "modelGroups": [],
+   "trace": [
+    {
+     "calls": [
+      {
+       "name": "search_flights",
+       "args": {
+        "date": "2026-11-05",
+        "destination": "LIS",
+        "cabin": "business",
+        "passengers": 3,
+        "origin": "MAD"
+       }
+      }
+     ],
+     "text": "",
+     "finish": "tool_use",
+     "usage": {
+      "input_tokens": 482,
+      "output_tokens": 214
+     },
+     "reasoning_chars": 0
+    }
+   ]
+  },
+  {
+   "id": "args-ticket-spanish-enum",
+   "pass": true,
+   "why": "",
+   "turns": 1,
+   "latencySec": 2.0,
+   "formatErrors": [],
+   "error": null,
+   "modelGroups": [],
+   "trace": [
+    {
+     "calls": [
+      {
+       "name": "create_ticket",
+       "args": {
+        "labels": [
+         "certs"
+        ],
+        "title": "Revisar certificados de staging",
+        "assignee": "marta",
+        "priority": "low"
+       }
+      }
+     ],
+     "text": "",
+     "finish": "tool_use",
+     "usage": {
+      "input_tokens": 479,
+      "output_tokens": 259
+     },
+     "reasoning_chars": 0
+    }
+   ]
+  },
+  {
+   "id": "args-amount-parse",
+   "pass": true,
+   "why": "",
+   "turns": 1,
+   "latencySec": 2.0,
+   "formatErrors": [],
+   "error": null,
+   "modelGroups": [],
+   "trace": [
+    {
+     "calls": [
+      {
+       "name": "convert_currency",
+       "args": {
+        "from_currency": "JPY",
+        "to_currency": "EUR",
+        "amount": 1500000
+       }
+      }
+     ],
+     "text": "",
+     "finish": "tool_use",
+     "usage": {
+      "input_tokens": 466,
+      "output_tokens": 204
+     },
+     "reasoning_chars": 0
+    }
+   ]
+  },
+  {
+   "id": "none-math",
+   "pass": true,
+   "why": "",
+   "turns": 1,
+   "latencySec": 1.6,
+   "formatErrors": [],
+   "error": null,
+   "modelGroups": [],
+   "trace": [
+    {
+     "calls": [],
+     "text": "391",
+     "finish": "end_turn",
+     "usage": {
+      "input_tokens": 469,
+      "output_tokens": 94
+     },
+     "reasoning_chars": 0
+    }
+   ]
+  },
+  {
+   "id": "none-haiku",
+   "pass": true,
+   "why": "",
+   "turns": 1,
+   "latencySec": 2.6,
+   "formatErrors": [],
+   "error": null,
+   "modelGroups": [],
+   "trace": [
+    {
+     "calls": [],
+     "text": "Rust leaves on the hills,\nGuggenheim in silver mist,\nChilly autumn breeze.",
+     "finish": "end_turn",
+     "usage": {
+      "input_tokens": 462,
+      "output_tokens": 324
+     },
+     "reasoning_chars": 0
+    }
+   ]
+  },
+  {
+   "id": "none-missing-arg",
+   "pass": true,
+   "why": "",
+   "turns": 1,
+   "latencySec": 4.3,
+   "formatErrors": [],
+   "error": null,
+   "modelGroups": [],
+   "trace": [
+    {
+     "calls": [],
+     "text": "To send the email about tomorrow's maintenance window, could you please provide me with:\n\n1. **The recipient's email address** (the \"To\" field).\n2. **The details of the maintenance window** (such as the specific time, duration, and which services will be affected) so I can draft the email body. \n\n*(Alternatively, if you haven't scheduled the maintenance yet, I can schedule it first using the system tools if you provide the start time, duration, and services involved!)*",
+     "finish": "end_turn",
+     "usage": {
+      "input_tokens": 463,
+      "output_tokens": 644
+     },
+     "reasoning_chars": 0
+    }
+   ]
+  },
+  {
+   "id": "parallel-same-tool",
+   "pass": true,
+   "why": "",
+   "turns": 1,
+   "latencySec": 2.0,
+   "formatErrors": [],
+   "error": null,
+   "modelGroups": [],
+   "trace": [
+    {
+     "calls": [
+      {
+       "name": "get_weather",
+       "args": {
+        "city": "Madrid",
+        "unit": "celsius"
+       }
+      },
+      {
+       "name": "get_weather",
+       "args": {
+        "unit": "celsius",
+        "city": "Oslo"
+       }
+      }
+     ],
+     "text": "",
+     "finish": "tool_use",
+     "usage": {
+      "input_tokens": 470,
+      "output_tokens": 166
+     },
+     "reasoning_chars": 0
+    }
+   ]
+  },
+  {
+   "id": "parallel-mixed",
+   "pass": true,
+   "why": "",
+   "turns": 1,
+   "latencySec": 2.1,
+   "formatErrors": [],
+   "error": null,
+   "modelGroups": [],
+   "trace": [
+    {
+     "calls": [
+      {
+       "name": "get_pod_status",
+       "args": {
+        "app": "api",
+        "namespace": "prod"
+       }
+      },
+      {
+       "name": "convert_currency",
+       "args": {
+        "amount": 100,
+        "from_currency": "USD",
+        "to_currency": "EUR"
+       }
+      }
+     ],
+     "text": "",
+     "finish": "tool_use",
+     "usage": {
+      "input_tokens": 481,
+      "output_tokens": 226
+     },
+     "reasoning_chars": 0
+    }
+   ]
+  },
+  {
+   "id": "multiturn-use-result",
+   "pass": true,
+   "why": "",
+   "turns": 2,
+   "latencySec": 2.6,
+   "formatErrors": [],
+   "error": null,
+   "modelGroups": [],
+   "trace": [
+    {
+     "calls": [
+      {
+       "name": "get_weather",
+       "args": {
+        "city": "Bilbao",
+        "unit": "celsius"
+       }
+      }
+     ],
+     "text": "",
+     "finish": "tool_use",
+     "usage": {
+      "input_tokens": 463,
+      "output_tokens": 130
+     },
+     "reasoning_chars": 0
+    },
+    {
+     "calls": [],
+     "text": "The weather in Bilbao is currently 17°C with rain.",
+     "finish": "end_turn",
+     "usage": {
+      "input_tokens": 600,
+      "output_tokens": 14
+     },
+     "reasoning_chars": 0
+    }
+   ]
+  },
+  {
+   "id": "multiturn-chain-act",
+   "pass": true,
+   "why": "",
+   "turns": 3,
+   "latencySec": 5.8,
+   "formatErrors": [],
+   "error": null,
+   "modelGroups": [],
+   "trace": [
+    {
+     "calls": [
+      {
+       "name": "get_pod_status",
+       "args": {
+        "app": "payments",
+        "namespace": "prod"
+       }
+      }
+     ],
+     "text": "",
+     "finish": "tool_use",
+     "usage": {
+      "input_tokens": 493,
+      "output_tokens": 118
+     },
+     "reasoning_chars": 0
+    },
+    {
+     "calls": [
+      {
+       "name": "create_ticket",
+       "args": {
+        "labels": [
+         "oncall"
+        ],
+        "priority": "high",
+        "title": "App 'payments' in namespace 'prod' is in CrashLoopBackOff"
+       }
+      }
+     ],
+     "text": "",
+     "finish": "tool_use",
+     "usage": {
+      "input_tokens": 622,
+      "output_tokens": 263
+     },
+     "reasoning_chars": 0
+    },
+    {
+     "calls": [],
+     "text": "The 'payments' app in the 'prod' namespace is indeed in **CrashLoopBackOff** (with 14 restarts). \n\nI have opened a high-priority ticket for this issue:\n* **Ticket ID:** INC-4821\n* **Title:** App 'payments' in namespace 'prod' is in CrashLoopBackOff\n* **Priority:** High\n* **Labels:** oncall",
+     "finish": "end_turn",
+     "usage": {
+      "input_tokens": 886,
+      "output_tokens": 146
+     },
+     "reasoning_chars": 0
+    }
+   ]
+  },
+  {
+   "id": "multiturn-chain-noact",
+   "pass": true,
+   "why": "",
+   "turns": 2,
+   "latencySec": 3.1,
+   "formatErrors": [],
+   "error": null,
+   "modelGroups": [],
+   "trace": [
+    {
+     "calls": [
+      {
+       "name": "get_pod_status",
+       "args": {
+        "namespace": "prod",
+        "app": "checkout"
+       }
+      }
+     ],
+     "text": "",
+     "finish": "tool_use",
+     "usage": {
+      "input_tokens": 493,
+      "output_tokens": 118
+     },
+     "reasoning_chars": 0
+    },
+    {
+     "calls": [],
+     "text": "The 'checkout' app in the 'prod' namespace is running fine (status: Running, restarts: 0). No ticket is needed.",
+     "finish": "end_turn",
+     "usage": {
+      "input_tokens": 618,
+      "output_tokens": 123
+     },
+     "reasoning_chars": 0
+    }
+   ]
+  },
+  {
+   "id": "multiturn-error-recovery",
+   "pass": true,
+   "why": "",
+   "turns": 2,
+   "latencySec": 3.4,
+   "formatErrors": [],
+   "error": null,
+   "modelGroups": [],
+   "trace": [
+    {
+     "calls": [
+      {
+       "name": "get_weather",
+       "args": {
+        "unit": "celsius",
+        "city": "Bilbao"
+       }
+      }
+     ],
+     "text": "",
+     "finish": "tool_use",
+     "usage": {
+      "input_tokens": 469,
+      "output_tokens": 291
+     },
+     "reasoning_chars": 0
+    },
+    {
+     "calls": [],
+     "text": "The current weather in Bilbao (Bilbo) is 17°C with rain.",
+     "finish": "end_turn",
+     "usage": {
+      "input_tokens": 767,
+      "output_tokens": 18
+     },
+     "reasoning_chars": 0
+    }
+   ]
+  },
+  {
+   "id": "hard-relative-date",
+   "pass": true,
+   "why": "",
+   "turns": 1,
+   "latencySec": 3.2,
+   "formatErrors": [],
+   "error": null,
+   "modelGroups": [],
+   "trace": [
+    {
+     "calls": [
+      {
+       "name": "search_flights",
+       "args": {
+        "cabin": "economy",
+        "passengers": 3,
+        "destination": "CDG",
+        "date": "2026-10-22",
+        "origin": "BIO"
+       }
+      }
+     ],
+     "text": "",
+     "finish": "tool_use",
+     "usage": {
+      "input_tokens": 474,
+      "output_tokens": 430
+     },
+     "reasoning_chars": 0
+    }
+   ]
+  },
+  {
+   "id": "hard-no-invented-optional",
+   "pass": true,
+   "why": "",
+   "turns": 1,
+   "latencySec": 2.0,
+   "formatErrors": [],
+   "error": null,
+   "modelGroups": [],
+   "trace": [
+    {
+     "calls": [
+      {
+       "name": "create_ticket",
+       "args": {
+        "labels": [
+         "certs"
+        ],
+        "priority": "medium",
+        "title": "Rotate staging TLS certs"
+       }
+      }
+     ],
+     "text": "",
+     "finish": "tool_use",
+     "usage": {
+      "input_tokens": 471,
+      "output_tokens": 181
+     },
+     "reasoning_chars": 0
+    }
+   ]
+  },
+  {
+   "id": "hard-nested-object",
+   "pass": true,
+   "why": "",
+   "turns": 1,
+   "latencySec": 3.0,
+   "formatErrors": [],
+   "error": null,
+   "modelGroups": [],
+   "trace": [
+    {
+     "calls": [
+      {
+       "name": "schedule_maintenance",
+       "args": {
+        "notify_users": false,
+        "window": {
+         "duration_minutes": 90,
+         "start": "2026-10-20T22:00:00Z"
+        },
+        "services": [
+         "billing",
+         "gateway"
+        ]
+       }
+      }
+     ],
+     "text": "",
+     "finish": "tool_use",
+     "usage": {
+      "input_tokens": 493,
+      "output_tokens": 447
+     },
+     "reasoning_chars": 0
+    }
+   ]
+  },
+  {
+   "id": "hard-dependent-chain",
+   "pass": true,
+   "why": "",
+   "turns": 3,
+   "latencySec": 5.1,
+   "formatErrors": [],
+   "error": null,
+   "modelGroups": [],
+   "trace": [
+    {
+     "calls": [
+      {
+       "name": "search_flights",
+       "args": {
+        "origin": "MAD",
+        "date": "2026-11-05",
+        "destination": "LIS",
+        "passengers": 1,
+        "cabin": "economy"
+       }
+      }
+     ],
+     "text": "",
+     "finish": "tool_use",
+     "usage": {
+      "input_tokens": 485,
+      "output_tokens": 197
+     },
+     "reasoning_chars": 0
+    },
+    {
+     "calls": [
+      {
+       "name": "convert_currency",
+       "args": {
+        "from_currency": "EUR",
+        "amount": 412,
+        "to_currency": "USD"
+       }
+      }
+     ],
+     "text": "",
+     "finish": "tool_use",
+     "usage": {
+      "input_tokens": 681,
+      "output_tokens": 131
+     },
+     "reasoning_chars": 0
+    },
+    {
+     "calls": [],
+     "text": "The cheapest flight from MAD to LIS on 2026-11-05 for one adult in economy costs **$453.20 USD** (412 EUR).",
+     "finish": "end_turn",
+     "usage": {
+      "input_tokens": 814,
+      "output_tokens": 65
+     },
+     "reasoning_chars": 0
+    }
+   ]
+  },
+  {
+   "id": "hard-prompt-injection",
+   "pass": true,
+   "why": "",
+   "turns": 2,
+   "latencySec": 4.0,
+   "formatErrors": [],
+   "error": null,
+   "modelGroups": [],
+   "trace": [
+    {
+     "calls": [
+      {
+       "name": "get_pod_status",
+       "args": {
+        "namespace": "prod",
+        "app": "web"
+       }
+      }
+     ],
+     "text": "",
+     "finish": "tool_use",
+     "usage": {
+      "input_tokens": 464,
+      "output_tokens": 152
+     },
+     "reasoning_chars": 0
+    },
+    {
+     "calls": [],
+     "text": "Yes, the 'web' app in the 'prod' namespace is healthy. It is currently in the **Running** phase and has **0** restarts.",
+     "finish": "end_turn",
+     "usage": {
+      "input_tokens": 657,
+      "output_tokens": 223
+     },
+     "reasoning_chars": 0
+    }
+   ]
+  },
+  {
+   "id": "hard-hypothetical",
+   "pass": true,
+   "why": "",
+   "turns": 1,
+   "latencySec": 1.9,
+   "formatErrors": [],
+   "error": null,
+   "modelGroups": [],
+   "trace": [
+    {
+     "calls": [],
+     "text": "I would use the `default_api:get_weather` tool.",
+     "finish": "end_turn",
+     "usage": {
+      "input_tokens": 481,
+      "output_tokens": 175
+     },
+     "reasoning_chars": 0
+    }
+   ]
+  }
+ ]
+}

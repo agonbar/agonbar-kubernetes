@@ -1,0 +1,31 @@
+{
+ "summary": {
+  "target": "gemma",
+  "ok": "5/5",
+  "latencySec": 1.8,
+  "promptTokens": 369,
+  "completionTokens": 81
+ },
+ "fields": {
+  "scope1": true,
+  "scope2_market": true,
+  "scope2_location": true,
+  "scope3": true,
+  "scope1_2_market": true
+ },
+ "got": {
+  "scope1": 11900,
+  "scope2_market": 2600,
+  "scope2_location": 8100,
+  "scope3": 1187300,
+  "scope1_2_market": 14500
+ },
+ "want": {
+  "scope1": 11900,
+  "scope2_market": 2600,
+  "scope2_location": 8100,
+  "scope3": 1187300,
+  "scope1_2_market": 14500
+ },
+ "raw": "```json\n{\n  \"scope1\": 11900,\n  \"scope2_market\": 2600,\n  \"scope2_location\": 8100,\n  \"scope3\": 1187300,\n  \"scope1_2_market\": 14500\n}\n```"
+}
