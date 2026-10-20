@@ -63,6 +63,11 @@ spec:
                     secretKeyRef:
                       name: immich
                       key: dbPassword
+                - name: KUMA_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: uptime-push
+                      key: token
               command: ["/bin/bash", "-c"]
               args:
                 - |
@@ -71,7 +76,20 @@ spec:
                   out="/backups/immich-${ts}.dump"
                   check=immich_restorecheck
 
-                  cleanup() { psql -d postgres -qc "DROP DATABASE IF EXISTS $check" >/dev/null 2>&1 || true; }
+                  # Uptime Kuma monitor "backup: immich-postgres-backup"
+                  # (scripts/uptime-backup-monitors.sh): up when clean, down on any
+                  # failure, and down by itself after 26h with no ping at all. The
+                  # image has no curl or wget, so the push goes over bash's /dev/tcp.
+                  kuma() {
+                    exec 3<>/dev/tcp/uptime.agonbar.svc.cluster.local/3001 || return 1
+                    printf 'GET /api/push/%s?status=%s&msg=%s HTTP/1.0\r\nHost: uptime\r\n\r\n' "$KUMA_TOKEN" "$1" "$2" >&3
+                    echo "kuma $1: $(head -1 <&3)"; exec 3<&-
+                  }
+                  cleanup() {
+                    rc=$?
+                    psql -d postgres -qc "DROP DATABASE IF EXISTS $check" >/dev/null 2>&1 || true
+                    if [ "$rc" -eq 0 ]; then kuma up "verified+${n:-0}+assets" || true; else kuma down "failed,exit+$rc" || true; fi
+                  }
                   trap cleanup EXIT
 
                   # Custom format, not plain SQL, because this database cannot be

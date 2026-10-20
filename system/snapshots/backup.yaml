@@ -65,6 +65,18 @@ data:
     TIMESTAMP=$(date +%Y%m%d-%H%M%S)
     FAILED=0
 
+    # Uptime Kuma monitor "backup: pvc-backup" (scripts/uptime-backup-monitors.sh):
+    # up when the whole run is clean, down when it is not, and down by itself
+    # after 28h with no ping at all. A BACKUP_ONLY rerun covers one volume, so it
+    # says nothing about the night and does not ping.
+    kuma() { curl -fsS -m 10 -o /dev/null "http://uptime.agonbar.svc.cluster.local:3001/api/push/${KUMA_TOKEN}?status=$1&msg=$2" && echo "kuma $1: ok"; }
+    finish() {
+      rc=$?
+      [ -z "${BACKUP_ONLY}" ] || return 0
+      if [ "$rc" -eq 0 ]; then kuma up OK || true; else kuma down "failed,exit+$rc" || true; fi
+    }
+    trap finish EXIT
+
     # The snapshot class is derived per-PVC below, never hardcoded. It used to be
     # a global "truenas-iscsi-ssd", which silently produced unrestorable backups
     # for the 17 PVCs on truenas-iscsi-ssd-lan: the snapshot succeeds and reports
@@ -685,6 +697,12 @@ spec:
               command:
                 - /bin/sh
                 - /scripts/backup.sh
+              env:
+                - name: KUMA_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: uptime-push
+                      key: token
               volumeMounts:
                 - name: script
                   mountPath: /scripts
