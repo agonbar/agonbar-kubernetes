@@ -1,15 +1,12 @@
-# Strata (github.com/Niko1221/Strata): Qwen3.8-Flash-Next UD-IQ4_XS (Unsloth,
-# ~4 bits) a 256K de contexto en la A2000 de kubernetes-10. Los modelos y la
-# config que escribe el setup del primer arranque viven en el SSD raíz del nodo
-# (/var/lib/strata-ssd). La IQ3_XXS sigue allí: para volver, MODEL=IQ3_XXS sin
-# FAMILY y los límites de memoria de antes (60Gi/66Gi, VM de 70 GiB).
+# Strata (github.com/Niko1221/Strata): Qwen3.8-Flash-Next IQ3_XXS a 256K de
+# contexto en la A2000 de kubernetes-10. Los modelos y la config que escribe el
+# setup del primer arranque viven en el SSD raíz del nodo (/var/lib/strata-ssd).
 # No en el HDD (scsi1, /var/lib/strata): el prefill lee el shard PLE con E/S
 # directa, y con prompts largos el raidz2 mecánico dejaba al motor 60 s sin
 # avanzar, y el vigilante de Strata lo reiniciaba.
-# Con 80 GiB de VM el setup no usa el modo de presupuesto de RAM: copia los
-# ~55 GiB de expertos a RAM fijada (mlock, por eso k3s corre con
-# LimitMEMLOCK=infinity) en cada arranque, de ahí la startupProbe larga. Por
-# debajo de ~71.4 GiB de MemTotal leería parte de los expertos del SSD.
+# Con 70 GiB de VM el setup no usa el modo low-RAM: copia los ~43 GB de expertos
+# a RAM fijada (mlock, por eso k3s corre con LimitMEMLOCK=infinity) en cada
+# arranque, de ahí la startupProbe larga.
 # Imagen construida en el propio nodo (código CPU nativo de Zen 4, sm_86).
 apiVersion: apps/v1
 kind: Deployment
@@ -40,10 +37,8 @@ spec:
         - name: strata
           image: ghcr.io/agonbar/strata:296b59d2
           env:
-            - name: FAMILY
-              value: unsloth
             - name: MODEL
-              value: UD-IQ4_XS
+              value: IQ3_XXS
             - name: CONTEXT
               value: "262144"
             - name: VISION
@@ -74,10 +69,10 @@ spec:
           resources:
             requests:
               cpu: "4"
-              memory: 66Gi
+              memory: 60Gi
               nvidia.com/gpu: 1
             limits:
-              memory: 74Gi
+              memory: 66Gi
               nvidia.com/gpu: 1
           volumeMounts:
             - name: data
