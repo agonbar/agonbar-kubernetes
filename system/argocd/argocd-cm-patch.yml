@@ -9,4 +9,6 @@ data:
   # 3m default. The controller and repo-server read this at startup only:
   # after changing it, `kubectl -n argocd rollout restart
   # statefulset/argocd-application-controller deploy/argocd-repo-server`.
+  # The repo-server also keeps the repo's ls-remote result in redis
+  # (git-refs|<repo>) for this long, so a stale entry outlives the restart.
   timeout.reconciliation: 5m
