@@ -76,7 +76,8 @@ spec:
             - containerPort: 27015
               name: gameport
               protocol: UDP
-            # REST API (v2.x wrapper backend) — internal only, not in the Service.
+            # REST API (v2.x wrapper backend) — internal only: not in the
+            # LoadBalancer Service, only in the ClusterIP palworld-rest.
             - containerPort: 8212
               name: restapi
               protocol: TCP
@@ -118,6 +119,22 @@ spec:
       targetPort: 27015
       name: gameport
       protocol: UDP
+---
+# The REST API, cluster-internal only, for games-status (player count, server
+# FPS, save before it scales the server to 0).
+kind: Service
+apiVersion: v1
+metadata:
+  name: palworld-rest
+  namespace: games
+spec:
+  selector:
+    app: palworld
+  ports:
+    - port: 8212
+      targetPort: 8212
+      name: restapi
+      protocol: TCP
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
