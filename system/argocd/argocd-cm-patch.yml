@@ -3,7 +3,10 @@ kind: ConfigMap
 metadata:
   name: argocd-cm
 data:
-  # This cluster changes rarely; poll Git hourly instead of every 3m to cut
-  # apiserver/kine load on ovh02. Manual refresh (argocd.argoproj.io/refresh)
-  # or a webhook still triggers immediate syncs.
-  timeout.reconciliation: 1h
+  # How often Argo CD polls Git. There is no GitHub webhook on this repo, so
+  # this is the only way a push reaches the cluster. 1h (2026-07-08) left
+  # commits undeployed for up to an hour; 5m keeps the poll cheaper than the
+  # 3m default. The controller and repo-server read this at startup only:
+  # after changing it, `kubectl -n argocd rollout restart
+  # statefulset/argocd-application-controller deploy/argocd-repo-server`.
+  timeout.reconciliation: 5m
