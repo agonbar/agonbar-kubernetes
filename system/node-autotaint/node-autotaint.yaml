@@ -81,41 +81,60 @@ data:
       esac
     done
 ---
-apiVersion: batch/v1
-kind: CronJob
+# A long-running loop rather than a CronJob. The CronJob created and deleted a
+# pod every 2 minutes, and every pod change makes the k3s network policy
+# controller (kube-router) rebuild iptables and ipsets on every node, and made
+# ArgoCD refresh this app ~25 times per run. On ovh02 that burst stalled the
+# Satisfactory server's tick for 1-2 s every couple of minutes (measured
+# 2026-10-20). The loop does the same check at the same cadence with no pod
+# churn. The short tolerations move it off a dead node in ~30 s, so it is not
+# stuck on the very node it has to taint.
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: node-autotaint
   namespace: kube-system
 spec:
-  schedule: "*/2 * * * *"
-  concurrencyPolicy: Forbid
-  successfulJobsHistoryLimit: 1
-  failedJobsHistoryLimit: 3
-  jobTemplate:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-autotaint
+  template:
+    metadata:
+      labels:
+        app: node-autotaint
     spec:
-      ttlSecondsAfterFinished: 600
-      template:
-        spec:
-          serviceAccountName: node-autotaint
-          restartPolicy: OnFailure
-          containers:
-            - name: reconcile
-              image: alpine/k8s:1.30.0
-              command: ["/bin/sh", "/script/reconcile.sh"]
-              env:
-                - name: UNREADY_THRESHOLD_SECONDS
-                  value: "300"
-              resources:
-                requests:
-                  cpu: 10m
-                  memory: 32Mi
-                limits:
-                  memory: 64Mi
-              volumeMounts:
-                - name: script
-                  mountPath: /script
-          volumes:
+      serviceAccountName: node-autotaint
+      tolerations:
+        - key: node.kubernetes.io/unreachable
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: 30
+        - key: node.kubernetes.io/not-ready
+          operator: Exists
+          effect: NoExecute
+          tolerationSeconds: 30
+      containers:
+        - name: reconcile
+          image: alpine/k8s:1.30.0
+          command:
+            - /bin/sh
+            - -c
+            - while true; do /bin/sh /script/reconcile.sh || echo "reconcile failed"; sleep 120; done
+          env:
+            - name: UNREADY_THRESHOLD_SECONDS
+              value: "300"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
             - name: script
-              configMap:
-                name: node-autotaint-script
-                defaultMode: 0555
+              mountPath: /script
+      volumes:
+        - name: script
+          configMap:
+            name: node-autotaint-script
+            defaultMode: 0555
