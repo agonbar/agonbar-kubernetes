@@ -4,6 +4,7 @@
 #              "Homer" frente a "Homero", "Leo Tolstoy" frente a "Tolstói")
 # series=X     saga para un libro que no está en la 75.452 ("series=" la quita)
 # index=N      número dentro de esa saga
+# lib=nf|f     biblioteca (no ficción o ficción) para un libro que no está en la 75.452
 #
 # Las sagas siguen el nombre que usa la 75.452 para el resto de la serie: Los juegos del
 # hambre se llama allí "Distritos".
@@ -17,3 +18,4 @@
 37	series=Distritos	index=0
 38	series=Distritos	index=0.5
 24	series=
+117	lib=nf

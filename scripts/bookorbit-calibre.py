@@ -12,6 +12,10 @@ metadatos de Calibre como fuente canónica.
       que la biblioteca aún no tiene, les pone los metadatos canónicos y los finaliza.
       El original se queda en nas03. Sin --apply solo dice cuántos entrarían.
 
+  ./bookorbit-calibre.py split [--apply]
+      Lleva cada libro ya importado a su biblioteca: "Ficción" o "No ficción" según sus
+      géneros de Calibre (ver FICTION y NONFICTION). Import ya los manda a la buena.
+
   ./bookorbit-calibre.py dupes
       Libros de la biblioteca con el mismo título y autor normalizados.
 
@@ -43,7 +47,22 @@ CAL_DB = os.path.expanduser("~/.cache/bookorbit-calibre/metadata.db")
 CAL_DIRS = os.path.expanduser("~/.cache/bookorbit-calibre/dirs.txt")
 STAGE_NAS = "/mnt/SSD/torrents/.book-dock-stage"  # nas02; en el pod es /downloads/.book-dock-stage
 STAGE_POD, DOCK_POD = "/downloads/.book-dock-stage", "/downloads/book-dock"
-LIBRARY_ID, FOLDER_ID = 1, 1
+LIBRARY_ID, FOLDER_ID = 1, 1                 # "Ficción", /library/books
+NF_PATH = "/library/no-ficcion"              # "No ficción"; su id se busca por la carpeta
+
+# Ficción o no ficción, por los géneros de epublibre. Un libro es de no ficción solo si
+# tiene algún género de NONFICTION y ninguno de FICTION; lo que no tiene ninguno de los
+# dos ("Otros", "Variada", "Humor" solos) es casi todo cuento, poesía y novela, y va a
+# ficción. Las etiquetas de tipo (Novela, Ensayo...) no sirven: solo las lleva un tercio.
+FICTION = {"Novela", "Relato", "Teatro", "Poesía", "Cuentos", "Relatos cortos", "Interactivo", "Guion", "Intriga",
+           "Romántico", "Policial", "Histórico", "Drama", "Ciencia ficción", "Fantástico", "Aventuras", "Juvenil",
+           "Realista", "Terror", "Erótico", "Infantil", "Psicológico", "Sátira", "Filosófico", "Bélico", "Clásico"}
+NONFICTION = {"Historia", "Ciencias sociales", "Divulgación", "Memorias", "Filosofía", "Espiritualidad", "Autoayuda",
+              "Ciencias naturales", "Ensayo", "Comunicación", "Crítica y teoría literaria", "Psicología", "Arte",
+              "Viajes", "Hogar", "Referencia", "Crónica", "Salud y bienestar", "Ciencias exactas", "Deportes y juegos",
+              "Tecnología", "Sexualidad", "Manuales y cursos", "Padres e hijos", "Idiomas", "Diccionarios y enciclopedias",
+              "Cocina", "Cocina y Arte", "Biografía", "Publicaciones periódicas", "Investigación", "Humanidades",
+              "Sociologia", "Teología siglo XXI", "Didáctico"}
 SID = int(os.environ.get("BO_SID", "173"))
 PORT = int(os.environ.get("BO_PORT", "18300"))
 LOCKS = ["title", "authors", "description", "publisher", "publishedYear", "language", "seriesName", "seriesIndex"]
@@ -121,6 +140,10 @@ class Calibre:
             return name, None
         return None, name
 
+    def nonfiction(self, cid):
+        g = set(self.tags.get(cid, []))
+        return bool(g & NONFICTION) and not g & FICTION
+
     def canonical(self, cid):
         """Metadatos de BookOrbit para el libro cid de la 75.452."""
         _, title, idx, pubdate, _, _ = self.books[cid]
@@ -164,7 +187,10 @@ def fmt_index(idx):
 
 def pod_node(js, *args, inp=None):
     cmd = KUBE + ["exec"] + (["-i"] if inp else []) + ["deploy/bookorbit", "--", "sh", "-c", 'cd /app && exec node -e "$0" "$@"', js, *args]
-    return subprocess.run(cmd, input=inp, capture_output=True, text=True, check=True).stdout
+    r = subprocess.run(cmd, input=inp, capture_output=True, text=True)
+    if r.returncode:
+        raise RuntimeError(f"kubectl exec: {r.stderr.strip()[-400:] or r.returncode}")
+    return r.stdout
 
 
 SQL_JS = r'''const {Client}=require("pg");(async()=>{const c=new Client({host:process.env.POSTGRES_HOST,port:+process.env.POSTGRES_PORT,
@@ -176,16 +202,34 @@ def sql(query):
     return json.loads(pod_node(SQL_JS, query))
 
 
+_nf = None
+
+
+def nf_target():
+    """(library_id, folder_id) de "No ficción", por la carpeta."""
+    global _nf
+    if _nf is None:
+        r = sql(f"select library_id, id from library_folders where path='{NF_PATH}'")
+        if not r:
+            raise SystemExit(f"no hay biblioteca con la carpeta {NF_PATH}")
+        _nf = (r[0]["library_id"], r[0]["id"])
+    return _nf
+
+
+def target(cal, cid):
+    return nf_target() if cal.nonfiction(cid) else (LIBRARY_ID, FOLDER_ID)
+
+
 def library_books():
     """id, title, authors, series de la biblioteca, por tramos: kubectl exec corta la salida hacia los 800 KB."""
     out, last = [], 0
     while True:
-        rows = sql(f"""select b.id, m.title, m.series_name s, m.series_index si, m.published_year y,
+        rows = sql(f"""select b.id, b.library_id lib, m.title, m.series_name s, m.series_index si, m.published_year y,
             coalesce((select json_agg(a.name order by ba.display_order) from book_authors ba join authors a on a.id=ba.author_id
                       where ba.book_id=b.id), '[]') au,
             coalesce((select json_agg(t.name order by t.name) from book_tags bt join tags t on t.id=bt.tag_id where bt.book_id=b.id), '[]') tg
             from books b join book_metadata m on m.book_id=b.id
-            where b.library_id={LIBRARY_ID} and b.id>{last} order by b.id limit 3000""")
+            where b.library_id in ({LIBRARY_ID}, {nf_target()[0]}) and b.id>{last} order by b.id limit 3000""")
         if not rows:
             return out
         out += rows
@@ -241,6 +285,16 @@ console.log(h+"."+p+"."+c.createHmac("sha256",process.env.JWT_SECRET).update(h+"
         self.pf.terminate()
 
 
+def rename(api):
+    """Con fileRenameEnabled, el renombrado coloca cada libro según sus metadatos."""
+    for lib in (LIBRARY_ID, nf_target()[0]):
+        pending = api("GET", f"/libraries/{lib}/bulk-rename/preview?page=1&pageSize=1")["totalByStatus"]
+        if pending.get("will_rename"):
+            api("POST", f"/libraries/{lib}/bulk-rename/execute", {}, raw=True)  # responde un stream de eventos
+            while api("GET", f"/libraries/{lib}/bulk-rename/status")["running"]:
+                time.sleep(3)
+
+
 def prune():
     """Quita los autores sin libros que dejan las grafías corregidas ("J.R.R. Tolkien", "Homer") y
     las carpetas vacías que deja el renombrado."""
@@ -251,7 +305,7 @@ def prune():
     if gone:
         log(f"{len(gone)} autores sin libros borrados")
     pod_node(r'''const fs=require("fs"),p=require("path");const walk=d=>{for(const n of fs.readdirSync(d)){const f=p.join(d,n);
-if(fs.statSync(f).isDirectory()){walk(f);if(!fs.readdirSync(f).length)fs.rmdirSync(f);}}};walk(process.argv[1]);''', "/library/books")
+if(fs.statSync(f).isDirectory()){walk(f);if(!fs.readdirSync(f).length)fs.rmdirSync(f);}}};process.argv.slice(1).forEach(walk);''', "/library/books", NF_PATH)
 
 
 def diff(cur, new):
@@ -270,11 +324,7 @@ def apply_metadata(api, book_id, md):
 
 def conform(args):
     cal = Calibre()
-    manual = {}
-    for line in open(os.path.join(HERE, "bookorbit-calibre-manual.tsv"), encoding="utf-8"):
-        if line.strip() and not line.startswith("#"):
-            bid, *kv = line.rstrip("\n").split("\t")
-            manual[int(bid)] = dict(x.split("=", 1) for x in kv)
+    manual = read_manual()
     by_key = cal.by_key()
     by_title = {}
     for cid, (_, title, *_r) in cal.books.items():
@@ -320,11 +370,7 @@ def conform(args):
             apply_metadata(api, b["id"], new)
     log(f"{changed} libros {'corregidos' if api else 'por corregir (sin --apply)'}")
     if api:
-        pending = api("GET", f"/libraries/{LIBRARY_ID}/bulk-rename/preview?page=1&pageSize=1")["totalByStatus"]
-        if pending.get("will_rename"):  # con la biblioteca en fileRenameEnabled, el renombrado coloca cada libro según sus metadatos nuevos
-            api("POST", f"/libraries/{LIBRARY_ID}/bulk-rename/execute", {}, raw=True)  # responde un stream de eventos
-            while api("GET", f"/libraries/{LIBRARY_ID}/bulk-rename/status")["running"]:
-                time.sleep(3)
+        rename(api)
         prune()
         api.close()
 
@@ -408,7 +454,8 @@ for(const n of fs.readdirSync(s)){if(fs.existsSync(p.join(d,n)))fs.rmSync(p.join
         cid = int(re.search(r"\((\d+)\)$", r["u"]).group(1))
         md = cal.canonical(cid)
         sel = {k: md[k] for k in ("title", "authors", "seriesName", "seriesIndex", "publishedYear", "language", "description", "publisher", "genres")}
-        api("PATCH", f"/book-dock/files/{r['id']}", {"selectedMetadata": sel, "targetLibraryId": LIBRARY_ID, "targetFolderId": FOLDER_ID})
+        lib, folder = target(cal, cid)
+        api("PATCH", f"/book-dock/files/{r['id']}", {"selectedMetadata": sel, "targetLibraryId": lib, "targetFolderId": folder})
         ids.append(r["id"])
         md_by_file[r["id"]] = md
     pre = api("POST", "/book-dock/finalize/preview", {"fileIds": ids, "defaultLibraryId": LIBRARY_ID, "defaultFolderId": FOLDER_ID})
@@ -434,6 +481,51 @@ def sh(s):
     return "'" + s.replace("'", "'\\''") + "'"
 
 
+def split(args):
+    """Lleva cada libro a su biblioteca, ficción o no ficción, en los dos sentidos. Los que
+    no están en la 75.452 se quedan donde estén salvo que bookorbit-calibre-manual.tsv diga
+    lib=nf o lib=f."""
+    cal = Calibre()
+    by_key = cal.by_key()
+    manual = read_manual()
+    nf = nf_target()
+    moves = {LIBRARY_ID: [], nf[0]: []}
+    for b in library_books():
+        want = manual.get(b["id"], {}).get("lib")
+        if want is None:
+            cids = by_key.get(key(b["title"], b["au"]))
+            if not cids:
+                continue
+            want = "nf" if cal.nonfiction(cids[0]) else "f"
+        lib = nf[0] if want == "nf" else LIBRARY_ID
+        if b["lib"] != lib:
+            moves[lib].append(b["id"])
+    for lib, ids in moves.items():
+        log(f"{len(ids)} libros a la biblioteca {lib}{'' if args.apply else ' (sin --apply)'}")
+        if not args.apply:
+            continue
+        api = Api()
+        folder = nf[1] if lib == nf[0] else FOLDER_ID
+        for i in range(0, len(ids), 500):
+            chunk = ids[i:i + 500]
+            body = {"selection": {"bookIds": chunk}, "targetLibraryId": lib, "targetFolderId": folder}
+            out = api("POST", "/books/move", {**body, "collisionPolicy": "skip"}, raw=True).decode(errors="replace")
+            bad = [l for l in out.splitlines() if l.startswith("data:") and '"status"' in l and '"success"' not in l]
+            log(f"  movidos {i + len(chunk)}/{len(ids)}" + (f", {len(bad)} sin mover: {bad[:3]}" if bad else ""))
+        api.close()
+    if args.apply:
+        prune()
+
+
+def read_manual():
+    manual = {}
+    for line in open(os.path.join(HERE, "bookorbit-calibre-manual.tsv"), encoding="utf-8"):
+        if line.strip() and not line.startswith("#"):
+            bid, *kv = line.rstrip("\n").split("\t")
+            manual[int(bid)] = dict(x.split("=", 1) for x in kv)
+    return manual
+
+
 def dupes(_):
     seen = {}
     for b in library_books():
@@ -453,6 +545,8 @@ if __name__ == "__main__":
     p.add_argument("--limit", type=int)
     p.add_argument("--batch", type=int, default=150)
     p.add_argument("--apply", action="store_true")
+    p = sub.add_parser("split")
+    p.add_argument("--apply", action="store_true")
     sub.add_parser("dupes")
     a = ap.parse_args()
-    {"conform": conform, "import": import_, "dupes": dupes}[a.cmd](a)
+    {"conform": conform, "import": import_, "split": split, "dupes": dupes}[a.cmd](a)
