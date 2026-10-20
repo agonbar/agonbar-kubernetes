@@ -7,7 +7,16 @@ metadata:
     app: piracy-postgres-backup
 spec:
   # Daily 03:30 Europe/Madrid. Dumps every database off the Postgres on nas02
-  # and keeps 14 days on the NFS share.
+  # and keeps 14 days on the NFS share. Then it restores one of the dumps into a
+  # scratch database on the same server and compares it with the source, one
+  # database a night in turn, so every one of them is read back every few weeks.
+  #
+  # The share is on nas02 too. nas03 pulls each night's set at 04:30 and keeps
+  # 30 days (scripts/nas03-pgdumps.sh); nas02 also snapshots PGDATA hourly
+  # (scripts/nas02-pg-snapshots.sh). The run pings the Uptime Kuma monitor
+  # "backup: piracy-postgres-backup" (scripts/uptime-backup-monitors.sh): up when
+  # clean, down when anything fails, and Kuma pages by itself after 26h of
+  # silence, which covers the run that never happened.
   #
   # PGHOST is a 192.168.0.x LAN address, so this has to land on a home node --
   # hence the lbpool selector. It used to pin kubernetes.io/hostname: nas00,
@@ -35,14 +44,37 @@ spec:
               envFrom:
                 - secretRef:
                     name: piracy-postgres-backup
+              env:
+                - name: KUMA_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: uptime-push
+                      key: token
               command: ["/bin/bash", "-c"]
               args:
                 - |
                   set -euo pipefail
                   ts="$(date +%Y%m%d-%H%M%S)"
+                  check=zz_restorecheck
+                  summary=""
+
+                  # The image has no curl or wget, so the push goes over bash's /dev/tcp.
+                  kuma() {
+                    exec 3<>/dev/tcp/uptime.agonbar.svc.cluster.local/3001 || return 1
+                    printf 'GET /api/push/%s?status=%s&msg=%s HTTP/1.0\r\nHost: uptime\r\n\r\n' "$KUMA_TOKEN" "$1" "$2" >&3
+                    echo "kuma $1: $(head -1 <&3)"; exec 3<&-
+                  }
+                  finish() {
+                    rc=$?
+                    psql -d postgres -qc "DROP DATABASE IF EXISTS $check WITH (FORCE)" >/dev/null 2>&1 || true
+                    if [ "$rc" -eq 0 ]; then kuma up "$summary" || true; else kuma down "failed,exit+$rc" || true; fi
+                  }
+                  trap finish EXIT
+
                   echo "globals -> /backups/globals-${ts}.sql"
                   pg_dumpall -h "$PGHOST" -U "$PGUSER" -g -f "/backups/globals-${ts}.sql"
-                  for db in $(psql -h "$PGHOST" -U "$PGUSER" -d postgres -tAc "select datname from pg_database where datistemplate=false and datname<>'postgres'"); do
+                  dbs=()
+                  for db in $(psql -h "$PGHOST" -U "$PGUSER" -d postgres -tAc "select datname from pg_database where datistemplate=false and datname not in ('postgres','$check') order by 1"); do
                     out="/backups/${db}-${ts}.dump"
                     for i in 1 2 3; do
                       if pg_dump -h "$PGHOST" -U "$PGUSER" -d "$db" -Fc -f "$out" && [ -s "$out" ]; then break; fi
@@ -51,7 +83,40 @@ spec:
                     done
                     pg_restore --list "$out" >/dev/null 2>&1 || { echo "FATAL bad dump $db"; rm -f "$out"; exit 1; }
                     echo "ok $db -> $out ($(du -h "$out" | cut -f1))"
+                    dbs+=("$db")
                   done
+
+                  # Globals are plain SQL and cannot be replayed on a server that
+                  # already has the roles, so check the file is whole and has them all.
+                  g="/backups/globals-${ts}.sql"
+                  roles=$(psql -d postgres -tAc "select count(*) from pg_roles where rolname !~ '^pg_'")
+                  in_dump=$(grep -c '^CREATE ROLE ' "$g" || true)
+                  grep -q '^-- PostgreSQL database cluster dump complete' "$g" && [ "$in_dump" -eq "$roles" ] || {
+                    echo "FATAL globals: $in_dump CREATE ROLE in $g, $roles roles on the server, or no completion footer"; exit 1; }
+                  echo "verify globals: complete, $in_dump/$roles roles"
+
+                  # One database a night, by day number, so the whole set comes round
+                  # every ${#dbs[@]} days. Restore it into a scratch database on the same
+                  # server; finish() drops it whatever happens.
+                  pick=${dbs[$(( $(date +%s) / 86400 % ${#dbs[@]} ))]}
+                  dump="/backups/${pick}-${ts}.dump"
+                  psql -d postgres -qc "DROP DATABASE IF EXISTS $check WITH (FORCE)"
+                  psql -d postgres -qc "CREATE DATABASE $check"
+                  t0=$(date +%s)
+                  pg_restore -d "$check" --single-transaction --exit-on-error "$dump"
+                  t1=$(date +%s)
+
+                  q() { psql -XtA -d "$1" -c "$2"; }
+                  tables="select count(*) from pg_tables where schemaname not in ('pg_catalog','information_schema')"
+                  src_t=$(q "$pick" "$tables"); dst_t=$(q "$check" "$tables")
+                  big=$(q "$check" "select format('%I.%I', schemaname, relname) from pg_stat_user_tables order by pg_total_relation_size(relid) desc limit 1")
+                  src_r=$(q "$pick" "select count(*) from $big"); dst_r=$(q "$check" "select count(*) from $big")
+                  # The live table keeps moving after the dump: allow 10% plus 100 rows.
+                  diff=$(( src_r > dst_r ? src_r - dst_r : dst_r - src_r ))
+                  echo "verify $pick: restored in $((t1 - t0))s, tables $dst_t/$src_t, $big rows $dst_r/$src_r"
+                  [ "$dst_t" -gt 0 ] && [ "$dst_t" -eq "$src_t" ] && [ "$dst_r" -gt 0 ] && [ "$diff" -le $(( src_r / 10 + 100 )) ] || {
+                    echo "FATAL verify $pick: restore does not match the source"; exit 1; }
+                  summary="${#dbs[@]}+dumps,verified+${pick}+${dst_r}+rows"
                   find /backups -type f \( -name '*.dump' -o -name 'globals-*.sql' \) -mtime +14 -print -delete
                   echo "=== current backups ==="; ls -lh /backups
               volumeMounts:
