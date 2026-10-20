@@ -56,6 +56,11 @@ spec:
                     secretKeyRef:
                       name: dawarich
                       key: databasePassword
+                - name: KUMA_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: uptime-push
+                      key: token
               command: ["/bin/sh", "-c"]
               args:
                 - |
@@ -64,7 +69,15 @@ spec:
                   out="/backups/dawarich-${ts}.dump"
                   check=dawarich_restorecheck
 
-                  cleanup() { psql -d postgres -qc "DROP DATABASE IF EXISTS $check" >/dev/null 2>&1 || true; }
+                  # Uptime Kuma monitor "backup: dawarich-postgres-backup"
+                  # (scripts/uptime-backup-monitors.sh): up when clean, down on any
+                  # failure, and down by itself after 26h with no ping at all.
+                  kuma() { wget -q -T 10 -O /dev/null "http://uptime.agonbar.svc.cluster.local:3001/api/push/$KUMA_TOKEN?status=$1&msg=$2" && echo "kuma $1: ok"; }
+                  cleanup() {
+                    rc=$?
+                    psql -d postgres -qc "DROP DATABASE IF EXISTS $check" >/dev/null 2>&1 || true
+                    if [ "$rc" -eq 0 ]; then kuma up "verified+${n:-0}+points" || true; else kuma down "failed,exit+$rc" || true; fi
+                  }
                   trap cleanup EXIT
 
                   pg_dump --dbname=dawarich_development -Fc -f "$out"
