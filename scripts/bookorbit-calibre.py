@@ -509,7 +509,14 @@ def split(args):
         for i in range(0, len(ids), 500):
             chunk = ids[i:i + 500]
             body = {"selection": {"bookIds": chunk}, "targetLibraryId": lib, "targetFolderId": folder}
-            out = api("POST", "/books/move", {**body, "collisionPolicy": "skip"}, raw=True).decode(errors="replace")
+            while True:  # BookOrbit no mueve mientras escanea una de las bibliotecas (al arrancar, cada hora)
+                try:
+                    out = api("POST", "/books/move", {**body, "collisionPolicy": "skip"}, raw=True).decode(errors="replace")
+                    break
+                except RuntimeError as e:
+                    if "scan is running" not in str(e):
+                        raise
+                    time.sleep(30)
             bad = [l for l in out.splitlines() if l.startswith("data:") and '"status"' in l and '"success"' not in l]
             log(f"  movidos {i + len(chunk)}/{len(ids)}" + (f", {len(bad)} sin mover: {bad[:3]}" if bad else ""))
         api.close()
