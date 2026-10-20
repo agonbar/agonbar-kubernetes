@@ -29,7 +29,10 @@ spec:
             - name: SERVER_NAME
               value: "DivertiJeep"
             - name: SERVER_PASSWORD
-              value: "lovamosviendo"
+              valueFrom:
+                secretKeyRef:
+                  name: enshrouded-passwords
+                  key: serverPassword
             - name: PORT
               value: "15637"
             - name: SERVER_SLOTS

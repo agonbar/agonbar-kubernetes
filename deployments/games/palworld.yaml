@@ -48,7 +48,10 @@ spec:
             - name: RCON_PORT
               value: "25575"
             - name: ADMIN_PASSWORD
-              value: "divertriclo"
+              valueFrom:
+                secretKeyRef:
+                  name: palworld-passwords
+                  key: adminPassword
             - name: COMMUNITY
               value: "true"
             - name: SERVER_NAME
@@ -56,7 +59,10 @@ spec:
             - name: SERVER_DESCRIPTION
               value: "Servidor de DivertiJeep"
             - name: SERVER_PASSWORD
-              value: "lovamosviendo"
+              valueFrom:
+                secretKeyRef:
+                  name: palworld-passwords
+                  key: serverPassword
             - name: TZ
               value: "Europe/Madrid"
             - name: PUBLIC_IP

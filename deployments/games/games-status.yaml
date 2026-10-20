@@ -14,8 +14,9 @@
 # to that node, no CDN). Through the node's /proc and /sys/fs/cgroup, mounted
 # read-only, it also reads the cgroup of the games that run on that node.
 #
-# No secrets in here: Satisfactory takes a passwordless Client login, and the
-# Palworld admin password is read from the palworld Deployment at runtime.
+# Satisfactory takes a passwordless Client login. The Palworld admin password
+# comes from the palworld-passwords SealedSecret (sealedsecrets.yaml) as env;
+# the Role does not let the panel read Secrets through the API.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -81,8 +82,13 @@ spec:
         - name: ghcr-agonbar
       containers:
         - name: games-status
-          image: ghcr.io/agonbar/games-status:7aa9264
+          image: ghcr.io/agonbar/games-status:7df35d6
           env:
+            - name: PALWORLD_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: palworld-passwords
+                  key: adminPassword
             - name: NODE_NAME
               valueFrom:
                 fieldRef:
