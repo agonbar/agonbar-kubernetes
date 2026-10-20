@@ -1,45 +1,92 @@
-# Read-only "is it the server or my connection?" page for the Satisfactory
-# players, at https://satisfactory.${BASE_DOMAIN}. Source and build script in
-# gitea agonbar/satisfactory-status.
+# Status page for the game servers in this namespace, at
+# https://juegos.${BASE_DOMAIN} (and the older https://satisfactory.${BASE_DOMAIN}
+# the Satisfactory players already have). One column per game: stopped,
+# starting or running, players, speed, CPU and PSI waits. Source and build
+# script in gitea agonbar/games-status.
 #
-# It has to run on the same node as the game: it reads the game container's
-# cgroup (CPU used, PSI wait for CPU and disk) through the node's /proc and
-# /sys/fs/cgroup, mounted read-only. The podAffinity follows the game wherever
-# it goes. It also has to be served from the game's public IP (traefik runs on
-# ovh02 and the domain resolves straight to it, no CDN), because the players'
-# browsers time /ping to judge their own connection.
+# It also scales the games: a game running with nobody in for 2h goes to 0
+# replicas, and anyone can start a stopped one from the page. That is why it
+# has a Role on exactly those four Deployments, and why the games ArgoCD app
+# ignores /spec/replicas on Deployments.
 #
-# The game API needs no secret: the server has no join password, so a
-# passwordless login as Client is enough to read the tick rate.
+# Placement: it sits next to traefik, because the players' browsers time
+# /ping through it to judge their own connection (the domain resolves straight
+# to that node, no CDN). Through the node's /proc and /sys/fs/cgroup, mounted
+# read-only, it also reads the cgroup of the games that run on that node.
+#
+# No secrets in here: Satisfactory takes a passwordless Client login, and the
+# Palworld admin password is read from the palworld Deployment at runtime.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: games-status
+  namespace: games
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: games-status
+  namespace: games
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: [satisfactory, palworld, enshrouded, factorio]
+    verbs: [get, list, watch, patch, update]
+  - apiGroups: ["apps"]
+    resources: ["deployments/scale"]
+    resourceNames: [satisfactory, palworld, enshrouded, factorio]
+    verbs: [get, patch, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: games-status
+  namespace: games
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: games-status
+subjects:
+  - kind: ServiceAccount
+    name: games-status
+    namespace: games
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: satisfactory-status
+  name: games-status
   namespace: games
   labels:
-    app: satisfactory-status
+    app: games-status
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: satisfactory-status
+      app: games-status
   template:
     metadata:
       labels:
-        app: satisfactory-status
+        app: games-status
     spec:
+      serviceAccountName: games-status
       affinity:
         podAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
                 matchLabels:
-                  app: satisfactory
+                  app.kubernetes.io/name: traefik
+              namespaces: [kube-system]
               topologyKey: kubernetes.io/hostname
       imagePullSecrets:
         - name: ghcr-agonbar
       containers:
-        - name: satisfactory-status
-          image: ghcr.io/agonbar/satisfactory-status:2d84ee4
+        - name: games-status
+          image: ghcr.io/agonbar/games-status:62b1901
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
           ports:
             - containerPort: 8080
               name: http
@@ -75,11 +122,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: satisfactory-status
+  name: games-status
   namespace: games
 spec:
   selector:
-    app: satisfactory-status
+    app: games-status
   ports:
     - port: 8080
       targetPort: http
@@ -88,13 +135,23 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: satisfactory-status
+  name: games-status
   namespace: games
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: traefik
   rules:
+    - host: juegos.${BASE_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: games-status
+                port:
+                  number: 8080
     - host: satisfactory.${BASE_DOMAIN}
       http:
         paths:
@@ -102,10 +159,13 @@ spec:
             path: /
             backend:
               service:
-                name: satisfactory-status
+                name: games-status
                 port:
                   number: 8080
   tls:
+    - secretName: juegos.${BASE_DOMAIN}
+      hosts:
+        - juegos.${BASE_DOMAIN}
     - secretName: satisfactory.${BASE_DOMAIN}
       hosts:
         - satisfactory.${BASE_DOMAIN}
