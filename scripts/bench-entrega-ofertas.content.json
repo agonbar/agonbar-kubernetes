@@ -1,0 +1,128 @@
+{
+ "ejemplos_intro": "Mensajes de agosto de 2026 leídos y verificados a mano contra el texto original. Las vinculaciones (nómina, seguros, certificación energética) y el estado de la operación son lo que un catálogo público no recoge.",
+ "ejemplos": [
+  {
+   "banco": "Openbank",
+   "tin": "2,30 %",
+   "condiciones": "Nómina y seguro de hogar. Con seguro de vida bajaba a 2,20 %, no contratado",
+   "estado": "FEIN firmada",
+   "fecha": "05-ago",
+   "url": "https://www.mediavida.com/foro/off-topic/el-hilo-de-las-hipotecas-678265/406#12160"
+  },
+  {
+   "banco": "BBVA",
+   "tin": "2,35 %",
+   "condiciones": "Sin vinculaciones. Alternativa descartada por el mismo solicitante",
+   "estado": "Ofertada",
+   "fecha": "05-ago",
+   "url": "https://www.mediavida.com/foro/off-topic/el-hilo-de-las-hipotecas-678265/406#12160"
+  },
+  {
+   "banco": "Sabadell",
+   "tin": "3,35 → 2,55 %",
+   "condiciones": "Bonificación de 0,80 puntos por nómina y seguro de vida, desglosada",
+   "estado": "Ofertada",
+   "fecha": "05-ago",
+   "url": "https://www.mediavida.com/foro/off-topic/el-hilo-de-las-hipotecas-678265/406#12173"
+  },
+  {
+   "banco": "Kutxabank",
+   "tin": "2,40 %",
+   "condiciones": "Nómina, certificación energética A y seguro de hogar durante 5 años",
+   "estado": "Preferida",
+   "fecha": "05-ago",
+   "url": "https://www.mediavida.com/foro/off-topic/el-hilo-de-las-hipotecas-678265/406#12173"
+  },
+  {
+   "banco": "Sabadell",
+   "tin": "2,55 %",
+   "condiciones": "Financia el 90 % con vinculaciones",
+   "estado": "Ofertada",
+   "fecha": "05-ago",
+   "url": "https://www.mediavida.com/foro/off-topic/el-hilo-de-las-hipotecas-678265/406#12161"
+  },
+  {
+   "banco": "Bankinter",
+   "tin": "2,85 %",
+   "condiciones": "Financia el 90 % con vinculaciones. Mismo solicitante que la anterior",
+   "estado": "Ofertada",
+   "fecha": "05-ago",
+   "url": "https://www.mediavida.com/foro/off-topic/el-hilo-de-las-hipotecas-678265/406#12161"
+  }
+ ],
+ "cadena": [
+  "<b>Captura.</b> Cada noche se recorren 32 fuentes del mercado (blogs, comparadores, prensa y foros). Los hilos de foro de particulares se leen mensaje a mensaje, con su fecha y su enlace.",
+  "<b>Extracción.</b> Un modelo de lenguaje extrae entidad, producto, TIN, TAE o diferencial, importe, plazo, bonificaciones y fecha del mensaje. Se guarda el texto original para poder auditarlo.",
+  "<b>Contraste con catálogo.</b> Cada oferta se compara con la banda de tipos que la entidad publica para ese producto, plazo y bonificación.",
+  "<b>Alerta.</b> Solo se marcan las ofertas que superan el filtro de la derecha.",
+  "<b>Panel.</b> Listado filtrable por entidad y producto, con distintivo de alerta y acceso al texto original."
+ ],
+ "filtro": {
+  "intro": "Una oferta se marca como alerta solo si cumple las tres condiciones:",
+  "condiciones": [
+   "<b>Es personal.</b> Procede de un foro de particulares o del formulario propio, nunca de un artículo o un comparador.",
+   "<b>Es realista.</b> Su tipo cae dentro de la banda oficial de la entidad. En hipotecas también vale por debajo, que es lo que pasa con una oferta negociada.",
+   "<b>Está completa.</b> Tiene como mínimo entidad y tipo, y además importe o plazo según el producto."
+  ],
+  "cierre": "Las condiciones de blogs, comparadores y prensa alimentan el benchmark de precios públicos, pero no generan alertas."
+ },
+ "fuentes_intro": "Medición propia de ofertas personales en primera persona (entidad y tipo o condición concreta) entre el 22 de septiembre y el 20 de octubre de 2026, salvo donde se indica. Se revisaron doce fuentes.",
+ "fuentes": [
+  {
+   "fuente": "Mediavida, hilo de hipotecas",
+   "tipo": "Foro",
+   "semana": "0,25",
+   "nota": "Fuente principal de abril a agosto, con 7 ofertas solo del 4 al 11 de agosto. Ha bajado desde septiembre."
+  },
+  {
+   "fuente": "Soloarquitectura, autopromoción",
+   "tipo": "Foro",
+   "semana": "0",
+   "nota": "Hilo anual. 3 ofertas entre el 12 de agosto y el 21 de septiembre."
+  },
+  {
+   "fuente": "iAhorro, iAhorradores",
+   "tipo": "Consultorio",
+   "semana": "0,75",
+   "nota": "Nueva. Ofertas con TIN, plazo y vinculaciones."
+  },
+  {
+   "fuente": "Rankia, depósitos y bancos",
+   "tipo": "Foro",
+   "semana": "≈ 9",
+   "nota": "Nueva, medida 9 días. Contraofertas de retención y ofertas negociadas por teléfono."
+  },
+  {
+   "fuente": "Rankia hipotecas, Burbuja, Bogleheads, HelpMyCash, Idealista, Finect",
+   "tipo": "Foros",
+   "semana": "0",
+   "nota": "Sin ofertas personales: tratan vivienda, alquiler o inversión."
+  },
+  {
+   "fuente": "Forocoches",
+   "tipo": "Foro",
+   "semana": "0 en abierto",
+   "nota": "Lo abierto solo trae promociones públicas. El hilo de hipotecas, de unos 100 mensajes por semana, exige invitación. Estimamos 1 o 2 ofertas por semana."
+  },
+  {
+   "fuente": "Reddit, 10 subreddits españoles",
+   "tipo": "Foro",
+   "semana": "0,75",
+   "nota": "Medido sobre el archivo público de Reddit. Casi todo son precios de captación públicos. La mejor es r/SpainFIRE."
+  }
+ ],
+ "pasos": [
+  "<b>Lectura incremental diaria</b> de cada hilo desde el último mensaje leído.",
+  "<b>Precios de retención en depósitos.</b> Incorporar los hilos de depósitos de Rankia y el consultorio de iAhorro, con unas 10 ofertas por semana.",
+  "<b>Exploración periódica de hilos nuevos</b> que sustituyan a los que se agotan.",
+  "<b>Alertas a un canal dedicado</b> cuando entre una oferta personal.",
+  "<b>Revisión humana de una muestra</b> para medir la precisión."
+ ],
+ "limites": [
+  "<b>Autoselección.</b> Quien comparte su oferta en un foro suele hacerlo cuando es buena. Mide el margen negociable, no el precio medio.",
+  "<b>Volumen.</b> En hipotecas dependemos de pocos hilos: unas 3 ofertas por semana de abril a agosto y 1 en las últimas cuatro.",
+  "<b>Solo tipo fijo.</b> Las ofertas sin referencia al Euríbor se tratan como fijas.",
+  "<b>Muestras pequeñas</b>, de 2 a 17 ofertas por entidad. Las medianas son orientativas.",
+  "<b>Catálogo.</b> El tipo publicado es el que bench registra en la web de cada entidad en esa fecha."
+ ]
+}
