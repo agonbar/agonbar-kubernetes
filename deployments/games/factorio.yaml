@@ -36,7 +36,10 @@ spec:
             - name: FACTORIO_VERSION
               value: stable
             - name: RCON_PASS
-              value: ""
+              valueFrom:
+                secretKeyRef:
+                  name: factorio-passwords
+                  key: rconPassword
             - name: ADMIN_USER
               valueFrom:
                 secretKeyRef:
