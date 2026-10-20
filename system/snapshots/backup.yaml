@@ -501,7 +501,10 @@ data:
     # the dump into a scratch database before calling it good.
     # dawarich/dawarich-db-data-local is the same case since 2026-09-24, covered by
     # dawarich-postgres-backup.
-    COVERAGE_SKIP="immich/immich-db-data-local dawarich/dawarich-db-data-local"
+    # piracy/bookorbit-data is a cover cache: BookOrbit regenerates covers/ from
+    # the books, its database lives in the Postgres on nas02, and the only other
+    # file is one user avatar. Nothing in it is worth a nightly copy.
+    COVERAGE_SKIP="immich/immich-db-data-local dawarich/dawarich-db-data-local piracy/bookorbit-data"
 
     check_coverage() {
       echo "========================================="
@@ -554,6 +557,7 @@ data:
     # games namespace
     backup_pvc games enshrouded-data-nfs
     backup_pvc games factorio-data-nfs
+    backup_pvc games archisteamfarm-data
     # local-path: sin snapshotter CSI, van por backup_local_path_pvc. Los tres
     # viven en ovh02 y hasta 2026-09-02 no tenian ninguna copia.
     backup_local_path_pvc games palworld-data
