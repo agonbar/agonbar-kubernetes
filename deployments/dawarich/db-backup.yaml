@@ -38,9 +38,12 @@ spec:
       template:
         spec:
           restartPolicy: Never
-          # Pin to the pool, never to a single host.
+          # Pin to the pool, never to a single host. amd64 because the postgis
+          # image has no arm64 build: on 2026-10-18 the pod landed on orange-pi5,
+          # sat in ImagePullBackOff, and Forbid held back every run after it.
           nodeSelector:
             svccontroller.k3s.cattle.io/lbpool: lamg
+            kubernetes.io/arch: amd64
           containers:
             - name: pg-dump
               # Same image as the server, so the client tools match its major.
