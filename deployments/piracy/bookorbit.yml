@@ -62,6 +62,12 @@ spec:
                       - name: media
                         mountPath: /library/books
                         subPath: books
+                      # Its own library, so an O'Reilly or a cookbook does not sit next to
+                      # Harry Potter. scripts/bookorbit-calibre.py decides which side a book
+                      # goes to from its Calibre genres.
+                      - name: media
+                        mountPath: /library/no-ficcion
+                        subPath: no-ficcion
                       - name: media
                         mountPath: /library/audiobooks
                         subPath: audiobooks
