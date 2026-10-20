@@ -156,6 +156,8 @@ spec:
 
 ---
 # Covers, thumbnails and upload staging. Library state lives in Postgres.
+# 25Gi: covers run ~205 KB per book (cover + thumbnail); 5Gi filled at ~24.5k
+# books, the library is ~75k.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -167,4 +169,4 @@ spec:
     storageClassName: truenas-nfs-ssd-lan
     resources:
         requests:
-            storage: 5Gi
+            storage: 25Gi
