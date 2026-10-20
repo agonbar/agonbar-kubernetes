@@ -10,6 +10,8 @@ Modes:
     <entity_id> [...]        expose those entities to the "conversation" assistant
     --check <entity_id>      print current exposure
     --ask "<frase>" [agent]  run a sentence through the agent (default: built-in)
+    --say "<frase>" [pipeline_id]  run a pipeline intent->tts, save the reply audio
+                             to /tmp/ha-say.<ext> in the pod (kubectl cp it out)
     --ws '<json>' [...]      send raw websocket messages (no "id"), print each result
     --flow <handler> '<json>' [...]  start a config flow, submit each json as a step
 """
@@ -64,6 +66,44 @@ async def flow(handler, steps):
             print(json.dumps(res))
 
 
+async def say(text, pipeline, out_base="/tmp/ha-say"):
+    """Run a pipeline from intent to tts; print the reply and save its audio in the pod."""
+    token = mint_token()
+    async with aiohttp.ClientSession() as s, s.ws_connect(URL + "/api/websocket") as ws:
+        await ws.receive_json()  # auth_required
+        await ws.send_json({"type": "auth", "access_token": token})
+        if (await ws.receive_json())["type"] != "auth_ok":
+            raise SystemExit("auth failed")
+        msg = {"id": 1, "type": "assist_pipeline/run", "start_stage": "intent",
+               "end_stage": "tts", "input": {"text": text}}
+        if pipeline:
+            msg["pipeline"] = pipeline
+        await ws.send_json(msg)
+        speech = url = None
+        t0 = time.monotonic()
+        while True:
+            r = await ws.receive_json()
+            if r["type"] == "result" and not r["success"]:
+                raise SystemExit("ERROR " + json.dumps(r.get("error")))
+            ev = r.get("event") or {}
+            data = ev.get("data") or {}
+            if ev.get("type") == "intent-end":
+                speech = data["intent_output"]["response"]["speech"]["plain"]["speech"]
+                print(f"speech ({time.monotonic() - t0:.1f}s):", speech)
+            elif ev.get("type") == "tts-end":
+                url = data["tts_output"]["url"]
+            elif ev.get("type") == "error":
+                raise SystemExit("ERROR " + json.dumps(data))
+            elif ev.get("type") == "run-end":
+                break
+        if not url:
+            raise SystemExit("no tts output")
+        async with s.get(URL + url, headers={"Authorization": "Bearer " + token}) as r:
+            path = out_base + "." + url.rsplit(".", 1)[-1]
+            open(path, "wb").write(await r.read())
+        print(f"audio ({time.monotonic() - t0:.1f}s):", path)
+
+
 def main():
     args = sys.argv[1:]
     if args and args[0] == "--check":
@@ -76,6 +116,8 @@ def main():
             print(json.dumps(r))
     elif args and args[0] == "--flow":
         asyncio.run(flow(args[1], [json.loads(a) for a in args[2:]]))
+    elif args and args[0] == "--say":
+        asyncio.run(say(args[1], args[2] if len(args) > 2 else None))
     elif args and args[0] == "--ask":
         agent = args[2] if len(args) > 2 else None
         payload = {"type": "conversation/process", "text": args[1], "language": "es"}
