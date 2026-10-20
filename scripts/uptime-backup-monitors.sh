@@ -36,6 +36,9 @@ MONITORS=(
   # pvc-backup runs 1-3h depending on what changed, so a little more slack.
   "backup: pvc-backup|28|backup|system/snapshots"
   "backup: piracy pg dumps on nas03|26|-|-"
+  # Not a backup: the daily check of the litellm fork against HA core
+  # (deployments/lamg/ha-litellm-drift.yaml), same push mechanics.
+  "ha: litellm fork vs core|26|lamg|deployments/lamg"
 )
 
 log(){ echo "[$(date +%H:%M:%S)] $*"; }

@@ -1,0 +1,165 @@
+# Daily check that the custom litellm integration (the ha-litellm-ai-task fork in
+# /config/custom_components/litellm, which adds ai_task) still matches the core
+# integration it shadows, in both Home Assistant instances. On 2026-10-12/15 an HA
+# upgrade moved core under the fork and the voice assistant broke without a word.
+#
+# For lamg and aya it runs the fork's check-upstream-drift.py inside the HA pod and
+# reads the litellm config entry state over the websocket. The Uptime Kuma push
+# monitor "ha: litellm fork vs core" (scripts/uptime-backup-monitors.sh) gets up when
+# both pass and down otherwise, and goes down by itself after 26h with no ping.
+#
+# The scripts come from the ConfigMap in ha-litellm-drift-configmap.yaml. After
+# rebasing the fork, regenerate it with scripts/ha-litellm-drift-configmap.sh.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ha-litellm-drift
+  namespace: lamg
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ha-litellm-drift
+  namespace: lamg
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ha-litellm-drift
+  namespace: lamg
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ha-litellm-drift
+subjects:
+  - kind: ServiceAccount
+    name: ha-litellm-drift
+    namespace: lamg
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ha-litellm-drift
+  namespace: aya
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ha-litellm-drift
+  namespace: aya
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ha-litellm-drift
+subjects:
+  - kind: ServiceAccount
+    name: ha-litellm-drift
+    namespace: lamg
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ha-litellm-drift
+  namespace: lamg
+spec:
+  schedule: "0 9 * * *"
+  timeZone: Europe/Madrid
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # A retry does not fix drift, and the down ping already went out.
+      backoffLimit: 0
+      ttlSecondsAfterFinished: 604800
+      template:
+        spec:
+          serviceAccountName: ha-litellm-drift
+          restartPolicy: Never
+          nodeSelector:
+            svccontroller.k3s.cattle.io/lbpool: lamg
+          containers:
+            - name: check
+              image: alpine/k8s:1.36.4
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: KUMA_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: uptime-push
+                      key: token
+              command: ["/bin/bash", "-c"]
+              args:
+                - |
+                  set -u
+                  core=/usr/src/homeassistant/homeassistant/components/litellm
+                  problems=()
+
+                  # Files go in as an exec argument, not on stdin: kubectl exec -i
+                  # dropped the stdin of a call while this was being tested, and an
+                  # empty baseline reads as a crash, not as drift.
+                  put() { kubectl -n "$1" exec "$2" -c homeassistant -- \
+                    sh -c 'mkdir -p /tmp/litellm-drift && printf "%s\n" "$2" > "/tmp/litellm-drift/$1"' \
+                    sh "$3" "$(cat "/cfg/$3")"; }
+
+                  for ns in lamg aya; do
+                    echo "=== $ns"
+                    pod=$(kubectl -n "$ns" get pod -l app=homeassistant --field-selector=status.phase=Running \
+                      -o jsonpath='{.items[0].metadata.name}')
+                    if [ -z "$pod" ]; then problems+=("$ns: no running HA pod"); continue; fi
+                    ex=(kubectl -n "$ns" exec "$pod" -c homeassistant --)
+
+                    for f in check-upstream-drift.py upstream-baseline.json ha-assist.py; do
+                      put "$ns" "$pod" "$f" || { problems+=("$ns: copy of $f failed"); continue 2; }
+                    done
+
+                    out=$("${ex[@]}" python3 /tmp/litellm-drift/check-upstream-drift.py \
+                      "$core" /tmp/litellm-drift/upstream-baseline.json 2>&1); rc=$?
+                    echo "$out"
+                    drift=$(grep -o 'DRIFT [^:]*' <<<"$out" | paste -sd, -)
+                    if [ "$rc" -ne 0 ]; then problems+=("$ns: ${drift:-drift check failed, exit $rc}"); fi
+
+                    ws=$("${ex[@]}" python3 /tmp/litellm-drift/ha-assist.py \
+                      --ws '{"type":"config_entries/get","domain":"litellm"}' 2>&1)
+                    states=$(jq -r '.result[].state' <<<"$ws" 2>/dev/null | sort -u | paste -sd, -)
+                    echo "litellm entries: ${states:-none}"
+                    if [ -z "$states" ]; then problems+=("$ns: litellm entry unreadable or missing")
+                    elif [ "$states" != loaded ]; then problems+=("$ns: litellm $states"); fi
+                  done
+
+                  if [ ${#problems[@]} -eq 0 ]; then
+                    status=up msg="lamg+aya: fork aligned with core, litellm loaded"
+                  else
+                    status=down msg=$(printf '%s; ' "${problems[@]}"); msg=${msg%; }
+                  fi
+                  echo "kuma $status: $msg"
+                  curl -fsS -m 10 -o /dev/null -G \
+                    --data-urlencode "status=$status" --data-urlencode "msg=$msg" \
+                    "http://uptime.agonbar.svc.cluster.local:3001/api/push/$KUMA_TOKEN" \
+                    && echo "kuma: ok"
+                  [ "$status" = up ]
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+              volumeMounts:
+                - name: cfg
+                  mountPath: /cfg
+          volumes:
+            - name: cfg
+              configMap:
+                name: ha-litellm-drift
