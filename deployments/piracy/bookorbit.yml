@@ -59,18 +59,15 @@ spec:
                   volumeMounts:
                       - name: data
                         mountPath: /data
+                      # The whole media share in one mount: the libraries are its books/
+                      # (Ficción), no-ficcion/ and audiobooks/ folders. One mount per
+                      # library made moving a book between libraries a cross-device copy,
+                      # and in 3.1.0 that copy's hash check never resolves for files over
+                      # the stream buffer (computeContentHash pipes into an async generator
+                      # nobody drains), so the move job hangs forever. Within one mount the
+                      # move is a rename.
                       - name: media
-                        mountPath: /library/books
-                        subPath: books
-                      # Its own library, so an O'Reilly or a cookbook does not sit next to
-                      # Harry Potter. scripts/bookorbit-calibre.py decides which side a book
-                      # goes to from its Calibre genres.
-                      - name: media
-                        mountPath: /library/no-ficcion
-                        subPath: no-ficcion
-                      - name: media
-                        mountPath: /library/audiobooks
-                        subPath: audiobooks
+                        mountPath: /library
                       # Same path qBittorrent sees, so the download-client path mapping
                       # in BookOrbit is /downloads -> /downloads.
                       - name: torrents
