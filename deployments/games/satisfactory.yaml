@@ -45,10 +45,13 @@ spec:
           volumeMounts:
             - mountPath: /config
               name: satisfactory
+          # Requests = what it uses idle (measured 2026-10-20: 0.06-0.1 cores,
+          # ~1.65 GiB). At 5m the kernel gave it the minimum CPU weight on
+          # ovh02, and the tick dropped to ~21/30 every minute with nobody in.
           resources:
             requests:
-              cpu: 5m
-              memory: 30Mi
+              cpu: 100m
+              memory: 1700Mi
             limits:
               cpu: "4"
               memory: 8Gi
