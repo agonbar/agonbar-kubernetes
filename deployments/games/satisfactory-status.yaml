@@ -39,7 +39,7 @@ spec:
         - name: ghcr-agonbar
       containers:
         - name: satisfactory-status
-          image: ghcr.io/agonbar/satisfactory-status:62e5ca2
+          image: ghcr.io/agonbar/satisfactory-status:2d84ee4
           ports:
             - containerPort: 8080
               name: http
