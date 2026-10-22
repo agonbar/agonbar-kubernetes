@@ -97,7 +97,9 @@ spec:
                       failureThreshold: 3
                   resources:
                       requests:
-                          memory: 512Mi
+                          # Uses ~640Mi at rest (measured 2026-10-22); at 512Mi it
+                          # landed on nas00 and was evicted for memory pressure.
+                          memory: 768Mi
                           cpu: 250m
                       limits:
                           # Was 100m — far too tight: Suwayomi + its embedded
