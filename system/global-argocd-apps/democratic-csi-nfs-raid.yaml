@@ -40,6 +40,31 @@ spec:
           existingConfigSecret: democratic-csi-nfs-raid-driver-config
           config:
             driver: freenas-api-nfs
+
+        # Requests measured 2026-10-22 (kubectl top --containers, max across nodes).
+        # With none set these pods were BestEffort, the first thing the kubelet
+        # evicts under memory pressure, and losing them takes every volume on the
+        # node down. Priority keeps them ahead of the workloads they serve.
+        controller:
+          priorityClassName: system-cluster-critical
+          driver:
+            resources: {requests: {cpu: 10m, memory: 64Mi}}
+          externalAttacher:
+            resources: {requests: {cpu: 5m, memory: 16Mi}}
+          externalProvisioner:
+            resources: {requests: {cpu: 5m, memory: 16Mi}}
+          externalResizer:
+            resources: {requests: {cpu: 5m, memory: 32Mi}}
+          externalSnapshotter:
+            resources: {requests: {cpu: 5m, memory: 16Mi}}
+        node:
+          priorityClassName: system-node-critical
+          driver:
+            resources: {requests: {cpu: 20m, memory: 96Mi}}
+          driverRegistrar:
+            resources: {requests: {cpu: 5m, memory: 10Mi}}
+        csiProxy:
+          resources: {requests: {cpu: 2m, memory: 8Mi}}
   destination:
     name: in-cluster
     namespace: democratic-csi
