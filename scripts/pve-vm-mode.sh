@@ -20,7 +20,7 @@ set -uo pipefail
 
 # Every VM here passes through a GPU, and 101/111 also share a disk, so any of
 # them left running can block the target mode.
-ALL="100 101 102 103 104 111"
+ALL="100 101 103 104 111"
 
 targets() {
     case $1 in
