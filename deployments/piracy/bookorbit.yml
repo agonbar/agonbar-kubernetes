@@ -48,6 +48,12 @@ spec:
                         value: /downloads/book-dock
                       - name: LIBRARY_BROWSE_ROOT
                         value: /library
+                      # The entrypoint's chown -R /data runs on every start and, once
+                      # /data grew, took longer than the 5 min startupProbe window, so
+                      # Node never launched (crashloop since 2026-10-22). /data is already
+                      # owned by the app user, so skip the recursive chown.
+                      - name: BOOKORBIT_FIX_PERMISSIONS
+                        value: "false"
                   envFrom:
                       # POSTGRES_PASSWORD, JWT_SECRET, SETUP_BOOTSTRAP_TOKEN,
                       # BOOK_REQUEST_ENCRYPTION_KEY
