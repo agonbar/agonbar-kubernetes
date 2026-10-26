@@ -21,6 +21,12 @@ metadatos de Calibre como fuente canónica.
       Corrupt JPEG data"): recodifica la portada con sharp en modo tolerante y vuelve a meter
       la unidad en el dock. El siguiente import las finaliza.
 
+  ./bookorbit-calibre.py audiobooks [--apply]
+      Los audiolibros de ivan-2 ("autor - título/NNN.rar", a veces con otro rar dentro) a la
+      biblioteca Audiolibros como Autor/Título/ con sus mp3, cover.jpg y metadata.opf. Título y
+      autor salen del opf, que sigue la grafía de la 75.452. Se extrae en nas03, se copia a
+      nas02 y se escanea la biblioteca.
+
   ./bookorbit-calibre.py dupes
       Libros de la biblioteca con el mismo título y autor normalizados.
 
@@ -43,7 +49,7 @@ Necesita kubectl con contexto lamg y ssh a nas02 y nas03. La API se usa con un t
 se firma dentro del pod con JWT_SECRET, ligado a la sesión BO_SID (por defecto 173,
 "bookorbit-calibre (script)", creada para esto y revocable desde Ajustes > Sesiones).
 """
-import argparse, json, os, re, socket, sqlite3, subprocess, sys, time, unicodedata, urllib.request, urllib.error
+import argparse, html, json, os, re, socket, sqlite3, subprocess, sys, time, unicodedata, urllib.request, urllib.error
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 KUBE = ["kubectl", "--context", os.environ.get("KUBE_CTX", "lamg"), "-n", "piracy"]
@@ -580,6 +586,90 @@ def fix_covers(_):
     api.close()
 
 
+IVAN2 = "/mnt/RAID/ivan/ivan-2"
+SCRATCH = "/mnt/RAID/ivan/.scratch-audio"      # nas03
+AUDIO_NAS = "/mnt/RAID/docker/media/audiobooks"  # nas02; /library/audiobooks en el pod
+
+# Extrae un audiolibro en $S/$N/book: el rar de fuera y, si trae otro dentro, también ese.
+# Deja los mp3, una portada como cover.jpg y el opf como metadata.opf; imprime el opf.
+EXTRACT_SH = r'''set -e; S="$1"; N="$2"; SRC="$3"
+rm -rf "$S/$N"; mkdir -p "$S/$N/out" "$S/$N/book"; cd "$S/$N/out"
+7z x -y "$SRC" >/dev/null
+find "$S/$N/out" -type f -iname '*.rar' | while read -r r; do 7z x -y -o"$S/$N/out/inner" "$r" >/dev/null && rm "$r"; done
+find "$S/$N/out" -type f -iname '*.mp3' -exec mv -t "$S/$N/book" {} +
+c=$(find "$S/$N/out" -type f -iname 'cover.jpg' | head -1); [ -n "$c" ] || c=$(find "$S/$N/out" -type f -iname '*.jpg' | head -1)
+[ -n "$c" ] && mv "$c" "$S/$N/book/cover.jpg"
+o=$(find "$S/$N/out" -type f -iname '*.opf' | head -1); [ -n "$o" ] && mv "$o" "$S/$N/book/metadata.opf" && cat "$S/$N/book/metadata.opf"
+rm -rf "$S/$N/out"; ls "$S/$N/book" | grep -qi '\.mp3$' || { echo "SIN MP3" >&2; exit 1; }'''
+
+
+def audiobooks(args):
+    ls = subprocess.run(["ssh", "-o", "BatchMode=yes", "nas03", f"cd {sh(IVAN2)} && find . -mindepth 2 -maxdepth 2 -iname '*.rar' -printf '%P\\n'"],
+                        capture_output=True, text=True, check=True).stdout.split("\n")
+    rars = [] if args.metadata_only else sorted(r for r in ls if r and " - " in r.split("/")[0] and re.search(args.only, r.split("/")[0], re.I))
+    log(f"{len(rars)} audiolibros")
+    for i, rar in enumerate(rars):
+        folder = rar.split("/")[0]
+        if not args.apply:
+            print("  " + folder)
+            continue
+        r = subprocess.run(["ssh", "-o", "BatchMode=yes", "nas03", f"bash -s -- {sh(SCRATCH)} {i} {sh(IVAN2 + '/' + rar)}"],
+                           input=EXTRACT_SH, capture_output=True, text=True)
+        if r.returncode:
+            log(f"  FALLA {folder}: {r.stderr.strip()[-200:]}")
+            continue
+        opf = r.stdout
+        t = re.search(r"<dc:title>([^<]+)", opf)
+        a = re.search(r"<dc:creator[^>]*>([^<]+)", opf)
+        author, title = (clean(a.group(1)), clean(t.group(1))) if t and a else [x.strip() for x in folder.split(" - ", 1)]
+        dest = f"{author.replace('/', '_')}/{title.replace('/', '_')}"
+        # De nas03 a nas02 por tar, ya con la carpeta final Autor/Título.
+        src = subprocess.Popen(["ssh", "-o", "BatchMode=yes", "nas03", f"cd {SCRATCH}/{i}/book && tar cf - ."], stdout=subprocess.PIPE)
+        dst = subprocess.run(["ssh", "-o", "BatchMode=yes", "nas02", f"mkdir -p {sh(AUDIO_NAS + '/' + dest)} && tar xf - -C {sh(AUDIO_NAS + '/' + dest)}"], stdin=src.stdout)
+        if dst.returncode or src.wait():
+            log(f"  FALLA la copia de {folder}")
+            continue
+        subprocess.run(["ssh", "-o", "BatchMode=yes", "nas03", f"rm -rf {SCRATCH}/{i}"], check=True)
+        log(f"  {dest}")
+    if args.apply:
+        api = Api()
+        lib = sql("select library_id from library_folders where path='/library/audiobooks'")[0]["library_id"]
+        if rars:
+            api("POST", f"/scanner/libraries/{lib}/scan", {})
+            log(f"escaneo lanzado en la biblioteca {lib}")
+            time.sleep(60)
+        audiobook_metadata(api, lib)
+        api.close()
+
+
+OPF_JS = r'''const fs=require("fs");for(const d of process.argv.slice(1)){let o="";try{o=fs.readFileSync(d+"/metadata.opf","utf8")}catch{}
+console.log(JSON.stringify({d,o}))}'''
+
+
+def audiobook_metadata(api, lib):
+    """Título y autor de la carpeta (Autor/Título, sacados del opf al importar); sinopsis, año y
+    géneros del opf. Lo que BookOrbit lee de las etiquetas ID3 es basura (":: Proyecto Audiolibros ::")."""
+    books = sql(f"select id, folder_path from books where library_id={lib}")
+    opfs = {}
+    for line in filter(None, pod_node(OPF_JS, *[b["folder_path"] for b in books]).split("\n")):  # splitlines() también corta en U+2028
+        j = json.loads(line)
+        opfs[j["d"]] = j["o"]
+    for b in books:
+        title, author = os.path.basename(b["folder_path"]), os.path.basename(os.path.dirname(b["folder_path"]))
+        o = opfs.get(b["folder_path"], "")
+        g = lambda tag: (re.search(rf"<dc:{tag}[^>]*>([^<]+)", o) or [None, None])[1]
+        desc = g("description")
+        year = int(g("date")[:4]) if g("date") and g("date")[:4].isdigit() else None
+        md = {"title": title, "authors": [author], "seriesName": None, "seriesIndex": None,
+              "language": "es" if o else "en",  # el único sin opf es The Hobbit, en inglés
+              "description": html.unescape(re.sub(r"<[^>]+>", "", html.unescape(desc))).strip() if desc else None,
+              "publishedYear": year if year and 1000 <= year <= 2200 else None,
+              "genres": [html.unescape(x) for x in re.findall(r"<dc:subject>([^<]+)", o)]}
+        apply_metadata(api, b["id"], md)
+    log(f"metadatos de {len(books)} audiolibros")
+    prune()  # los autores que BookOrbit sacó de las etiquetas ID3 ("Farkas", "gideas") se quedan sin libros
+
+
 def dupes(_):
     seen = {}
     for b in library_books():
@@ -602,6 +692,10 @@ if __name__ == "__main__":
     p = sub.add_parser("split")
     p.add_argument("--apply", action="store_true")
     sub.add_parser("fix-covers")
+    p = sub.add_parser("audiobooks")
+    p.add_argument("--only", default="", help="regex sobre el nombre de la carpeta, para repetir solo algunos")
+    p.add_argument("--metadata-only", action="store_true", help="solo rehace los metadatos de lo que ya hay")
+    p.add_argument("--apply", action="store_true")
     sub.add_parser("dupes")
     a = ap.parse_args()
-    {"conform": conform, "import": import_, "split": split, "fix-covers": fix_covers, "dupes": dupes}[a.cmd](a)
+    {"conform": conform, "import": import_, "split": split, "fix-covers": fix_covers, "audiobooks": audiobooks, "dupes": dupes}[a.cmd](a)
