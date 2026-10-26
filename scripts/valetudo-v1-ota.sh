@@ -11,7 +11,10 @@
 #
 # Only V1 units made before 2020-03 accept the local OTA; newer ones answer
 # unknown_method and stay untouched (then it is UART + vinda, see the vault note
-# projects/xiaomi-vacuum-gen1.md).
+# projects/xiaomi-vacuum-gen1.md). A second-hand unit whose cloud firmware was
+# updated answers miIO.ota with an empty payload instead: a full factory reset
+# (hold Home + press reset) restores the recovery firmware, which accepted it.
+# An empty miIO.info reply does NOT predict a refusal; just try the flash.
 set -uo pipefail
 
 SSID=$1 PKG=$2 HELPER=$3
