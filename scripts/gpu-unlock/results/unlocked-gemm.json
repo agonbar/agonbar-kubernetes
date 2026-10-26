@@ -1,0 +1,1 @@
+{"device": "NVIDIA GeForce RTX 3090", "torch": "2.11.0+cu128", "power": {"limit_w": 370.0}, "tflops": {"fp16": 115.57, "bf16": 119.68, "tf32": 66.05, "fp32": 25.83, "int8": 71.1, "attn_fp16": 98.13, "attn_bf16": 100.47}}
