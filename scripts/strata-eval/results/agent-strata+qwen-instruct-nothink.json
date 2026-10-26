@@ -1,0 +1,291 @@
+{
+ "summary": {
+  "target": "strata+qwen-instruct",
+  "model": "qwen3.8-flash-next-iq3_xxs",
+  "extraBody": "{\"thinking\": {\"type\": \"disabled\"}, \"temperature\": 0.7, \"top_p\": 0.8, \"top_k\": 20, \"min_p\": 0, \"presence_penalty\": 1.5}",
+  "pass": 7,
+  "total": 7,
+  "wallSec": 446,
+  "run": "/tmp/strata-agent/strata+qwen-instruct-nothink-20261026-181133"
+ },
+ "results": [
+  {
+   "task": "bugfix",
+   "pass": true,
+   "check": "tests=True test_file_untouched=True ['OK']",
+   "wallSec": 53,
+   "rc": 0,
+   "timedOut": false,
+   "turns": 8,
+   "toolCalls": 7,
+   "toolErrors": 1,
+   "apiErrors": 0,
+   "resultSubtype": "success",
+   "isError": false,
+   "finalText": "All 3 tests pass. Two bugs in `pricing.py`:\n\n1. **`apply_discount`** (`pricing.py:5`): divided by `10` instead of `100`, so a 10% discount removed 100% of the total (`apply_discount(200, 10)` returned `0.0`). Fixed to `total * percent / 100`.\n\n2. **`bulk_price`** (`pricing.py:11`): used `qty > 10`, ",
+   "toolErrorSamples": [
+    "Exit code 1\ntest_bulk_threshold (test_pricing.PricingTest.test_bulk_threshold) ... FAIL\ntest_discount (test_pricing.PricingTest.test_discount) ... FAIL\ntest_dis"
+   ],
+   "usage": {
+    "input_tokens": 16962,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 83187,
+    "output_tokens": 715,
+    "output_tokens_details": {
+     "thinking_tokens": 0
+    },
+    "server_tool_use": {
+     "web_search_requests": 0,
+     "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+     "ephemeral_1h_input_tokens": 0,
+     "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "",
+    "iterations": [],
+    "speed": "standard",
+    "fallback_credit": null
+   },
+   "log": "/tmp/strata-agent/strata+qwen-instruct-nothink-20261026-181133/bugfix.jsonl"
+  },
+  {
+   "task": "feature",
+   "pass": true,
+   "check": "tests=True hidden=True () slugify_asserts=13",
+   "wallSec": 86,
+   "rc": 0,
+   "timedOut": false,
+   "turns": 11,
+   "toolCalls": 10,
+   "toolErrors": 2,
+   "apiErrors": 0,
+   "resultSubtype": "success",
+   "isError": false,
+   "finalText": "Done. `slugify(text, max_len=50)` is in textutils.py:21 and all 9 tests pass with `python3 -m unittest -v`.\n\n**Implementation** (textutils.py):\n- Lowercase, then NFKD-decompose and drop combining marks — so á→a, ñ→n, ü→u.\n- `re.sub(r\"[^a-z0-9]+\", \"-\", ...)` collapses each run of non-alphanumeric cha",
+   "toolErrorSamples": [
+    "Exit code 1\ntest_basic_lowercase_and_hyphens (test_textutils.SlugifyTest.test_basic_lowercase_and_hyphens) ... ok\ntest_empty_and_default_max_len (test_textutils",
+    "Exit code 1\ntest_basic_lowercase_and_hyphens (test_textutils.SlugifyTest.test_basic_lowercase_and_hyphens) ... ok\ntest_empty_and_default_max_len (test_textutils"
+   ],
+   "usage": {
+    "input_tokens": 17751,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 158691,
+    "output_tokens": 1898,
+    "output_tokens_details": {
+     "thinking_tokens": 0
+    },
+    "server_tool_use": {
+     "web_search_requests": 0,
+     "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+     "ephemeral_1h_input_tokens": 0,
+     "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "",
+    "iterations": [],
+    "speed": "standard",
+    "fallback_credit": null
+   },
+   "log": "/tmp/strata-agent/strata+qwen-instruct-nothink-20261026-181133/feature.jsonl"
+  },
+  {
+   "task": "refactor",
+   "pass": true,
+   "check": "tests=True helper=True used_by_all=True fmt_copies=1 tests_untouched=True",
+   "wallSec": 45,
+   "rc": 0,
+   "timedOut": false,
+   "turns": 5,
+   "toolCalls": 4,
+   "toolErrors": 0,
+   "apiErrors": 0,
+   "resultSubtype": "success",
+   "isError": false,
+   "finalText": "Done. Extracted the repeated row-formatting logic into `_format_row(row)` in report.py:2 — it strips/title-cases the name, applies the Spanish number format (dot thousands, comma decimals), and pads to the same `<20`/`>12` widths as before. All three report functions (`sales_report`, `refunds_report",
+   "toolErrorSamples": [],
+   "usage": {
+    "input_tokens": 16644,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 66236,
+    "output_tokens": 598,
+    "output_tokens_details": {
+     "thinking_tokens": 0
+    },
+    "server_tool_use": {
+     "web_search_requests": 0,
+     "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+     "ephemeral_1h_input_tokens": 0,
+     "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "",
+    "iterations": [],
+    "speed": "standard",
+    "fallback_credit": null
+   },
+   "log": "/tmp/strata-agent/strata+qwen-instruct-nothink-20261026-181133/refactor.jsonl"
+  },
+  {
+   "task": "readqa",
+   "pass": true,
+   "check": "answer=['port=8443', 'callers=gateway,notifier'] other_changes=[]",
+   "wallSec": 56,
+   "rc": 0,
+   "timedOut": false,
+   "turns": 13,
+   "toolCalls": 12,
+   "toolErrors": 0,
+   "apiErrors": 0,
+   "resultSubtype": "success",
+   "isError": false,
+   "finalText": "Done. `ANSWER.txt` now contains:\n\n```\nport=8443\ncallers=gateway,notifier\n```\n\nReasoning:\n- **Port**: `billing/config.yaml` sets 8080, but `billing/main.py` prefers the `BILLING_PORT` env var, and `deploy/overrides.env` sets `BILLING_PORT=8443` (the commented-out `9443` line is inactive), so the depl",
+   "toolErrorSamples": [],
+   "usage": {
+    "input_tokens": 19157,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 74053,
+    "output_tokens": 997,
+    "output_tokens_details": {
+     "thinking_tokens": 0
+    },
+    "server_tool_use": {
+     "web_search_requests": 0,
+     "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+     "ephemeral_1h_input_tokens": 0,
+     "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "",
+    "iterations": [],
+    "speed": "standard",
+    "fallback_credit": null
+   },
+   "log": "/tmp/strata-agent/strata+qwen-instruct-nothink-20261026-181133/readqa.jsonl"
+  },
+  {
+   "task": "shell",
+   "pass": true,
+   "check": "report=[['203.0.113.17', '9'], ['198.51.100.3', '7'], ['192.0.2.250', '5']] logs_intact=True",
+   "wallSec": 44,
+   "rc": 0,
+   "timedOut": false,
+   "turns": 5,
+   "toolCalls": 4,
+   "toolErrors": 0,
+   "apiErrors": 0,
+   "resultSubtype": "success",
+   "isError": false,
+   "finalText": "Done. `report.txt` now contains the top 3 client IPs by 5xx count across all three log files (including the gzipped one):\n\n```\n203.0.113.17 9\n198.51.100.3 7\n192.0.2.250 5\n```\n\nMethod: concatenated `access.log` and `access.log.1`, piped `zcat` for `access.log.2.gz`, matched the status field ($9) agai",
+   "toolErrorSamples": [],
+   "usage": {
+    "input_tokens": 16926,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 66358,
+    "output_tokens": 540,
+    "output_tokens_details": {
+     "thinking_tokens": 0
+    },
+    "server_tool_use": {
+     "web_search_requests": 0,
+     "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+     "ephemeral_1h_input_tokens": 0,
+     "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "",
+    "iterations": [],
+    "speed": "standard",
+    "fallback_credit": null
+   },
+   "log": "/tmp/strata-agent/strata+qwen-instruct-nothink-20261026-181133/shell.jsonl"
+  },
+  {
+   "task": "rootcause",
+   "pass": true,
+   "check": "tests=True tests_untouched=True hidden=True [2.68, 0.13, 1.01, 11.0, 2.67, 1.0]",
+   "wallSec": 57,
+   "rc": 0,
+   "timedOut": false,
+   "turns": 8,
+   "toolCalls": 7,
+   "toolErrors": 0,
+   "apiErrors": 0,
+   "resultSubtype": "success",
+   "isError": false,
+   "finalText": "Both tests pass now.\n\n**Root cause:** `round_half_up` in `inv/money.py:3` was just delegating to Python's built-in `round()`. That does banker's rounding (ties-to-even) — so `0.125` rounded to `0.12` instead of `0.13`, failing `test_half_cent_rounds_up`. It also can't honor the docstring's promise f",
+   "toolErrorSamples": [],
+   "usage": {
+    "input_tokens": 17009,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 84458,
+    "output_tokens": 1013,
+    "output_tokens_details": {
+     "thinking_tokens": 0
+    },
+    "server_tool_use": {
+     "web_search_requests": 0,
+     "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+     "ephemeral_1h_input_tokens": 0,
+     "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "",
+    "iterations": [],
+    "speed": "standard",
+    "fallback_credit": null
+   },
+   "log": "/tmp/strata-agent/strata+qwen-instruct-nothink-20261026-181133/rootcause.jsonl"
+  },
+  {
+   "task": "multifile",
+   "pass": true,
+   "check": "tests=True hidden=True tests_cover_priority=True ",
+   "wallSec": 105,
+   "rc": 0,
+   "timedOut": false,
+   "turns": 13,
+   "toolCalls": 12,
+   "toolErrors": 0,
+   "apiErrors": 0,
+   "resultSubtype": "success",
+   "isError": false,
+   "finalText": "Done. All three features are implemented and `python3 -m unittest -v` passes (4 tests, OK).\n\n**`todo/storage.py`**\n- Added `DEFAULT_PRIORITY = \"normal\"`.\n- `load()` now backfills missing priorities with `item.setdefault(\"priority\", DEFAULT_PRIORITY)`, so items saved by the old version load as `norma",
+   "toolErrorSamples": [],
+   "usage": {
+    "input_tokens": 17787,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 165213,
+    "output_tokens": 2947,
+    "output_tokens_details": {
+     "thinking_tokens": 0
+    },
+    "server_tool_use": {
+     "web_search_requests": 0,
+     "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+     "ephemeral_1h_input_tokens": 0,
+     "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "",
+    "iterations": [],
+    "speed": "standard",
+    "fallback_credit": null
+   },
+   "log": "/tmp/strata-agent/strata+qwen-instruct-nothink-20261026-181133/multifile.jsonl"
+  }
+ ]
+}
