@@ -9,6 +9,11 @@
                                  con una clave limitada a `rrsync -ro`; corre en segundo plano allí
   ./bookorbit-comics.py status   cómo va ese rsync
   ./bookorbit-comics.py revoke   quita la clave de nas03 y limpia nas02
+  ./bookorbit-comics.py rezip [--min-mb 100]
+                                 pasa a cbz, en nas02, los cbr más grandes que eso. BookOrbit lee
+                                 cada cbr entero en memoria y se lo da dos veces a un unrar en WASM
+                                 cuya memoria no se libera: uno de 900 MB lo mata por OOM. Los cbz
+                                 los abre leyendo solo el índice y la portada.
   ./bookorbit-comics.py meta [--apply]
                                  escanea las dos bibliotecas y pone serie, número y título a cada
                                  cómic a partir de su ruta, con esos campos bloqueados
@@ -274,6 +279,52 @@ print(f"nas03: clave de nas02 quitada, quedan {len(keys)}")
     print(ssh("nas02", f"{ALIVE} && echo 'AVISO: el rsync sigue corriendo'; rm -f ~/.ssh/{TAG} ~/.ssh/{TAG}.pub ~/{TAG}.pid; echo 'nas02 limpio'").strip())
 
 
+REZIP_PY = r'''
+import os, shutil, subprocess, sys, tempfile
+roots, min_bytes = sys.argv[1:-1], int(sys.argv[-1])
+tmp_root = os.path.join(os.path.dirname(roots[0]), ".rezip")
+os.makedirs(tmp_root, exist_ok=True)
+done = 0
+for root in roots:
+    for d, _, fs in os.walk(root):
+        for f in fs:
+            src = os.path.join(d, f)
+            if not f.lower().endswith(".cbr") or os.path.getsize(src) < min_bytes:
+                continue
+            dst = src[:-4] + ".cbz"
+            tmp = tempfile.mkdtemp(dir=tmp_root)
+            try:
+                x = subprocess.run(["7z", "x", "-y", "-o" + tmp, "--", src], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+                if x.returncode:
+                    # Alguno trae una página dañada ("Data Error"): 7z saca el resto y se empaqueta eso.
+                    pages = sum(len(f) for _, _, f in os.walk(tmp))
+                    if not pages:
+                        raise subprocess.CalledProcessError(x.returncode, "7z x", stderr=x.stderr)
+                    print(f"AVISO {src}: rar dañado, entran las {pages} páginas que se pueden leer", flush=True)
+                subprocess.run(["7z", "a", "-tzip", "-mx0", dst + ".part", "--", "."], cwd=tmp, check=True, stdout=subprocess.DEVNULL)
+                subprocess.run(["7z", "t", dst + ".part"], check=True, stdout=subprocess.DEVNULL)
+                os.rename(dst + ".part", dst)
+                os.remove(src)
+                done += 1
+                print(f"{os.path.getsize(dst) // 1000000} MB  {dst}", flush=True)
+            except subprocess.CalledProcessError as e:
+                print(f"FALLA {src}: {e}", flush=True)
+                if os.path.exists(dst + ".part"):
+                    os.remove(dst + ".part")
+            finally:
+                shutil.rmtree(tmp, ignore_errors=True)
+print(f"{done} cbr pasados a cbz")
+'''
+
+
+def rezip(args):
+    roots = [f"{DEST}/{lib}" for lib in LIBS]
+    r = subprocess.run(["ssh", "-o", "BatchMode=yes", "nas02", f"python3 -c {sh(REZIP_PY)} {' '.join(sh(x) for x in roots)} {int(args.min_mb * 1e6)}"],
+                       text=True)
+    if r.returncode:
+        raise SystemExit("rezip falló")
+
+
 def parse(rel):
     """(serie, número, título) de "Serie/Fichero.ext" en una biblioteca de cómics."""
     parts = rel.split("/")
@@ -343,7 +394,9 @@ if __name__ == "__main__":
     sub = ap.add_subparsers(dest="cmd", required=True)
     for c in ("plan", "build", "copy", "status", "revoke"):
         sub.add_parser(c)
+    p = sub.add_parser("rezip")
+    p.add_argument("--min-mb", type=float, default=100)
     p = sub.add_parser("meta")
     p.add_argument("--apply", action="store_true")
     a = ap.parse_args()
-    {"plan": plan, "build": build, "copy": copy, "status": status, "revoke": revoke, "meta": meta}[a.cmd](a)
+    {"plan": plan, "build": build, "copy": copy, "status": status, "revoke": revoke, "rezip": rezip, "meta": meta}[a.cmd](a)
