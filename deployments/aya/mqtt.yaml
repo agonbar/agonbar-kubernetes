@@ -1,0 +1,92 @@
+# Same broker as deployments/lamg/mqtt.yaml, see the probe rationale there.
+# zigbee2mqtt does not run in the cluster here: it is a TrueNAS app on nas03,
+# where the CC2531 stick is plugged in, and reaches this broker through the
+# kube-vip-aya VIP (192.168.1.26:1883). scripts/nas03-zigbee2mqtt.sh sets it up.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: mqtt
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: mqtt
+  namespace: aya
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mqtt
+  template:
+    metadata:
+      labels:
+        app: mqtt
+    spec:
+      containers:
+        - image: emqx/emqx:6.2.2
+          name: mqtt
+          env:
+            - name: EMQX_AUTHORIZATION__NO_MATCH
+              value: "allow"
+          ports:
+            - containerPort: 1883
+              name: mqtt
+              protocol: TCP
+            - containerPort: 18083
+              name: mqtt-dashboard
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: 18083
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /status
+              port: 18083
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 8
+          startupProbe:
+            httpGet:
+              path: /status
+              port: 18083
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 36
+          resources:
+            requests:
+              cpu: 5m
+              memory: 30Mi
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: aya
+      tolerations:
+        - {key: dedicated, operator: Equal, value: media, effect: NoSchedule}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mqtt
+  namespace: aya
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: aya
+  annotations:
+    svccontroller.k3s.cattle.io/tolerations: '[{"key":"dedicated","operator":"Equal","value":"media","effect":"NoSchedule"}]'
+spec:
+  type: LoadBalancer
+  ports:
+    - name: mqtt
+      protocol: TCP
+      port: 1883
+      targetPort: 1883
+    - name: mqtt-dashboard
+      protocol: TCP
+      port: 18083
+      targetPort: 18083
+  selector:
+    app: mqtt
