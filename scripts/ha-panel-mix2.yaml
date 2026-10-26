@@ -136,12 +136,19 @@ views:
             grid_options: { columns: full }
             features:
               - type: light-brightness
-          - type: picture-entity
-            entity: camera.tele
-            camera_view: auto
-            show_name: false
-            show_state: false
+          # Hyperion only has a frame while the TV feeds it; otherwise the proxy 500s and the card greys out.
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: light.tele
+                state: "on"
             grid_options: { columns: full }
+            card:
+              type: picture-entity
+              entity: camera.tele
+              camera_view: auto
+              show_name: false
+              show_state: false
 
       - type: grid
         cards:

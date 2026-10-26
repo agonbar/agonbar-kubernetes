@@ -5,7 +5,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 ctx=lamg ns=aya url=panel-mix2
-pod=$(kubectl --context $ctx -n $ns get pod -o name | grep -m1 homeassistant)
+pod=$(kubectl --context $ctx -n $ns get pod -o name --field-selector=status.phase=Running | grep -m1 homeassistant)
 config=$(nix shell nixpkgs#yq-go -c yq -o=json -I=0 . ha-panel-mix2.yaml)
 
 kubectl --context $ctx -n $ns exec -i "$pod" -- sh -c 'mkdir -p /tmp/s && cat > /tmp/s/ha-assist.py' < ha-assist.py
