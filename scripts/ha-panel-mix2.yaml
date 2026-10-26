@@ -136,11 +136,14 @@ views:
             grid_options: { columns: full }
             features:
               - type: light-brightness
-          # Hyperion only has a frame while the TV feeds it; otherwise the proxy 500s and the card greys out.
+          # Hyperion only has a frame while the TV feeds it video; with the LEDs off or a solid
+          # colour/effect the proxy 500s and the card greys out. binary_sensor.tele_con_imagen is a
+          # UI template helper in HA aya: light.tele on and the visible priority's component_id
+          # not in [none, COLOR, EFFECT].
           - type: conditional
             conditions:
               - condition: state
-                entity: light.tele
+                entity: binary_sensor.tele_con_imagen
                 state: "on"
             grid_options: { columns: full }
             card:
