@@ -4,6 +4,7 @@ does: `claude --print --output-format stream-json`) against a model, inside bubb
 
   run_agent.py strata [--tasks bugfix,shell] [--max-turns 40] [--task-timeout 2700]
   run_agent.py gemma
+  CLAUDE_CODE_EXTRA_BODY='{"thinking":{"type":"disabled"}}' run_agent.py strata+qwen-instruct --tag nothink
   CLAUDE_CODE_EXTRA_BODY='{"thinking":{"type":"disabled"}}' run_agent.py strata --tag nothink
   run_agent.py claude [--claude-model sonnet]   # reference, Claude subscription
 
@@ -45,6 +46,10 @@ def env_for(target, model, base_home):
     for k in ("DISABLE_PROMPT_CACHING", "CLAUDE_CODE_MAX_OUTPUT_TOKENS", "MAX_THINKING_TOKENS", "CLAUDE_CODE_EXTRA_BODY"):
         if os.environ.get(k):
             e[k] = os.environ[k]
+    if t.get("sampling"):
+        # Claude Code 2.1.x sends no temperature/top_p/top_k of its own (checked with a capture proxy),
+        # so Strata would decode greedy; CLAUDE_CODE_EXTRA_BODY is merged into every /v1/messages body.
+        e["CLAUDE_CODE_EXTRA_BODY"] = json.dumps(dict(json.loads(e.get("CLAUDE_CODE_EXTRA_BODY") or "{}"), **t["sampling"]))
     return e, t["model"]
 
 
@@ -127,7 +132,7 @@ def main():
         print("%-9s %s turns=%s tools=%d toolErr=%d apiErr=%d %4ds %s | %s" % (task, "PASS" if ok else "FAIL", r["turns"], r["toolCalls"],
               r["toolErrors"], r["apiErrors"], wall, r["resultSubtype"] or ("TIMEOUT" if timed_out else "rc=%s" % rc), detail[:120]), flush=True)
         shutil.rmtree(home, ignore_errors=True)  # holds the OAuth token for the claude target
-    summ = {"target": a.target, "model": model, "pass": sum(r["pass"] for r in out), "total": len(out),
+    summ = {"target": a.target, "model": model, "extraBody": env.get("CLAUDE_CODE_EXTRA_BODY"), "pass": sum(r["pass"] for r in out), "total": len(out),
             "wallSec": sum(r["wallSec"] for r in out), "run": root}
     print("SUMMARY", json.dumps(summ))
     res = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")

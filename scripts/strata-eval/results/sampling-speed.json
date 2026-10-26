@@ -1,0 +1,437 @@
+{
+ "summary": {
+  "greedy": {
+   "requests": 9,
+   "medianTokS": 49.5,
+   "accepted": 2299,
+   "drafts": 3055,
+   "acceptRate": 0.753,
+   "tokens": 3589
+  },
+  "qwen-instruct": {
+   "requests": 9,
+   "medianTokS": 48.8,
+   "accepted": 2249,
+   "drafts": 3121,
+   "acceptRate": 0.721,
+   "tokens": 3572
+  },
+  "qwen-instruct-nopp": {
+   "requests": 9,
+   "medianTokS": 50.9,
+   "accepted": 2314,
+   "drafts": 3083,
+   "acceptRate": 0.751,
+   "tokens": 3595
+  },
+  "qwen-think": {
+   "requests": 9,
+   "medianTokS": 47.8,
+   "accepted": 2254,
+   "drafts": 3104,
+   "acceptRate": 0.726,
+   "tokens": 3572
+  }
+ },
+ "rows": [
+  {
+   "wall": 9.4,
+   "tokens": 400,
+   "tokS": 49.6,
+   "drafts": 356,
+   "accepted": 260,
+   "finish": "length",
+   "preset": "greedy",
+   "prompt": "code",
+   "round": 0
+  },
+  {
+   "wall": 9.03,
+   "tokens": 400,
+   "tokS": 51.4,
+   "drafts": 349,
+   "accepted": 265,
+   "finish": "length",
+   "preset": "qwen-instruct",
+   "prompt": "code",
+   "round": 0
+  },
+  {
+   "wall": 9.02,
+   "tokens": 400,
+   "tokS": 50.9,
+   "drafts": 354,
+   "accepted": 266,
+   "finish": "length",
+   "preset": "qwen-instruct-nopp",
+   "prompt": "code",
+   "round": 0
+  },
+  {
+   "wall": 9.23,
+   "tokens": 400,
+   "tokS": 50.0,
+   "drafts": 351,
+   "accepted": 265,
+   "finish": "length",
+   "preset": "qwen-think",
+   "prompt": "code",
+   "round": 0
+  },
+  {
+   "wall": 10.98,
+   "tokens": 389,
+   "tokS": 40.0,
+   "drafts": 351,
+   "accepted": 208,
+   "finish": "stop",
+   "preset": "greedy",
+   "prompt": "prose",
+   "round": 0
+  },
+  {
+   "wall": 11.58,
+   "tokens": 372,
+   "tokS": 35.8,
+   "drafts": 373,
+   "accepted": 174,
+   "finish": "stop",
+   "preset": "qwen-instruct",
+   "prompt": "prose",
+   "round": 0
+  },
+  {
+   "wall": 11.13,
+   "tokens": 400,
+   "tokS": 39.8,
+   "drafts": 385,
+   "accepted": 218,
+   "finish": "length",
+   "preset": "qwen-instruct-nopp",
+   "prompt": "prose",
+   "round": 0
+  },
+  {
+   "wall": 11.25,
+   "tokens": 391,
+   "tokS": 38.5,
+   "drafts": 353,
+   "accepted": 198,
+   "finish": "stop",
+   "preset": "qwen-think",
+   "prompt": "prose",
+   "round": 0
+  },
+  {
+   "wall": 8.15,
+   "tokens": 400,
+   "tokS": 57.6,
+   "drafts": 304,
+   "accepted": 296,
+   "finish": "length",
+   "preset": "greedy",
+   "prompt": "json",
+   "round": 0
+  },
+  {
+   "wall": 7.96,
+   "tokens": 400,
+   "tokS": 59.4,
+   "drafts": 309,
+   "accepted": 298,
+   "finish": "length",
+   "preset": "qwen-instruct",
+   "prompt": "json",
+   "round": 0
+  },
+  {
+   "wall": 7.88,
+   "tokens": 400,
+   "tokS": 60.7,
+   "drafts": 300,
+   "accepted": 297,
+   "finish": "length",
+   "preset": "qwen-instruct-nopp",
+   "prompt": "json",
+   "round": 0
+  },
+  {
+   "wall": 8.11,
+   "tokens": 400,
+   "tokS": 58.3,
+   "drafts": 317,
+   "accepted": 296,
+   "finish": "length",
+   "preset": "qwen-think",
+   "prompt": "json",
+   "round": 0
+  },
+  {
+   "wall": 9.82,
+   "tokens": 400,
+   "tokS": 46.5,
+   "drafts": 347,
+   "accepted": 254,
+   "finish": "length",
+   "preset": "qwen-think",
+   "prompt": "code",
+   "round": 1
+  },
+  {
+   "wall": 9.05,
+   "tokens": 400,
+   "tokS": 50.9,
+   "drafts": 345,
+   "accepted": 270,
+   "finish": "length",
+   "preset": "qwen-instruct-nopp",
+   "prompt": "code",
+   "round": 1
+  },
+  {
+   "wall": 9.51,
+   "tokens": 400,
+   "tokS": 47.9,
+   "drafts": 359,
+   "accepted": 260,
+   "finish": "length",
+   "preset": "qwen-instruct",
+   "prompt": "code",
+   "round": 1
+  },
+  {
+   "wall": 9.25,
+   "tokens": 400,
+   "tokS": 49.5,
+   "drafts": 351,
+   "accepted": 264,
+   "finish": "length",
+   "preset": "greedy",
+   "prompt": "code",
+   "round": 1
+  },
+  {
+   "wall": 12.44,
+   "tokens": 400,
+   "tokS": 35.6,
+   "drafts": 393,
+   "accepted": 199,
+   "finish": "length",
+   "preset": "qwen-think",
+   "prompt": "prose",
+   "round": 1
+  },
+  {
+   "wall": 11.44,
+   "tokens": 395,
+   "tokS": 38.3,
+   "drafts": 376,
+   "accepted": 205,
+   "finish": "stop",
+   "preset": "qwen-instruct-nopp",
+   "prompt": "prose",
+   "round": 1
+  },
+  {
+   "wall": 11.88,
+   "tokens": 400,
+   "tokS": 37.2,
+   "drafts": 390,
+   "accepted": 204,
+   "finish": "length",
+   "preset": "qwen-instruct",
+   "prompt": "prose",
+   "round": 1
+  },
+  {
+   "wall": 11.49,
+   "tokens": 400,
+   "tokS": 38.7,
+   "drafts": 358,
+   "accepted": 206,
+   "finish": "length",
+   "preset": "greedy",
+   "prompt": "prose",
+   "round": 1
+  },
+  {
+   "wall": 8.33,
+   "tokens": 400,
+   "tokS": 56.3,
+   "drafts": 310,
+   "accepted": 297,
+   "finish": "length",
+   "preset": "qwen-think",
+   "prompt": "json",
+   "round": 1
+  },
+  {
+   "wall": 7.87,
+   "tokens": 400,
+   "tokS": 60.3,
+   "drafts": 300,
+   "accepted": 297,
+   "finish": "length",
+   "preset": "qwen-instruct-nopp",
+   "prompt": "json",
+   "round": 1
+  },
+  {
+   "wall": 8.03,
+   "tokens": 400,
+   "tokS": 59.0,
+   "drafts": 306,
+   "accepted": 296,
+   "finish": "length",
+   "preset": "qwen-instruct",
+   "prompt": "json",
+   "round": 1
+  },
+  {
+   "wall": 8.16,
+   "tokens": 400,
+   "tokS": 60.0,
+   "drafts": 301,
+   "accepted": 297,
+   "finish": "length",
+   "preset": "greedy",
+   "prompt": "json",
+   "round": 1
+  },
+  {
+   "wall": 9.87,
+   "tokens": 400,
+   "tokS": 46.2,
+   "drafts": 366,
+   "accepted": 259,
+   "finish": "length",
+   "preset": "greedy",
+   "prompt": "code",
+   "round": 2
+  },
+  {
+   "wall": 9.31,
+   "tokens": 400,
+   "tokS": 48.8,
+   "drafts": 359,
+   "accepted": 266,
+   "finish": "length",
+   "preset": "qwen-instruct",
+   "prompt": "code",
+   "round": 2
+  },
+  {
+   "wall": 9.1,
+   "tokens": 400,
+   "tokS": 50.3,
+   "drafts": 340,
+   "accepted": 268,
+   "finish": "length",
+   "preset": "qwen-instruct-nopp",
+   "prompt": "code",
+   "round": 2
+  },
+  {
+   "wall": 9.51,
+   "tokens": 400,
+   "tokS": 47.8,
+   "drafts": 368,
+   "accepted": 265,
+   "finish": "length",
+   "preset": "qwen-think",
+   "prompt": "code",
+   "round": 2
+  },
+  {
+   "wall": 11.59,
+   "tokens": 400,
+   "tokS": 38.6,
+   "drafts": 362,
+   "accepted": 212,
+   "finish": "length",
+   "preset": "greedy",
+   "prompt": "prose",
+   "round": 2
+  },
+  {
+   "wall": 12.23,
+   "tokens": 400,
+   "tokS": 36.0,
+   "drafts": 370,
+   "accepted": 190,
+   "finish": "length",
+   "preset": "qwen-instruct",
+   "prompt": "prose",
+   "round": 2
+  },
+  {
+   "wall": 12.23,
+   "tokens": 400,
+   "tokS": 36.6,
+   "drafts": 383,
+   "accepted": 196,
+   "finish": "length",
+   "preset": "qwen-instruct-nopp",
+   "prompt": "prose",
+   "round": 2
+  },
+  {
+   "wall": 11.8,
+   "tokens": 381,
+   "tokS": 35.8,
+   "drafts": 363,
+   "accepted": 183,
+   "finish": "stop",
+   "preset": "qwen-think",
+   "prompt": "prose",
+   "round": 2
+  },
+  {
+   "wall": 8.29,
+   "tokens": 400,
+   "tokS": 56.9,
+   "drafts": 306,
+   "accepted": 297,
+   "finish": "length",
+   "preset": "greedy",
+   "prompt": "json",
+   "round": 2
+  },
+  {
+   "wall": 7.95,
+   "tokens": 400,
+   "tokS": 59.0,
+   "drafts": 306,
+   "accepted": 296,
+   "finish": "length",
+   "preset": "qwen-instruct",
+   "prompt": "json",
+   "round": 2
+  },
+  {
+   "wall": 7.9,
+   "tokens": 400,
+   "tokS": 59.7,
+   "drafts": 300,
+   "accepted": 297,
+   "finish": "length",
+   "preset": "qwen-instruct-nopp",
+   "prompt": "json",
+   "round": 2
+  },
+  {
+   "wall": 7.88,
+   "tokens": 400,
+   "tokS": 59.7,
+   "drafts": 302,
+   "accepted": 297,
+   "finish": "length",
+   "preset": "qwen-think",
+   "prompt": "json",
+   "round": 2
+  }
+ ],
+ "maxTokens": 400,
+ "target": "strata-nothink",
+ "at": "2026-10-20T20:18:19+0200"
+}

@@ -3,6 +3,8 @@
 # Needs the port-forward up in another shell:
 #   kubectl --context lamg port-forward -n strata svc/strata 18091:8080
 # Usage: run-strata.sh [step...]   steps: smoke esg-nothink tools-nothink agent agent-nothink longctx tools-think esg-think vision
+#        run-strata.sh sampling-speed sampling-tools sampling-esg sampling-agent   (not in the default list:
+#        greedy against the model card's sampling presets, ~2.5 h)
 # Vision goes last: Strata loads the encoder on the first image and keeps it ~120 s,
 # taking ~2 GiB of expert cache, which would slow whatever runs next.
 # Logs: /tmp/strata-eval-logs/<step>.log ; results as each script documents.
@@ -27,6 +29,15 @@ for s in "${steps[@]}"; do
     agent-nothink) CLAUDE_CODE_EXTRA_BODY='{"thinking":{"type":"disabled"}}' \
                      ./run_agent.py strata --tag nothink --task-timeout 3600 > "$L/$s.log" 2>&1 ;;
     vision)        ./vision.py strata-nothink > "$L/$s.log" 2>&1 ;;
+    # sampled runs differ run to run: repeats, each to its own file (run-esg.py --resume would mix them).
+    # Rerunning a step finishes what is missing: a complete file is skipped case by case.
+    sampling-speed) ./sampling_speed.py > "$L/$s.log" 2>&1 ;;
+    sampling-tools) for r in r1 r2 r3; do for p in greedy qwen-instruct; do
+                      ./toolcall_bench.py strata-nothink+$p --tag $r > "$L/$s-$p-$r.log" 2>&1; done; done ;;
+    sampling-esg)   for run in greedy:r1 qwen-instruct:r1 qwen-instruct-nopp:r1 qwen-instruct:r2 qwen-instruct-nopp:r2 qwen-instruct:r3 greedy:r2 qwen-instruct-nopp:r3 greedy:r3; do
+                      ./run-esg.py strata-nothink+${run%%:*} --tag ${run#*:} > "$L/$s-${run%%:*}-${run#*:}.log" 2>&1; done ;;
+    sampling-agent) CLAUDE_CODE_EXTRA_BODY='{"thinking":{"type":"disabled"}}' \
+                      ./run_agent.py strata+qwen-instruct --tag nothink --task-timeout 3600 > "$L/$s.log" 2>&1 ;;
     longctx)       ./longctx.py strata-nothink --chars 400000 > "$L/$s-400k.log" 2>&1
                    ./longctx.py strata-nothink --chars 650000 > "$L/$s-650k.log" 2>&1 ;;
     *) echo "unknown step $s" ;;

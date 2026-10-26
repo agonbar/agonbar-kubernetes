@@ -11,6 +11,12 @@ Strata needs no key; reach it with
 Strata reasons by default on both APIs. Off per request: OpenAI
 chat_template_kwargs.enable_thinking=false (or reasoning_effort "none"), Anthropic
 thinking.type=disabled. STRATA_NOTHINK_BODY / STRATA_NOTHINK_BODY_ANTHROPIC override them.
+
+Strata decodes greedy when a request carries no sampling fields (no `sampling` block in its
+run config), and Claude Code sends none. A sampling preset is appended to a target name with
+"+": `strata-nothink+qwen-instruct` merges SAMPLING["qwen-instruct"] into both API bodies, and
+the results files carry the full name. Strata takes these fields on both APIs (min_p and the
+penalties too, on /v1/messages); top_k is clamped to 64.
 """
 import json, os
 
@@ -49,9 +55,28 @@ TARGETS = {
 }
 
 
+# Sampling presets. qwen-*: the "Best Practices" of https://huggingface.co/Qwen/Qwen3.8-Flash-Next
+# (Unsloth's guide repeats them). The card's presence_penalty assumes vLLM/SGLang, which count every
+# generated token; Strata counts the last penalty_last_n (default 64). greedy = what every client
+# got before (temperature 0, or no sampling fields at all).
+SAMPLING = {
+    "greedy": {"temperature": 0},
+    "qwen-instruct": {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "min_p": 0, "presence_penalty": 1.5},
+    "qwen-instruct-nopp": {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "min_p": 0},
+    "qwen-think": {"temperature": 1.0, "top_p": 0.95, "top_k": 20, "min_p": 0},
+}
+
+
 def get(name):
-    if name not in TARGETS:
-        raise SystemExit("unknown target %r, one of: %s" % (name, ", ".join(TARGETS)))
-    t = dict(TARGETS[name], name=name)
+    base, _, preset = name.partition("+")
+    if base not in TARGETS:
+        raise SystemExit("unknown target %r, one of: %s" % (base, ", ".join(TARGETS)))
+    if preset and preset not in SAMPLING:
+        raise SystemExit("unknown sampling preset %r, one of: %s" % (preset, ", ".join(SAMPLING)))
+    t = dict(TARGETS[base], name=name)
     t.setdefault("extra_anthropic", t["extra"])
+    if preset:
+        t["sampling"] = SAMPLING[preset]
+        t["extra"] = dict(t["extra"], **t["sampling"])
+        t["extra_anthropic"] = dict(t["extra_anthropic"], **t["sampling"])
     return t

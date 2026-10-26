@@ -431,7 +431,7 @@ def main():
             print("%-10s %-26s %s %5.1fs %s%s" % (apiname, r["id"], "PASS" if r["pass"] else "FAIL", r["latencySec"],
                   "" if r["pass"] else r["why"][:110], (" fmt=%s" % r["formatErrors"]) if r["formatErrors"] else ""), flush=True)
         lat = sorted(r["latencySec"] for r in res)
-        summ = {"target": t["name"], "model": t["model"], "api": apiname, "pass": sum(r["pass"] for r in res), "total": len(res),
+        summ = {"target": t["name"], "model": t["model"], "api": apiname, "sampling": t.get("sampling"), "tag": a.tag or None, "pass": sum(r["pass"] for r in res), "total": len(res),
                 "formatErrors": sum(len(r["formatErrors"]) for r in res), "requestErrors": sum(1 for r in res if r["error"]),
                 "medianLatencySec": lat[len(lat) // 2] if lat else None, "totalSec": round(sum(lat), 1)}
         print("SUMMARY", json.dumps(summ), flush=True)

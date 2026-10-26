@@ -16,7 +16,7 @@ Cases run one at a time (local servers here serve one request at a time).
 --out is rewritten after every case, and --resume skips the ids it already has.
 --replay DIR scores saved answers (DIR/<id>.txt) without calling any server.
 """
-import argparse, glob, json, os, re, sys, time, urllib.error, urllib.request
+import argparse, glob, json, os, re, statistics, sys, time, urllib.error, urllib.request
 
 SCOPES = ("scope1", "scope2", "scope2LocationBased", "scope3", "scopes1And2")
 ALL_VALUE_FIELDS = SCOPES + ("totalCo2",)
@@ -48,7 +48,8 @@ def ask(base_url, api_key, model, request, timeout, max_tokens, json_mode, extra
     u = d.get("usage") or {}
     return {"answer": msg.get("content") or "", "reasoning": msg.get("reasoning_content") or "",
             "finish_reason": ch.get("finish_reason"), "latency": time.time() - t0,
-            "prompt_tokens": u.get("prompt_tokens"), "completion_tokens": u.get("completion_tokens")}
+            "prompt_tokens": u.get("prompt_tokens"), "completion_tokens": u.get("completion_tokens"),
+            "timings": {k: (d.get("timings") or {}).get(k) for k in ("predicted_per_second", "draft_n", "draft_n_accepted")}}
 
 
 # ------------------------------------------------------------------ parsing
@@ -252,7 +253,8 @@ def main():
                        json.loads(a.extra_body) if a.extra_body else None)
         r = {"id": c["id"], "kind": c["kind"], "truth": c["truth"], "latencySec": round(call.get("latency", 0), 1),
              "promptTokens": call.get("prompt_tokens"), "completionTokens": call.get("completion_tokens"),
-             "finishReason": call.get("finish_reason"), "error": call.get("error"), "rawAnswer": call.get("answer", "")}
+             "finishReason": call.get("finish_reason"), "error": call.get("error"), "rawAnswer": call.get("answer", ""),
+             "timings": call.get("timings")}
         if call.get("reasoning"):
             r["reasoning"] = call["reasoning"]
         resp, perr = parse_answer(call.get("answer", "")) if not call.get("error") else (None, "request failed")
@@ -297,6 +299,11 @@ def summary(results):
         "promptTokens": sum(r.get("promptTokens") or 0 for r in results),
         "completionTokens": sum(r.get("completionTokens") or 0 for r in results),
         "errors": sum(1 for r in results if r.get("error")),
+        # Strata's `timings`: decode speed and MTP draft acceptance (absent on other servers)
+        "medianDecodeTokS": statistics.median(tm) if (tm := [r["timings"]["predicted_per_second"] for r in results
+                                                              if (r.get("timings") or {}).get("predicted_per_second")]) else None,
+        "draftsAccepted": "%d/%d" % (sum((r.get("timings") or {}).get("draft_n_accepted") or 0 for r in results),
+                                     sum((r.get("timings") or {}).get("draft_n") or 0 for r in results)),
     }
 
 
