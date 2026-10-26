@@ -182,4 +182,4 @@ spec:
     storageClassName: truenas-nfs-ssd-lan
     resources:
         requests:
-            storage: 25Gi
+            storage: 60Gi
