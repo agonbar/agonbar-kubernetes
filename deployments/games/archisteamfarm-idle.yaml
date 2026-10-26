@@ -1,0 +1,91 @@
+# Idles games on the ASF bots until each reaches a target playtime, to even
+# out hours between the two accounts. Every run reads the hours from the
+# public gamecards page and, per bot, re-issues `play` for the games still
+# below target (a pod restart drops `play`) or sends `resume` once all are
+# reached. Delete this file when the log says every target is reached.
+#
+# Targets from scripts/asf-match-report.py on 2026-10-26: Final Fantasy III
+# and IV, up to the hours the other account already has.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: archisteamfarm-idle
+  namespace: games
+data:
+  targets.json: |
+    [
+      {"bot": "Panda", "appid": 1173790, "hours": 26.0},
+      {"bot": "agonbar", "appid": 1173800, "hours": 43.0}
+    ]
+  idle.py: |
+    import json, os, re, urllib.request
+
+    ASF = "http://archisteamfarm.games.svc:1242/Api"
+    PW = os.environ["IPC_PASSWORD"]
+
+    def api(path, command=None):
+        data = json.dumps({"Command": command}).encode() if command else None
+        req = urllib.request.Request(f"{ASF}/{path}", data=data, headers={
+            "Authentication": PW, "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=120) as r:
+            return json.load(r)["Result"]
+
+    def hours(steamid, appid):
+        url = f"https://steamcommunity.com/profiles/{steamid}/gamecards/{appid}/?l=english"
+        with urllib.request.urlopen(url, timeout=60) as r:
+            m = re.search(r"([\d,.]+) hrs on record", r.read().decode())
+        return float(m.group(1).replace(",", "")) if m else 0.0
+
+    steamids = {n: b["SteamID"] for n, b in api("Bot/ASF").items()}
+    pending = {}
+    for t in json.load(open("/etc/idle/targets.json")):
+        h = hours(steamids[t["bot"]], t["appid"])
+        print(f"{t['bot']} {t['appid']}: {h:.1f} / {t['hours']:.1f} h")
+        pending.setdefault(t["bot"], [])
+        if h < t["hours"]:
+            pending[t["bot"]].append(str(t["appid"]))
+    for bot, appids in pending.items():
+        command = f"play {bot} {','.join(appids)}" if appids else f"resume {bot}"
+        print(command, "->", api("Command", command).strip())
+    if not any(pending.values()):
+        print("every target reached: delete archisteamfarm-idle.yaml")
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: archisteamfarm-idle
+  namespace: games
+spec:
+  schedule: "*/20 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: idle
+              image: python:3.13-alpine
+              command: ["python3", "-I", "/etc/idle/idle.py"]
+              env:
+                - name: IPC_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: archisteamfarm
+                      key: ipcPassword
+              volumeMounts:
+                - name: idle
+                  mountPath: /etc/idle
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+          volumes:
+            - name: idle
+              configMap:
+                name: archisteamfarm-idle
+          nodeSelector:
+            svccontroller.k3s.cattle.io/lbpool: lamg
