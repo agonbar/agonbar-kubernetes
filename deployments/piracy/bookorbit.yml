@@ -100,12 +100,13 @@ spec:
                       periodSeconds: 30
                       timeoutSeconds: 5
                       failureThreshold: 3
+                  # Scanning the 16,800 comics OOMKilled it twice at 2Gi.
                   resources:
                       requests:
-                          memory: 512Mi
+                          memory: 1Gi
                           cpu: 250m
                       limits:
-                          memory: 2Gi
+                          memory: 4Gi
                           cpu: "2"
             volumes:
                 - name: data
@@ -119,8 +120,11 @@ spec:
                   nfs:
                       server: 192.168.0.29
                       path: /mnt/SSD/torrents
+            # nas02-k3s: 16GiB and on nas02's LAN, so the NFS share is local. orange-pi5,
+            # the other lamg node it could land on, is short of memory.
             nodeSelector:
                 svccontroller.k3s.cattle.io/lbpool: lamg
+                kubernetes.io/hostname: nas02-k3s
 
 ---
 kind: Service
