@@ -16,6 +16,11 @@ metadatos de Calibre como fuente canónica.
       Lleva cada libro ya importado a su biblioteca: "Ficción" o "No ficción" según sus
       géneros de Calibre (ver FICTION y NONFICTION). Import ya los manda a la buena.
 
+  ./bookorbit-calibre.py fix-covers
+      Rehace las unidades que el dock rechaza por una portada JPEG corrupta ("VipsJpeg:
+      Corrupt JPEG data"): recodifica la portada con sharp en modo tolerante y vuelve a meter
+      la unidad en el dock. El siguiente import las finaliza.
+
   ./bookorbit-calibre.py dupes
       Libros de la biblioteca con el mismo título y autor normalizados.
 
@@ -153,9 +158,9 @@ class Calibre:
             m = re.search(r"(\d+(?:\.\d+)?)\)$", raw)
             idx = float(m.group(1)) if m else None
         md = {
-            "title": title,
-            "authors": self.authors.get(cid, []),
-            "seriesName": saga,
+            "title": clean(title),
+            "authors": [clean(a) for a in self.authors.get(cid, [])],
+            "seriesName": clean(saga),
             "seriesIndex": fmt_index(idx) if saga else None,
             "language": "es",
             "description": self.comments.get(cid),
@@ -175,6 +180,11 @@ class Calibre:
         for cid, (_, title, *_r) in self.books.items():
             out.setdefault(key(title, self.authors.get(cid, [])), []).append(cid)
         return out
+
+
+def clean(x):
+    """Calibre trae algún nombre con un BOM pegado ("El valle de Laudine\\ufeff"); BookOrbit lo quita al guardar."""
+    return x.replace("\ufeff", "").strip() if isinstance(x, str) else x
 
 
 def fmt_index(idx):
@@ -414,8 +424,9 @@ def import_(args):
             log(f"progreso: {min(i + args.batch, len(todo))}/{len(todo)}")
         prune()
     finally:
-        if settings["autoFetchMetadata"]:
-            api("PUT", "/book-dock/settings", {k: v for k, v in settings.items() if k != "bookDockPath"})
+        # Siempre encendida al acabar, no "como estaba": una pasada que se corta la deja
+        # apagada y la siguiente la "restauraba" apagada.
+        api("PUT", "/book-dock/settings", {**{k: v for k, v in settings.items() if k != "bookDockPath"}, "autoFetchMetadata": True})
         api.close()
 
 
@@ -533,6 +544,42 @@ def read_manual():
     return manual
 
 
+# Copia una unidad del dock rehaciendo cada JPEG que libvips no lee en modo estricto, suelto o
+# dentro del epub (de ahí saca el dock la portada). El epub se reempaqueta con mimetype primero
+# y sin comprimir, como pide el formato. El original sigue en nas03.
+FIX_JS = r'''const fs=require("fs"),p=require("path"),sharp=require("sharp"),unzipper=require("unzipper"),{ZipArchive}=require("archiver");
+const [src,dst]=process.argv.slice(1);
+const ok=async b=>{try{await sharp(b).toBuffer();return true}catch{return false}};
+const redo=b=>sharp(b,{failOn:"none"}).jpeg({quality:90}).toBuffer();
+async function epub(a,b){const z=await unzipper.Open.file(a);const out=new ZipArchive({zlib:{level:9}});const w=fs.createWriteStream(b);
+const done=new Promise((res,rej)=>{w.on("close",res);out.on("error",rej)});out.pipe(w);
+const files=z.files.filter(f=>f.type==="File").sort((x,y)=>(y.path==="mimetype")-(x.path==="mimetype"));
+for(const f of files){let buf=await f.buffer();if(/\.jpe?g$/i.test(f.path)&&!(await ok(buf)))buf=await redo(buf);
+out.append(buf,{name:f.path,store:f.path==="mimetype"});}
+await out.finalize();await done;}
+(async()=>{fs.rmSync(dst,{recursive:true,force:true});fs.mkdirSync(dst,{recursive:true});for(const n of fs.readdirSync(src)){const a=p.join(src,n),b=p.join(dst,n);
+if(/\.jpe?g$/i.test(n)){const buf=fs.readFileSync(a);fs.writeFileSync(b,(await ok(buf))?buf:await redo(buf));}
+else if(/\.epub$/i.test(n))await epub(a,b);else fs.copyFileSync(a,b);}})().catch(e=>{console.error(e.message);process.exit(1)})'''
+
+
+def fix_covers(_):
+    rows = sql("select id, unit_directory u from book_dock_files where status='error' and error_message like 'VipsJpeg%' and unit_directory is not null")
+    if not rows:
+        log("no hay unidades con la portada rota")
+        return
+    api = Api()
+    fix = "/downloads/.book-dock-fix"
+    for r in rows:
+        name = os.path.basename(r["u"])
+        # Copia aparte con las portadas recodificadas; descartar la unidad del dock borra sus ficheros.
+        pod_node(FIX_JS, r["u"], f"{fix}/{name}")
+        api("DELETE", f"/book-dock/files/{r['id']}")
+        pod_node(r'''const fs=require("fs");const [a,b]=process.argv.slice(1);fs.renameSync(a,b);fs.rmdirSync(require("path").dirname(a));''',
+                 f"{fix}/{name}", r["u"])
+        log(f"portada rehecha: {name}")
+    api.close()
+
+
 def dupes(_):
     seen = {}
     for b in library_books():
@@ -554,6 +601,7 @@ if __name__ == "__main__":
     p.add_argument("--apply", action="store_true")
     p = sub.add_parser("split")
     p.add_argument("--apply", action="store_true")
+    sub.add_parser("fix-covers")
     sub.add_parser("dupes")
     a = ap.parse_args()
-    {"conform": conform, "import": import_, "split": split, "dupes": dupes}[a.cmd](a)
+    {"conform": conform, "import": import_, "split": split, "fix-covers": fix_covers, "dupes": dupes}[a.cmd](a)
