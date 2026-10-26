@@ -360,14 +360,22 @@ def meta(args):
     for lib_dir in LIBS.values():
         lib = sql(f"select library_id from library_folders where path='{lib_dir}'")[0]["library_id"]
         if api:
-            api("POST", f"/scanner/libraries/{lib}/scan", {})
+            try:
+                api("POST", f"/scanner/libraries/{lib}/scan", {})
+            except RuntimeError as e:  # uno ya en marcha (el horario) vale igual: se espera a ese
+                if "already running" not in str(e):
+                    raise
             while sql(f"select count(*) c from scan_jobs where library_id={lib} and status not in ('completed','failed','cancelled')")[0]["c"] != "0":
                 bc.time.sleep(10)
+        gone = [r["id"] for r in sql(f"select id from books where library_id={lib} and status='missing'")]
+        if api and gone:  # los cbr que rezip cambió por cbz, si el escaneo llegó a verlos antes
+            api("DELETE", "/books", {"bookIds": gone})
+            log(f"{lib_dir}: {len(gone)} cómics que ya no están en disco, fuera")
         rows, last = [], 0
         while True:
             chunk = sql(f"""select b.id, f.rel_path, m.title, m.series_name s, m.series_index si from books b
                 join book_files f on f.id=b.primary_file_id join book_metadata m on m.book_id=b.id
-                where b.library_id={lib} and b.id>{last} order by b.id limit 3000""")
+                where b.library_id={lib} and b.status='present' and b.id>{last} order by b.id limit 3000""")
             if not chunk:
                 break
             rows += chunk
