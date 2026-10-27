@@ -171,9 +171,10 @@ views:
             entity: switch.mix2_torch
             name: Linterna
 
-      # Reolink E1 Pro "Blanca" (integration reolink, host 192.168.1.206, Bitwarden personal
-      # "Reolink blanca"). Its PTZ buttons move until stopped, so the arrows call
-      # script.blanca_mover (UI script in HA aya: press direction, wait ms, press stop).
+      # Reolink E1 Pro "Blanca" (192.168.1.206) and "Negra" (192.168.1.243), integration reolink,
+      # both admin + Bitwarden personal "Reolink blanca". Their PTZ buttons move until stopped,
+      # so the arrows call script.reolink_mover (UI script in HA aya: press direction, wait ms,
+      # press stop).
       - type: grid
         cards:
           - type: heading
@@ -189,29 +190,29 @@ views:
                 style: { left: 7%, top: 50%, color: white, background: 'rgba(0,0,0,0.55)', border-radius: 50%, padding: 6px, '--mdc-icon-size': 34px }
                 tap_action:
                   action: perform-action
-                  perform_action: script.blanca_mover
-                  data: { direccion: left, ms: 400 }
+                  perform_action: script.reolink_mover
+                  data: { camara: blanca, direccion: left, ms: 400 }
               - type: icon
                 icon: mdi:chevron-right
                 style: { left: 93%, top: 50%, color: white, background: 'rgba(0,0,0,0.55)', border-radius: 50%, padding: 6px, '--mdc-icon-size': 34px }
                 tap_action:
                   action: perform-action
-                  perform_action: script.blanca_mover
-                  data: { direccion: right, ms: 400 }
+                  perform_action: script.reolink_mover
+                  data: { camara: blanca, direccion: right, ms: 400 }
               - type: icon
                 icon: mdi:chevron-up
                 style: { left: 50%, top: 12%, color: white, background: 'rgba(0,0,0,0.55)', border-radius: 50%, padding: 6px, '--mdc-icon-size': 34px }
                 tap_action:
                   action: perform-action
-                  perform_action: script.blanca_mover
-                  data: { direccion: up, ms: 400 }
+                  perform_action: script.reolink_mover
+                  data: { camara: blanca, direccion: up, ms: 400 }
               - type: icon
                 icon: mdi:chevron-down
                 style: { left: 50%, top: 88%, color: white, background: 'rgba(0,0,0,0.55)', border-radius: 50%, padding: 6px, '--mdc-icon-size': 34px }
                 tap_action:
                   action: perform-action
-                  perform_action: script.blanca_mover
-                  data: { direccion: down, ms: 400 }
+                  perform_action: script.reolink_mover
+                  data: { camara: blanca, direccion: down, ms: 400 }
               - type: icon
                 icon: mdi:home-import-outline
                 title: Volver a guardia
@@ -232,6 +233,68 @@ views:
           - type: tile
             entity: binary_sensor.blanca_motion
             name: Movimiento
+
+      - type: grid
+        cards:
+          - type: heading
+            heading: Cámara Negra
+            icon: mdi:cctv
+          - type: picture-elements
+            camera_image: camera.negra_fluent
+            camera_view: live
+            grid_options: { columns: full }
+            elements:
+              - type: icon
+                icon: mdi:chevron-left
+                style: { left: 7%, top: 50%, color: white, background: 'rgba(0,0,0,0.55)', border-radius: 50%, padding: 6px, '--mdc-icon-size': 34px }
+                tap_action:
+                  action: perform-action
+                  perform_action: script.reolink_mover
+                  data: { camara: negra, direccion: left, ms: 400 }
+              - type: icon
+                icon: mdi:chevron-right
+                style: { left: 93%, top: 50%, color: white, background: 'rgba(0,0,0,0.55)', border-radius: 50%, padding: 6px, '--mdc-icon-size': 34px }
+                tap_action:
+                  action: perform-action
+                  perform_action: script.reolink_mover
+                  data: { camara: negra, direccion: right, ms: 400 }
+              - type: icon
+                icon: mdi:chevron-up
+                style: { left: 50%, top: 12%, color: white, background: 'rgba(0,0,0,0.55)', border-radius: 50%, padding: 6px, '--mdc-icon-size': 34px }
+                tap_action:
+                  action: perform-action
+                  perform_action: script.reolink_mover
+                  data: { camara: negra, direccion: up, ms: 400 }
+              - type: icon
+                icon: mdi:chevron-down
+                style: { left: 50%, top: 88%, color: white, background: 'rgba(0,0,0,0.55)', border-radius: 50%, padding: 6px, '--mdc-icon-size': 34px }
+                tap_action:
+                  action: perform-action
+                  perform_action: script.reolink_mover
+                  data: { camara: negra, direccion: down, ms: 400 }
+              - type: icon
+                icon: mdi:home-import-outline
+                title: Volver a guardia
+                style: { left: 7%, top: 88%, color: white, background: 'rgba(0,0,0,0.55)', border-radius: 50%, padding: 6px, '--mdc-icon-size': 26px }
+                tap_action:
+                  action: perform-action
+                  perform_action: button.press
+                  target: { entity_id: button.negra_guard_go_to }
+          - type: tile
+            entity: switch.negra_privacy_mode
+            name: Privacidad
+          - type: tile
+            entity: switch.negra_auto_tracking
+            name: Seguimiento
+          - type: tile
+            entity: binary_sensor.negra_person
+            name: Persona
+          - type: tile
+            entity: binary_sensor.negra_motion
+            name: Movimiento
+          - type: tile
+            entity: binary_sensor.negra_baby_crying
+            name: Llanto
 
       - type: grid
         cards:
