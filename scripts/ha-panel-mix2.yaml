@@ -171,6 +171,75 @@ views:
             entity: switch.mix2_torch
             name: Linterna
 
+      # Reolink E1 Pro "Blanca" (integration reolink, host 192.168.1.206, Bitwarden personal
+      # "Reolink blanca"). Its PTZ buttons move until stopped, so the arrows call
+      # script.blanca_mover (UI script in HA aya: press direction, wait ms, press stop).
+      - type: grid
+        cards:
+          - type: heading
+            heading: Cámara Blanca
+            icon: mdi:cctv
+          - type: picture-entity
+            entity: camera.blanca_fluent
+            camera_view: live
+            show_name: false
+            show_state: false
+            grid_options: { columns: full }
+          - type: button
+            icon: mdi:arrow-left-bold
+            show_name: false
+            grid_options: { columns: 3, rows: 1 }
+            tap_action:
+              action: perform-action
+              perform_action: script.blanca_mover
+              data: { direccion: left, ms: 400 }
+          - type: button
+            icon: mdi:arrow-up-bold
+            show_name: false
+            grid_options: { columns: 3, rows: 1 }
+            tap_action:
+              action: perform-action
+              perform_action: script.blanca_mover
+              data: { direccion: up, ms: 400 }
+          - type: button
+            icon: mdi:arrow-down-bold
+            show_name: false
+            grid_options: { columns: 3, rows: 1 }
+            tap_action:
+              action: perform-action
+              perform_action: script.blanca_mover
+              data: { direccion: down, ms: 400 }
+          - type: button
+            icon: mdi:arrow-right-bold
+            show_name: false
+            grid_options: { columns: 3, rows: 1 }
+            tap_action:
+              action: perform-action
+              perform_action: script.blanca_mover
+              data: { direccion: right, ms: 400 }
+          - type: tile
+            entity: button.blanca_guard_go_to
+            name: Volver a guardia
+            icon: mdi:home-import-outline
+            hide_state: true
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target: { entity_id: button.blanca_guard_go_to }
+            grid_options: { columns: full }
+          - type: tile
+            entity: switch.blanca_privacy_mode
+            name: Privacidad
+          - type: tile
+            entity: switch.blanca_auto_tracking
+            name: Seguimiento
+          - type: tile
+            entity: binary_sensor.blanca_person
+            name: Persona
+          - type: tile
+            entity: binary_sensor.blanca_motion
+            name: Movimiento
+
       - type: grid
         cards:
           - type: weather-forecast
