@@ -1,0 +1,360 @@
+{
+ "summary": {
+  "harness": "pi",
+  "target": "strata-nothink+qwen-instruct",
+  "model": "qwen3.8-flash-next-iq3_xxs",
+  "extra": {
+   "chat_template_kwargs": {
+    "enable_thinking": false
+   },
+   "temperature": 0.7,
+   "top_p": 0.8,
+   "top_k": 20,
+   "min_p": 0,
+   "presence_penalty": 1.5
+  },
+  "extraAnthropic": {
+   "thinking": {
+    "type": "disabled"
+   },
+   "temperature": 0.7,
+   "top_p": 0.8,
+   "top_k": 20,
+   "min_p": 0,
+   "presence_penalty": 1.5
+  },
+  "pass": 7,
+  "total": 7,
+  "wallSec": 295,
+  "run": "/tmp/strata-agent/pi-strata-nothink+qwen-instruct-r3-20261027-010836",
+  "calls": 37,
+  "promptTok": 119685,
+  "cachedTok": 98482,
+  "outTok": 6615,
+  "toolCalls": 40,
+  "toolErrors": 0,
+  "formatErrors": 0,
+  "httpErrors": 0
+ },
+ "results": [
+  {
+   "task": "bugfix",
+   "pass": true,
+   "check": "tests=True test_file_untouched=True ['OK']",
+   "wallSec": 19,
+   "rc": 0,
+   "timedOut": false,
+   "log": "/tmp/strata-agent/pi-strata-nothink+qwen-instruct-r3-20261027-010836/bugfix.jsonl",
+   "wire": {
+    "calls": 3,
+    "toolCallsTurns": 3,
+    "refused": 0,
+    "httpErrors": 0,
+    "httpErrorSamples": [],
+    "promptTok": 7482,
+    "cachedTok": 4921,
+    "outTok": 189,
+    "modelSec": 15,
+    "firstPromptTok": 2191,
+    "firstCallSec": 7.14,
+    "toolsOffered": 7,
+    "toolsChars": 5183,
+    "systemChars": 2885,
+    "api": "completions",
+    "thinkingOff": true,
+    "samplingSent": {
+     "temperature": 0.7,
+     "top_p": 0.8,
+     "top_k": 20,
+     "min_p": 0,
+     "presence_penalty": 1.5
+    },
+    "streamed": true,
+    "toolCalls": 2,
+    "toolErrors": 0,
+    "formatErrors": 0,
+    "toolErrorSamples": [],
+    "maxRepeat": 1,
+    "dupCalls": 0,
+    "toolMix": {
+     "bash": 1,
+     "edit": 1
+    }
+   }
+  },
+  {
+   "task": "feature",
+   "pass": true,
+   "check": "tests=True hidden=True () slugify_asserts=17",
+   "wallSec": 84,
+   "rc": 0,
+   "timedOut": false,
+   "log": "/tmp/strata-agent/pi-strata-nothink+qwen-instruct-r3-20261027-010836/feature.jsonl",
+   "wire": {
+    "calls": 9,
+    "toolCallsTurns": 9,
+    "refused": 0,
+    "httpErrors": 0,
+    "httpErrorSamples": [],
+    "promptTok": 34360,
+    "cachedTok": 30796,
+    "outTok": 2007,
+    "modelSec": 65,
+    "firstPromptTok": 2259,
+    "firstCallSec": 7.15,
+    "toolsOffered": 7,
+    "toolsChars": 5183,
+    "systemChars": 2886,
+    "api": "completions",
+    "thinkingOff": true,
+    "samplingSent": {
+     "temperature": 0.7,
+     "top_p": 0.8,
+     "top_k": 20,
+     "min_p": 0,
+     "presence_penalty": 1.5
+    },
+    "streamed": true,
+    "toolCalls": 9,
+    "toolErrors": 0,
+    "formatErrors": 0,
+    "toolErrorSamples": [],
+    "maxRepeat": 1,
+    "dupCalls": 0,
+    "toolMix": {
+     "bash": 4,
+     "read": 2,
+     "edit": 3
+    }
+   }
+  },
+  {
+   "task": "refactor",
+   "pass": true,
+   "check": "tests=True helper=True used_by_all=True fmt_copies=1 tests_untouched=True",
+   "wallSec": 20,
+   "rc": 0,
+   "timedOut": false,
+   "log": "/tmp/strata-agent/pi-strata-nothink+qwen-instruct-r3-20261027-010836/refactor.jsonl",
+   "wire": {
+    "calls": 3,
+    "toolCallsTurns": 3,
+    "refused": 0,
+    "httpErrors": 0,
+    "httpErrorSamples": [],
+    "promptTok": 7514,
+    "cachedTok": 4984,
+    "outTok": 315,
+    "modelSec": 17,
+    "firstPromptTok": 2206,
+    "firstCallSec": 6.39,
+    "toolsOffered": 7,
+    "toolsChars": 5183,
+    "systemChars": 2887,
+    "api": "completions",
+    "thinkingOff": true,
+    "samplingSent": {
+     "temperature": 0.7,
+     "top_p": 0.8,
+     "top_k": 20,
+     "min_p": 0,
+     "presence_penalty": 1.5
+    },
+    "streamed": true,
+    "toolCalls": 2,
+    "toolErrors": 0,
+    "formatErrors": 0,
+    "toolErrorSamples": [],
+    "maxRepeat": 1,
+    "dupCalls": 0,
+    "toolMix": {
+     "read": 1,
+     "write": 1
+    }
+   }
+  },
+  {
+   "task": "readqa",
+   "pass": true,
+   "check": "answer=['port=8443', 'callers=gateway,notifier'] other_changes=[]",
+   "wallSec": 41,
+   "rc": 0,
+   "timedOut": false,
+   "log": "/tmp/strata-agent/pi-strata-nothink+qwen-instruct-r3-20261027-010836/readqa.jsonl",
+   "wire": {
+    "calls": 7,
+    "toolCallsTurns": 7,
+    "refused": 0,
+    "httpErrors": 0,
+    "httpErrorSamples": [],
+    "promptTok": 20704,
+    "cachedTok": 17682,
+    "outTok": 859,
+    "modelSec": 35,
+    "firstPromptTok": 2229,
+    "firstCallSec": 7.06,
+    "toolsOffered": 7,
+    "toolsChars": 5183,
+    "systemChars": 2885,
+    "api": "completions",
+    "thinkingOff": true,
+    "samplingSent": {
+     "temperature": 0.7,
+     "top_p": 0.8,
+     "top_k": 20,
+     "min_p": 0,
+     "presence_penalty": 1.5
+    },
+    "streamed": true,
+    "toolCalls": 11,
+    "toolErrors": 0,
+    "formatErrors": 0,
+    "toolErrorSamples": [],
+    "maxRepeat": 1,
+    "dupCalls": 0,
+    "toolMix": {
+     "ls": 1,
+     "bash": 3,
+     "read": 7
+    }
+   }
+  },
+  {
+   "task": "shell",
+   "pass": true,
+   "check": "report=[['203.0.113.17', '9'], ['198.51.100.3', '7'], ['192.0.2.250', '5']] logs_intact=True",
+   "wallSec": 23,
+   "rc": 0,
+   "timedOut": false,
+   "log": "/tmp/strata-agent/pi-strata-nothink+qwen-instruct-r3-20261027-010836/shell.jsonl",
+   "wire": {
+    "calls": 4,
+    "toolCallsTurns": 4,
+    "refused": 0,
+    "httpErrors": 0,
+    "httpErrorSamples": [],
+    "promptTok": 11036,
+    "cachedTok": 7918,
+    "outTok": 294,
+    "modelSec": 18,
+    "firstPromptTok": 2207,
+    "firstCallSec": 6.33,
+    "toolsOffered": 7,
+    "toolsChars": 5183,
+    "systemChars": 2884,
+    "api": "completions",
+    "thinkingOff": true,
+    "samplingSent": {
+     "temperature": 0.7,
+     "top_p": 0.8,
+     "top_k": 20,
+     "min_p": 0,
+     "presence_penalty": 1.5
+    },
+    "streamed": true,
+    "toolCalls": 3,
+    "toolErrors": 0,
+    "formatErrors": 0,
+    "toolErrorSamples": [],
+    "maxRepeat": 1,
+    "dupCalls": 0,
+    "toolMix": {
+     "bash": 3
+    }
+   }
+  },
+  {
+   "task": "rootcause",
+   "pass": true,
+   "check": "tests=True tests_untouched=True hidden=True [2.68, 0.13, 1.01, 11.0, 2.67, 1.0]",
+   "wallSec": 32,
+   "rc": 0,
+   "timedOut": false,
+   "log": "/tmp/strata-agent/pi-strata-nothink+qwen-instruct-r3-20261027-010836/rootcause.jsonl",
+   "wire": {
+    "calls": 4,
+    "toolCallsTurns": 4,
+    "refused": 0,
+    "httpErrors": 0,
+    "httpErrorSamples": [],
+    "promptTok": 10935,
+    "cachedTok": 8038,
+    "outTok": 424,
+    "modelSec": 21,
+    "firstPromptTok": 2180,
+    "firstCallSec": 6.82,
+    "toolsOffered": 7,
+    "toolsChars": 5183,
+    "systemChars": 2888,
+    "api": "completions",
+    "thinkingOff": true,
+    "samplingSent": {
+     "temperature": 0.7,
+     "top_p": 0.8,
+     "top_k": 20,
+     "min_p": 0,
+     "presence_penalty": 1.5
+    },
+    "streamed": true,
+    "toolCalls": 5,
+    "toolErrors": 0,
+    "formatErrors": 0,
+    "toolErrorSamples": [],
+    "maxRepeat": 1,
+    "dupCalls": 0,
+    "toolMix": {
+     "bash": 1,
+     "read": 3,
+     "edit": 1
+    }
+   }
+  },
+  {
+   "task": "multifile",
+   "pass": true,
+   "check": "tests=True hidden=True tests_cover_priority=True ",
+   "wallSec": 76,
+   "rc": 0,
+   "timedOut": false,
+   "log": "/tmp/strata-agent/pi-strata-nothink+qwen-instruct-r3-20261027-010836/multifile.jsonl",
+   "wire": {
+    "calls": 7,
+    "toolCallsTurns": 7,
+    "refused": 0,
+    "httpErrors": 0,
+    "httpErrorSamples": [],
+    "promptTok": 27654,
+    "cachedTok": 24143,
+    "outTok": 2527,
+    "modelSec": 67,
+    "firstPromptTok": 2297,
+    "firstCallSec": 7.67,
+    "toolsOffered": 7,
+    "toolsChars": 5183,
+    "systemChars": 2888,
+    "api": "completions",
+    "thinkingOff": true,
+    "samplingSent": {
+     "temperature": 0.7,
+     "top_p": 0.8,
+     "top_k": 20,
+     "min_p": 0,
+     "presence_penalty": 1.5
+    },
+    "streamed": true,
+    "toolCalls": 8,
+    "toolErrors": 0,
+    "formatErrors": 0,
+    "toolErrorSamples": [],
+    "maxRepeat": 1,
+    "dupCalls": 0,
+    "toolMix": {
+     "bash": 2,
+     "read": 3,
+     "edit": 2,
+     "write": 1
+    }
+   }
+  }
+ ]
+}

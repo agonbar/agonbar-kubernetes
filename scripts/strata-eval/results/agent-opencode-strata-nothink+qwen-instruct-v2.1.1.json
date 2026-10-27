@@ -1,0 +1,364 @@
+{
+ "summary": {
+  "harness": "opencode",
+  "target": "strata-nothink+qwen-instruct",
+  "model": "qwen3.8-flash-next-iq3_xxs",
+  "extra": {
+   "chat_template_kwargs": {
+    "enable_thinking": false
+   },
+   "temperature": 0.7,
+   "top_p": 0.8,
+   "top_k": 20,
+   "min_p": 0,
+   "presence_penalty": 1.5
+  },
+  "extraAnthropic": {
+   "thinking": {
+    "type": "disabled"
+   },
+   "temperature": 0.7,
+   "top_p": 0.8,
+   "top_k": 20,
+   "min_p": 0,
+   "presence_penalty": 1.5
+  },
+  "pass": 7,
+  "total": 7,
+  "wallSec": 517,
+  "run": "/tmp/strata-agent/opencode-strata-nothink+qwen-instruct-v2.1.1-20261027-013021",
+  "calls": 65,
+  "promptTok": 421938,
+  "cachedTok": 332571,
+  "outTok": 9153,
+  "toolCalls": 67,
+  "toolErrors": 1,
+  "formatErrors": 0,
+  "httpErrors": 0
+ },
+ "results": [
+  {
+   "task": "bugfix",
+   "pass": true,
+   "check": "tests=True test_file_untouched=True ['OK']",
+   "wallSec": 44,
+   "rc": 0,
+   "timedOut": false,
+   "log": "/tmp/strata-agent/opencode-strata-nothink+qwen-instruct-v2.1.1-20261027-013021/bugfix.jsonl",
+   "wire": {
+    "calls": 6,
+    "toolCallsTurns": 5,
+    "refused": 0,
+    "httpErrors": 0,
+    "httpErrorSamples": [],
+    "promptTok": 29627,
+    "cachedTok": 17877,
+    "outTok": 460,
+    "modelSec": 37,
+    "firstPromptTok": 5254,
+    "firstCallSec": 11.05,
+    "toolsOffered": 11,
+    "toolsChars": 13143,
+    "systemChars": 8408,
+    "api": "completions",
+    "thinkingOff": true,
+    "samplingSent": {
+     "temperature": 0.7,
+     "top_p": 0.8,
+     "top_k": 20,
+     "min_p": 0,
+     "presence_penalty": 1.5
+    },
+    "streamed": true,
+    "toolCalls": 4,
+    "toolErrors": 0,
+    "formatErrors": 0,
+    "toolErrorSamples": [],
+    "maxRepeat": 1,
+    "dupCalls": 0,
+    "toolMix": {
+     "read": 2,
+     "edit": 2
+    }
+   }
+  },
+  {
+   "task": "feature",
+   "pass": true,
+   "check": "tests=True hidden=True () slugify_asserts=35",
+   "wallSec": 150,
+   "rc": 0,
+   "timedOut": false,
+   "log": "/tmp/strata-agent/opencode-strata-nothink+qwen-instruct-v2.1.1-20261027-013021/feature.jsonl",
+   "wire": {
+    "calls": 20,
+    "toolCallsTurns": 19,
+    "refused": 0,
+    "httpErrors": 0,
+    "httpErrorSamples": [],
+    "promptTok": 164099,
+    "cachedTok": 149091,
+    "outTok": 3359,
+    "modelSec": 134,
+    "firstPromptTok": 5322,
+    "firstCallSec": 10.96,
+    "toolsOffered": 11,
+    "toolsChars": 13143,
+    "systemChars": 8410,
+    "api": "completions",
+    "thinkingOff": true,
+    "samplingSent": {
+     "temperature": 0.7,
+     "top_p": 0.8,
+     "top_k": 20,
+     "min_p": 0,
+     "presence_penalty": 1.5
+    },
+    "streamed": true,
+    "toolCalls": 19,
+    "toolErrors": 1,
+    "formatErrors": 0,
+    "toolErrorSamples": [
+     "shell: Traceback (most recent call last):   File \"/tmp/strata-agent/opencode-strata-nothink+qwen-instruct-v2.1.1-20261027-013021/feature/test_textutils.py\", "
+    ],
+    "maxRepeat": 1,
+    "dupCalls": 3,
+    "toolMix": {
+     "shell": 7,
+     "read": 3,
+     "edit": 8,
+     "write": 1
+    }
+   }
+  },
+  {
+   "task": "refactor",
+   "pass": true,
+   "check": "tests=True helper=True used_by_all=True fmt_copies=1 tests_untouched=True",
+   "wallSec": 51,
+   "rc": 0,
+   "timedOut": false,
+   "log": "/tmp/strata-agent/opencode-strata-nothink+qwen-instruct-v2.1.1-20261027-013021/refactor.jsonl",
+   "wire": {
+    "calls": 6,
+    "toolCallsTurns": 5,
+    "refused": 0,
+    "httpErrors": 0,
+    "httpErrorSamples": [],
+    "promptTok": 31147,
+    "cachedTok": 18938,
+    "outTok": 675,
+    "modelSec": 43,
+    "firstPromptTok": 5269,
+    "firstCallSec": 11.07,
+    "toolsOffered": 11,
+    "toolsChars": 13143,
+    "systemChars": 8412,
+    "api": "completions",
+    "thinkingOff": true,
+    "samplingSent": {
+     "temperature": 0.7,
+     "top_p": 0.8,
+     "top_k": 20,
+     "min_p": 0,
+     "presence_penalty": 1.5
+    },
+    "streamed": true,
+    "toolCalls": 5,
+    "toolErrors": 0,
+    "formatErrors": 0,
+    "toolErrorSamples": [],
+    "maxRepeat": 1,
+    "dupCalls": 0,
+    "toolMix": {
+     "shell": 2,
+     "read": 2,
+     "write": 1
+    }
+   }
+  },
+  {
+   "task": "readqa",
+   "pass": true,
+   "check": "answer=['port=8443', 'callers=gateway,notifier'] other_changes=[]",
+   "wallSec": 42,
+   "rc": 0,
+   "timedOut": false,
+   "log": "/tmp/strata-agent/opencode-strata-nothink+qwen-instruct-v2.1.1-20261027-013021/readqa.jsonl",
+   "wire": {
+    "calls": 5,
+    "toolCallsTurns": 4,
+    "refused": 0,
+    "httpErrors": 0,
+    "httpErrorSamples": [],
+    "promptTok": 23432,
+    "cachedTok": 11455,
+    "outTok": 367,
+    "modelSec": 35,
+    "firstPromptTok": 5292,
+    "firstCallSec": 10.41,
+    "toolsOffered": 11,
+    "toolsChars": 13143,
+    "systemChars": 8408,
+    "api": "completions",
+    "thinkingOff": true,
+    "samplingSent": {
+     "temperature": 0.7,
+     "top_p": 0.8,
+     "top_k": 20,
+     "min_p": 0,
+     "presence_penalty": 1.5
+    },
+    "streamed": true,
+    "toolCalls": 11,
+    "toolErrors": 0,
+    "formatErrors": 0,
+    "toolErrorSamples": [],
+    "maxRepeat": 1,
+    "dupCalls": 0,
+    "toolMix": {
+     "shell": 1,
+     "read": 10
+    }
+   }
+  },
+  {
+   "task": "shell",
+   "pass": true,
+   "check": "report=[['203.0.113.17', '9'], ['198.51.100.3', '7'], ['192.0.2.250', '5']] logs_intact=True",
+   "wallSec": 51,
+   "rc": 0,
+   "timedOut": false,
+   "log": "/tmp/strata-agent/opencode-strata-nothink+qwen-instruct-v2.1.1-20261027-013021/shell.jsonl",
+   "wire": {
+    "calls": 7,
+    "toolCallsTurns": 6,
+    "refused": 0,
+    "httpErrors": 0,
+    "httpErrorSamples": [],
+    "promptTok": 38456,
+    "cachedTok": 25864,
+    "outTok": 526,
+    "modelSec": 44,
+    "firstPromptTok": 5270,
+    "firstCallSec": 10.54,
+    "toolsOffered": 11,
+    "toolsChars": 13143,
+    "systemChars": 8406,
+    "api": "completions",
+    "thinkingOff": true,
+    "samplingSent": {
+     "temperature": 0.7,
+     "top_p": 0.8,
+     "top_k": 20,
+     "min_p": 0,
+     "presence_penalty": 1.5
+    },
+    "streamed": true,
+    "toolCalls": 5,
+    "toolErrors": 0,
+    "formatErrors": 0,
+    "toolErrorSamples": [],
+    "maxRepeat": 1,
+    "dupCalls": 0,
+    "toolMix": {
+     "shell": 4,
+     "write": 1
+    }
+   }
+  },
+  {
+   "task": "rootcause",
+   "pass": true,
+   "check": "tests=True tests_untouched=True hidden=True [2.68, 0.13, 1.01, 11.0, 2.67, 1.0]",
+   "wallSec": 91,
+   "rc": 0,
+   "timedOut": false,
+   "log": "/tmp/strata-agent/opencode-strata-nothink+qwen-instruct-v2.1.1-20261027-013021/rootcause.jsonl",
+   "wire": {
+    "calls": 12,
+    "toolCallsTurns": 11,
+    "refused": 0,
+    "httpErrors": 0,
+    "httpErrorSamples": [],
+    "promptTok": 77343,
+    "cachedTok": 64467,
+    "outTok": 1639,
+    "modelSec": 79,
+    "firstPromptTok": 5243,
+    "firstCallSec": 10.75,
+    "toolsOffered": 11,
+    "toolsChars": 13143,
+    "systemChars": 8414,
+    "api": "completions",
+    "thinkingOff": true,
+    "samplingSent": {
+     "temperature": 0.7,
+     "top_p": 0.8,
+     "top_k": 20,
+     "min_p": 0,
+     "presence_penalty": 1.5
+    },
+    "streamed": true,
+    "toolCalls": 12,
+    "toolErrors": 0,
+    "formatErrors": 0,
+    "toolErrorSamples": [],
+    "maxRepeat": 1,
+    "dupCalls": 0,
+    "toolMix": {
+     "shell": 8,
+     "read": 3,
+     "write": 1
+    }
+   }
+  },
+  {
+   "task": "multifile",
+   "pass": true,
+   "check": "tests=True hidden=True tests_cover_priority=True ",
+   "wallSec": 88,
+   "rc": 0,
+   "timedOut": false,
+   "log": "/tmp/strata-agent/opencode-strata-nothink+qwen-instruct-v2.1.1-20261027-013021/multifile.jsonl",
+   "wire": {
+    "calls": 9,
+    "toolCallsTurns": 8,
+    "refused": 0,
+    "httpErrors": 0,
+    "httpErrorSamples": [],
+    "promptTok": 57834,
+    "cachedTok": 44879,
+    "outTok": 2127,
+    "modelSec": 77,
+    "firstPromptTok": 5362,
+    "firstCallSec": 11.25,
+    "toolsOffered": 11,
+    "toolsChars": 13143,
+    "systemChars": 8414,
+    "api": "completions",
+    "thinkingOff": true,
+    "samplingSent": {
+     "temperature": 0.7,
+     "top_p": 0.8,
+     "top_k": 20,
+     "min_p": 0,
+     "presence_penalty": 1.5
+    },
+    "streamed": true,
+    "toolCalls": 11,
+    "toolErrors": 0,
+    "formatErrors": 0,
+    "toolErrorSamples": [],
+    "maxRepeat": 1,
+    "dupCalls": 0,
+    "toolMix": {
+     "shell": 2,
+     "read": 3,
+     "edit": 5,
+     "write": 1
+    }
+   }
+  }
+ ]
+}

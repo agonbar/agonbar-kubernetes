@@ -54,10 +54,45 @@ def agent():
     print("|---|---|---|---|---|---|---|---|---|")
     for p in sorted(glob.glob(os.path.join(HERE, "results/agent-*.json"))):
         d = load(p)
+        if "harness" in d["summary"]:
+            continue
         for r in d["results"]:
             print("| %s | %s | %s | %s | %s | %s | %s | %s | %s |" % (d["summary"]["target"], r["task"], "yes" if r["pass"] else "NO",
                   r["turns"], r["toolCalls"], r["toolErrors"], r["apiErrors"], r["wallSec"],
                   "timeout" if r["timedOut"] else (r["resultSubtype"] or "rc=%s" % r["rc"])))
+    print()
+
+
+def harnesses():
+    """run_agent.py --harness runs: measured on the wire by capture_proxy, the same for every harness."""
+    runs = []
+    for p in sorted(glob.glob(os.path.join(HERE, "results/agent-*.json"))):
+        d = load(p)
+        if d and "harness" in d["summary"]:
+            f = os.path.basename(p)[len("agent-"):-len(".json")]
+            d["summary"]["file"] = f if f.startswith(d["summary"]["harness"] + "-") else d["summary"]["harness"] + "-" + f
+            runs.append(d)
+    if not runs:
+        return
+    print("## Agent harnesses (same tasks, same model, measured on the wire)\n")
+    print("| run | pass | wall s | model calls | 1st prompt tok | prompt tok | cached | completion tok | tool calls | tool errors | format errors | max repeat | HTTP errors | thinking off | sampling sent |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    for d in runs:
+        s, w = d["summary"], [r.get("wire") or {} for r in d["results"]]
+        first = [x["firstPromptTok"] for x in w if x.get("firstPromptTok")]
+        print("| %s | %d/%d | %d | %d | %s | %d | %d | %d | %d | %d | %d | %s | %d | %s | %s |" % (
+            s["file"], s["pass"], s["total"], s["wallSec"], s["calls"], min(first) if first else "-",
+            s["promptTok"], s["cachedTok"], s["outTok"], s["toolCalls"], s["toolErrors"], s["formatErrors"],
+            max((x.get("maxRepeat") or 0) for x in w), s["httpErrors"], all(x.get("thinkingOff") for x in w if x),
+            ",".join(sorted({k for x in w for k in (x.get("samplingSent") or {})})) or "none"))
+    print("\n| run | task | pass | wall s | calls | tool calls | tool errors | prompt tok | cached | out tok | end |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|")
+    for d in runs:
+        for r in d["results"]:
+            w = r.get("wire") or {}
+            print("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |" % (d["summary"]["file"], r["task"], "yes" if r["pass"] else "NO",
+                  r["wallSec"], w.get("calls"), w.get("toolCalls"), w.get("toolErrors"), w.get("promptTok"), w.get("cachedTok"),
+                  w.get("outTok"), "timeout" if r["timedOut"] else "refused" if w.get("refused") else "rc=%s" % r["rc"]))
     print()
 
 
@@ -133,4 +168,4 @@ def repeats():
 
 
 if __name__ == "__main__":
-    esg(); toolcall(); agent(); longctx(); vision(); repeats()
+    esg(); toolcall(); agent(); harnesses(); longctx(); vision(); repeats()

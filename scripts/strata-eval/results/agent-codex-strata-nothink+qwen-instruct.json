@@ -1,0 +1,316 @@
+{
+ "summary": {
+  "harness": "codex",
+  "target": "strata-nothink+qwen-instruct",
+  "model": "qwen3.8-flash-next-iq3_xxs",
+  "extra": {
+   "chat_template_kwargs": {
+    "enable_thinking": false
+   },
+   "temperature": 0.7,
+   "top_p": 0.8,
+   "top_k": 20,
+   "min_p": 0,
+   "presence_penalty": 1.5
+  },
+  "extraAnthropic": {
+   "thinking": {
+    "type": "disabled"
+   },
+   "temperature": 0.7,
+   "top_p": 0.8,
+   "top_k": 20,
+   "min_p": 0,
+   "presence_penalty": 1.5
+  },
+  "pass": 7,
+  "total": 7,
+  "wallSec": 769,
+  "run": "/tmp/strata-agent/codex-strata-nothink+qwen-instruct-20261026-235905",
+  "calls": 89,
+  "promptTok": 1108439,
+  "cachedTok": 1024792,
+  "outTok": 15085,
+  "toolCalls": 86,
+  "toolErrors": 4,
+  "formatErrors": 0,
+  "httpErrors": 0
+ },
+ "results": [
+  {
+   "task": "bugfix",
+   "pass": true,
+   "check": "tests=True test_file_untouched=True ['OK']",
+   "wallSec": 66,
+   "rc": 0,
+   "timedOut": false,
+   "log": "/tmp/strata-agent/codex-strata-nothink+qwen-instruct-20261026-235905/bugfix.jsonl",
+   "wire": {
+    "calls": 8,
+    "toolCallsTurns": 8,
+    "refused": 0,
+    "httpErrors": 0,
+    "httpErrorSamples": [],
+    "promptTok": 81176,
+    "cachedTok": 70148,
+    "outTok": 1004,
+    "modelSec": 52,
+    "firstPromptTok": 8649,
+    "firstCallSec": 14.99,
+    "toolsOffered": 9,
+    "toolsChars": 17766,
+    "systemChars": 0,
+    "api": "responses",
+    "thinkingOff": true,
+    "samplingSent": {},
+    "streamed": true,
+    "toolCalls": 7,
+    "toolErrors": 0,
+    "formatErrors": 0,
+    "toolErrorSamples": [],
+    "maxRepeat": 1,
+    "dupCalls": 0,
+    "toolMix": {
+     "exec_command": 7
+    }
+   }
+  },
+  {
+   "task": "feature",
+   "pass": true,
+   "check": "tests=True hidden=True () slugify_asserts=14",
+   "wallSec": 113,
+   "rc": 0,
+   "timedOut": false,
+   "log": "/tmp/strata-agent/codex-strata-nothink+qwen-instruct-20261026-235905/feature.jsonl",
+   "wire": {
+    "calls": 14,
+    "toolCallsTurns": 14,
+    "refused": 0,
+    "httpErrors": 0,
+    "httpErrorSamples": [],
+    "promptTok": 154099,
+    "cachedTok": 141751,
+    "outTok": 2090,
+    "modelSec": 93,
+    "firstPromptTok": 8714,
+    "firstCallSec": 17.38,
+    "toolsOffered": 9,
+    "toolsChars": 17766,
+    "systemChars": 0,
+    "api": "responses",
+    "thinkingOff": true,
+    "samplingSent": {},
+    "streamed": true,
+    "toolCalls": 13,
+    "toolErrors": 0,
+    "formatErrors": 0,
+    "toolErrorSamples": [],
+    "maxRepeat": 1,
+    "dupCalls": 0,
+    "toolMix": {
+     "exec_command": 13
+    }
+   }
+  },
+  {
+   "task": "refactor",
+   "pass": true,
+   "check": "tests=True helper=True used_by_all=True fmt_copies=1 tests_untouched=True",
+   "wallSec": 144,
+   "rc": 0,
+   "timedOut": false,
+   "log": "/tmp/strata-agent/codex-strata-nothink+qwen-instruct-20261026-235905/refactor.jsonl",
+   "wire": {
+    "calls": 14,
+    "toolCallsTurns": 14,
+    "refused": 0,
+    "httpErrors": 0,
+    "httpErrorSamples": [],
+    "promptTok": 148680,
+    "cachedTok": 137833,
+    "outTok": 1533,
+    "modelSec": 75,
+    "firstPromptTok": 8662,
+    "firstCallSec": 15.51,
+    "toolsOffered": 9,
+    "toolsChars": 17766,
+    "systemChars": 0,
+    "api": "responses",
+    "thinkingOff": true,
+    "samplingSent": {},
+    "streamed": true,
+    "toolCalls": 14,
+    "toolErrors": 1,
+    "formatErrors": 0,
+    "toolErrorSamples": [
+     "write_stdin: write_stdin failed: stdin is closed for this session; rerun exec_command with tty=true to keep stdin open"
+    ],
+    "maxRepeat": 1,
+    "dupCalls": 0,
+    "toolMix": {
+     "exec_command": 12,
+     "write_stdin": 2
+    }
+   }
+  },
+  {
+   "task": "readqa",
+   "pass": true,
+   "check": "answer=['port=8443', 'callers=gateway,notifier'] other_changes=[]",
+   "wallSec": 31,
+   "rc": 0,
+   "timedOut": false,
+   "log": "/tmp/strata-agent/codex-strata-nothink+qwen-instruct-20261026-235905/readqa.jsonl",
+   "wire": {
+    "calls": 3,
+    "toolCallsTurns": 3,
+    "refused": 0,
+    "httpErrors": 0,
+    "httpErrorSamples": [],
+    "promptTok": 27602,
+    "cachedTok": 18053,
+    "outTok": 328,
+    "modelSec": 25,
+    "firstPromptTok": 8685,
+    "firstCallSec": 15.26,
+    "toolsOffered": 9,
+    "toolsChars": 17766,
+    "systemChars": 0,
+    "api": "responses",
+    "thinkingOff": true,
+    "samplingSent": {},
+    "streamed": true,
+    "toolCalls": 2,
+    "toolErrors": 0,
+    "formatErrors": 0,
+    "toolErrorSamples": [],
+    "maxRepeat": 1,
+    "dupCalls": 0,
+    "toolMix": {
+     "exec_command": 2
+    }
+   }
+  },
+  {
+   "task": "shell",
+   "pass": true,
+   "check": "report=[['203.0.113.17', '9'], ['198.51.100.3', '7'], ['192.0.2.250', '5']] logs_intact=True",
+   "wallSec": 37,
+   "rc": 0,
+   "timedOut": false,
+   "log": "/tmp/strata-agent/codex-strata-nothink+qwen-instruct-20261026-235905/shell.jsonl",
+   "wire": {
+    "calls": 4,
+    "toolCallsTurns": 4,
+    "refused": 0,
+    "httpErrors": 0,
+    "httpErrorSamples": [],
+    "promptTok": 37346,
+    "cachedTok": 27555,
+    "outTok": 446,
+    "modelSec": 30,
+    "firstPromptTok": 8662,
+    "firstCallSec": 14.83,
+    "toolsOffered": 9,
+    "toolsChars": 17766,
+    "systemChars": 0,
+    "api": "responses",
+    "thinkingOff": true,
+    "samplingSent": {},
+    "streamed": true,
+    "toolCalls": 3,
+    "toolErrors": 0,
+    "formatErrors": 0,
+    "toolErrorSamples": [],
+    "maxRepeat": 1,
+    "dupCalls": 0,
+    "toolMix": {
+     "exec_command": 3
+    }
+   }
+  },
+  {
+   "task": "rootcause",
+   "pass": true,
+   "check": "tests=True tests_untouched=True hidden=True [2.68, 0.13, 1.01, 11.0, 2.67, 1.0]",
+   "wallSec": 179,
+   "rc": 0,
+   "timedOut": false,
+   "log": "/tmp/strata-agent/codex-strata-nothink+qwen-instruct-20261026-235905/rootcause.jsonl",
+   "wire": {
+    "calls": 20,
+    "toolCallsTurns": 20,
+    "refused": 0,
+    "httpErrors": 0,
+    "httpErrorSamples": [],
+    "promptTok": 274742,
+    "cachedTok": 259565,
+    "outTok": 4238,
+    "modelSec": 149,
+    "firstPromptTok": 8636,
+    "firstCallSec": 16.98,
+    "toolsOffered": 9,
+    "toolsChars": 17766,
+    "systemChars": 0,
+    "api": "responses",
+    "thinkingOff": true,
+    "samplingSent": {},
+    "streamed": true,
+    "toolCalls": 21,
+    "toolErrors": 1,
+    "formatErrors": 0,
+    "toolErrorSamples": [
+     "exec_command: exec_command failed: CreateProcess { message: \"Rejected(\\\"`/run/current-system/sw/bin/zsh -lc 'cd /tmp/strata-agent/codex-strata-nothink+qwen-instruct"
+    ],
+    "maxRepeat": 1,
+    "dupCalls": 0,
+    "toolMix": {
+     "exec_command": 21
+    }
+   }
+  },
+  {
+   "task": "multifile",
+   "pass": true,
+   "check": "tests=True hidden=True tests_cover_priority=True ",
+   "wallSec": 199,
+   "rc": 0,
+   "timedOut": false,
+   "log": "/tmp/strata-agent/codex-strata-nothink+qwen-instruct-fixmf-20261027-001531/multifile.jsonl",
+   "wire": {
+    "calls": 26,
+    "toolCallsTurns": 26,
+    "refused": 0,
+    "httpErrors": 0,
+    "httpErrorSamples": [],
+    "promptTok": 384794,
+    "cachedTok": 369887,
+    "outTok": 5446,
+    "modelSec": 178,
+    "firstPromptTok": 8762,
+    "firstCallSec": 16.73,
+    "toolsOffered": 9,
+    "toolsChars": 17766,
+    "systemChars": 0,
+    "api": "responses",
+    "thinkingOff": true,
+    "samplingSent": {},
+    "streamed": true,
+    "toolCalls": 26,
+    "toolErrors": 2,
+    "formatErrors": 0,
+    "toolErrorSamples": [
+     "exec_command: apply_patch verification failed: invalid patch: The first line of the patch must be '*** Begin Patch'",
+     "exec_command: exec_command failed: CreateProcess { message: \"Rejected(\\\"`/run/current-system/sw/bin/zsh -lc 'cd /tmp/strata-agent/codex-strata-nothink+qwen-instruct"
+    ],
+    "maxRepeat": 1,
+    "dupCalls": 0,
+    "toolMix": {
+     "exec_command": 26
+    }
+   },
+   "note": "rerun: the first multifile run lost the port-forward mid-task (30 HTTP errors), /tmp/strata-agent/codex-strata-nothink+qwen-instruct-20261026-235905/multifile.jsonl"
+  }
+ ]
+}
