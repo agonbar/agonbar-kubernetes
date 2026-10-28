@@ -4,7 +4,15 @@ ArgoCD auto-syncs this directory from `main`, so an upgrade is an image bump in
 `server.yaml` and `machine-learning.yaml`, committed and pushed. Server and
 machine-learning always move together, to the same tag.
 
-Last upgrades: v2.7.5 → v3.0.1 (major), v3.0.3 → v3.2.4 on 2026-10-01.
+Last upgrades: v2.7.5 → v3.0.1 (major), v3.0.3 → v3.2.4 on 2026-10-01,
+v3.2.4 → v3.3.5 on 2026-10-28. That one ran five migrations in under a second
+and switched `server` to `strategy: Recreate`, so the old pod is gone before
+the new one migrates. Since then the server warns about schema drift in
+`geodata_places` and `naturalearth_countries`: column types and `_pkey1`
+names left by the reverse-geocoding import. The expected table definition is
+identical in v3.2.4 and v3.3.5, so the drift predates the upgrade. Leave it,
+and do not run the SQL that `immich-admin schema-check` suggests: it drops
+and re-adds a `NOT NULL` column on a table with 229k rows.
 
 ## Before bumping
 
