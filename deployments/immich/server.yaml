@@ -12,6 +12,10 @@ metadata:
   namespace: immich
 spec:
   replicas: 1
+  # Only one server version may touch the database: the new pod runs the
+  # schema migrations on boot, and the old one must be gone by then.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: server 
@@ -21,7 +25,7 @@ spec:
         app: server 
     spec:
       containers:
-        - image: ghcr.io/immich-app/immich-server:v3.2.4
+        - image: ghcr.io/immich-app/immich-server:v3.3.5
           name: server 
           # command: ["/bin/sh"]
           # args: ["./start-server.sh"]
