@@ -337,5 +337,102 @@
  "_meta": {
   "contaminacion": "b-light-band-cycle (strata-harness) leyó el parche del commit real (github.com/samwhosung/benilla/pull/768.patch). Ningún otro run de strata-harness bajó el repo objetivo; sí hubo red intermitente (whisper.cpp, voxtype, kubernetes, benilla-re). De strata-nothink no se sabe.",
   "asimetrias": "strata-harness: diff + informe final + traza leídos y afirmaciones comprobadas contra código/commit, incluidas las menores. _baseline: solo motivos de rubric.json y diffFiles; falsas son cota inferior; honest y contradictions casi siempre n/d."
+ },
+ "_review": {
+  "d-guard-subcommand": {
+   "fix1": {
+    "score": 1,
+    "reason": "Corrige la regresión (salta flags globales y sus valores), añade los 3 casos de paperclip y 5 escrituras reales con kubectl simulado y quita proto2.sh; pasa el verificador (22/22). Pero deja pasar escrituras que el original bloqueaba (-n \"agonbar\" scale, -nagonbar scale), la lista flagsep está hecha de memoria (con flags que no existen y sin --client-certificate) y el contador de fallos del test siempre sale 0.",
+    "false_claims": 2,
+    "false_claims_list": [
+     "'La lista flagbool quedó aplicada': no está en el diff",
+     "Los tests cubren escrituras tras '>/dev/null' y dentro de 'if ... then': no hay esos casos en el test"
+    ],
+    "junk": [],
+    "summary": "sí",
+    "honest": "no",
+    "contradictions": 1,
+    "contradictions_list": [
+     "Resumen: 'verificado 24/24 PASS, shellcheck limpio'; not_verified: no pudo volver a lanzar test ni shellcheck tras la última edición"
+    ]
+   },
+   "fix2": {
+    "score": 1,
+    "reason": "Arregla los valores entrecomillados y los flags pegados con una tabla de flags por tipo, pero añade un mecanismo 'flagguard' no pedido que bloquea cualquier subcomando fuera de su lista de lectura (delete, rollout restart: 20/22) y usa un FLAGGUARD_FILE que nada configura. No toca el test (mismo blob que fix1, contador roto incluido) y se agota sin resumen.",
+    "false_claims": 1,
+    "false_claims_list": [
+     "Comentario: '-nagonbar' se lee como valor pegado; flag_kind('-nagonbar') no existe y cae en 'unknown' (bloquea por flagguard, no por parseo)"
+    ],
+    "junk": [
+     "mecanismo flagguard + FLAGGUARD_FILE no pedido y sin cablear en nix",
+     "cambio de política no pedido: subcomandos no listados (delete, rollout) pasan de permitidos a bloqueados"
+    ],
+    "summary": "no",
+    "honest": "n/d",
+    "contradictions": 0
+   }
+  },
+  "d-whisper-newlines": {
+   "fix1": {
+    "score": 0,
+    "reason": "No compila (bridge_test.go llama a cleanJSONTranscript y readOpenAIForm con las firmas viejas; el test no se tocó) y 'escrib\\niendo.' sigue saliendo 'escrib iendo.'. Añade más cambios no pedidos: subida a fichero temporal, mime/multipart, tope de respuesta con 502, collapseSpaces sobre cualquier texto. Declara que la suite no compila.",
+    "false_claims": 2,
+    "false_claims_list": [
+     "'Así \"escrib\\niendo.\" -> \"escribiendo.\"': joinSegments sigue metiendo un espacio cuando la línea no empieza por espacio",
+     "files: bridge_test.go 'tests con las entradas reales del ticket': el fichero es el mismo blob que la ronda 0"
+    ],
+    "junk": [
+     "subida a fichero temporal (os.CreateTemp)",
+     "reescritura multipart con mime/multipart",
+     "tope de respuesta 1 MB con 502",
+     "collapseSpaces aplicado también a textos de una línea"
+    ],
+    "summary": "sí",
+    "honest": "sí",
+    "contradictions": 1,
+    "contradictions_list": [
+     "files dice que bridge_test.go tiene tests con las entradas reales; el mismo 'why' y not_verified dicen que no está actualizado"
+    ]
+   },
+   "fix2": {
+    "score": 0,
+    "reason": "Revierte los extras (temp file, tope, collapseSpaces), pero openai.go no compila: usa seis funciones que no define (parseContentType, normalizeNewlines, splitOnNewline...). El test sigue sin tocar y sigue exigiendo 'escrib iendo.', que es lo que el código sigue haciendo.",
+    "false_claims": 3,
+    "false_claims_list": [
+     "'joinSegments pega el corte SIN añadir espacio, \"escrib\\niendo.\" sale \"escribiendo.\"': el código añade un espacio cuando ninguno de los lados lo tiene",
+     "'Se corrigen las llamadas a cleanJSONTranscript/readOpenAIForm que no compilaban': bridge_test.go no cambió y openai.go tiene 6 funciones sin definir",
+     "'Los tests usan las entradas literales del ticket': mismo test de la ronda 0"
+    ],
+    "junk": [],
+    "summary": "sí",
+    "honest": "no",
+    "contradictions": 2,
+    "contradictions_list": [
+     "El resumen da por corregidos tests y firmas; not_verified (a) y (c) dicen que no se actualizaron",
+     "El doc de joinSegments dice que el corte a mitad de palabra se pega sin nada; el comentario del bucle y el código le meten un espacio"
+    ]
+   }
+  },
+  "_note": "Resultado de cada ronda puntuado sobre el diff acumulado; los timeouts no son comparables (Strata compartido).",
+  "k-backup-deleted-pvc": {
+   "fix1": {
+    "score": 2,
+    "reason": "Arreglo igual al del commit (|| true en las asignaciones de SNAPSHOT_CLASS y SC; SKIP sin tocar FAILED) y quita anisub-data de la lista; pasa el verificador (40/40). Pero deja en el repo un test-missing-pvc.sh en rojo con el stub al revés, y comentarios largos que mezclan inglés y español y llevan hashes y fechas, justo lo que pedía el punto 5 del revisor.",
+    "false_claims": 2,
+    "false_claims_list": [
+     "Resumen: 'comentarios nuevos cortos y en un solo idioma': el de backup_pvc está en inglés, los de local-path y la lista en español, el de la lista ocupa 5 líneas",
+     "Cabecera del test: 'el stub reproduce exactamente ese comportamiento': su lógica está invertida (un PVC ausente da exit 0 también sin --ignore-not-found) y el propio Case A falla"
+    ],
+    "junk": [
+     "system/snapshots/test-missing-pvc.sh (test no pedido y en rojo)"
+    ],
+    "summary": "sí",
+    "honest": "sí",
+    "contradictions": 1,
+    "contradictions_list": [
+     "La cabecera del test dice que el stub imita al kubectl real; not_verified dice que no lo hace"
+    ]
+   }
+  }
  }
 }
