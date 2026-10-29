@@ -203,10 +203,16 @@ def fmt_index(idx):
 
 def pod_node(js, *args, inp=None):
     cmd = KUBE + ["exec"] + (["-i"] if inp else []) + ["deploy/bookorbit", "--", "sh", "-c", 'cd /app && exec node -e "$0" "$@"', js, *args]
-    r = subprocess.run(cmd, input=inp, capture_output=True, text=True)
-    if r.returncode:
+    # El API server de lamg y el kubelet se caen a ratos ("Unable to connect", "unable to upgrade
+    # connection ... 502"): en una ejecución de horas, un corte así no debe tirar todo.
+    for attempt in range(6):
+        r = subprocess.run(cmd, input=inp, capture_output=True, text=True)
+        if not r.returncode:
+            return r.stdout
+        if attempt < 5 and re.search(r"Unable to connect|unable to upgrade|i/o timeout|connection refused|502|503", r.stderr):
+            time.sleep(30)
+            continue
         raise RuntimeError(f"kubectl exec: {r.stderr.strip()[-400:] or r.returncode}")
-    return r.stdout
 
 
 SQL_JS = r'''const {Client}=require("pg");(async()=>{const c=new Client({host:process.env.POSTGRES_HOST,port:+process.env.POSTGRES_PORT,
