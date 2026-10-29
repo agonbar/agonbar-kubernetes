@@ -198,5 +198,63 @@
    1,
    "La semántica del ciclo es correcta (los tests ocultos pasan si se adapta la firma), pero cambia segment() a Option, deja un test del crate en rojo y se agota el tiempo con 446 líneas."
   ]
+ },
+ "strata-harness": {
+  "k-backup-deleted-pvc": [
+   0,
+   "Causa correcta (asignación $(kubectl get pvc) bajo set -e, anisub-data borrado en fa892da), pero el guard usa --ignore-not-found, que devuelve 0 con el PVC borrado: nunca salta y el script sigue muriendo en el primer PVC (1/41). Se agota el tiempo (1800 s) sin resumen."
+  ],
+  "k-nas-diff-extra": [
+   3,
+   "Hace lo pedido como el commit (extras solo para nombre+tamaño, también en same-size como el commit), clase nueva moved-to-extra, --dump en cualquier posición, docstring al día; probado con fixtures sintéticos. Detalle: helper index() usado solo para B y los extras indexados a mano."
+  ],
+  "k-autotaint-deployment": [
+   2,
+   "Deployment correcto (pasa todo el verificador), pero mete todo reconcile.sh en una función reindentada, quita set -e y cambia la semántica del jq sin que se pidiera (lo avisa en not_verified). Sin tolerations para salir de un nodo caído."
+  ],
+  "k-seal-secrets-shrink": [
+   2,
+   "Cumple todo (temp file + mv, cuenta de SealedSecret, REFUSE por stderr, exit 1, SKIP, DRY_RUN), probado con kubeseal falso en sandboxes; vuelve a tocar README sin que se pida y deja un comentario obsoleto ('dir:secrets-file pairs')."
+  ],
+  "k-snapshot-class-why": [
+   2,
+   "Causa correcta (clase de snapshot fija truenas-iscsi-ssd frente a volúmenes en -lan con otro driver) y los 17 exactos en AFFECTED, pero da como hechos dos consecuencias falsas que contradicen su propio mecanismo, y la lista en prosa sale rota (15 nombres, sin tdarr). Finish forzado a las 90 llamadas."
+  ],
+  "d-paperclip-env": [
+   1,
+   "Arreglo idéntico al commit (${!PAPERCLIP_@}), pero la causa es inventada: dice que compgen -e lista una instantánea del entorno tomada al arrancar el shell y que Paperclip pone las variables después; la real es que el bash de writeShellApplication no trae compgen. Deja la causa falsa en un comentario del script."
+  ],
+  "d-guard-subcommand": [
+   0,
+   "Reescribe la detección del verbo, pero el bucle toma el primer flag global (--context) como subcomando y ya no bloquea ninguna escritura (11/22 casos, 0/3 tests); no toca tests/ y deja proto2.sh en la raíz. Lo declara INCOMPLETO."
+  ],
+  "d-whisper-newlines": [
+   1,
+   "Solo reescribe el json plano y deja verbose_json intacto, pero mete un espacio en los cortes a mitad de palabra ('escrib iendo.', justo el ejemplo del enunciado) y recorta el espacio inicial: el test oculto falla. 370 líneas, con buffer de toda la subida y parser multipart propio, frente a 40 del commit."
+  ],
+  "d-meeting-env-quote": [
+   3,
+   "KEY=\"valor\" solo en los valores con espacios, en las dos unidades; causa correcta y comprobada con nix eval y systemd-analyze verify ('Invalid environment assignment, ignoring: SenseiVision$'). Igual que el commit en lo esencial."
+  ],
+  "d-rebuild-nopasswd": [
+   3,
+   "Módulo compartido con las tres reglas, sudoers de t480 idéntico byte a byte (md5 contra HEAD~), asus-rog igual, regla suelta eliminada, work-vm intactas. No actualiza el comentario de update.sh:176 que apunta a 't480's security.sudo.extraRules'. Finish forzado."
+  ],
+  "d-gke-context-why": [
+   3,
+   "Correcto: server.nix define contexto, script y KUBECONFIG; work-vm-00 usa agonbar.nix por defecto; hosts reales work-vm-01, kubernetes-10, kubernetes-20; propone un módulo compartido con KUBECONFIG dentro. Largo (163 líneas) y con un apartado que se contradice."
+  ],
+  "b-tradeskill-nummade": [
+   3,
+   "Mismo cambio de una línea que el commit (map_or((1,1))) y tests para cabecera, índice pasado el final y sin snapshot; cargo test, fmt y clippy limpios. 81 llamadas para eso."
+  ],
+  "b-dial-ipv4": [
+   3,
+   "dial_ipv4 toma la primera dirección IPv4 y un host sin IPv4 falla como unresolved, como el commit; tests de localhost, solo-IPv6 y nombre inexistente (dependen del resolver local). Consultó benilla-re, no el repo objetivo. Finish forzado."
+  ],
+  "b-light-band-cycle": [
+   1,
+   "CONTAMINADA: descargó de GitHub el PR #768 de samwhosung/benilla, que es el commit de referencia, y su segment() lo reproduce (tests ocultos 2/2). Su propio test nuevo a_sample_interpolates_between_unordered_keys falla, el crate queda en rojo y se agota el tiempo sin resumen."
+  ]
  }
 }

@@ -12,7 +12,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import tasks as T
 
-ORDER = ["strata-nothink", "strata-think", "gemma", "claude-sonnet"]
+ORDER = ["strata-nothink", "strata-harness", "strata-think", "gemma", "claude-sonnet"]
 
 
 def load():

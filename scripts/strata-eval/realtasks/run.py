@@ -5,6 +5,7 @@
   run.py reverify --of CONTENDER         rerun the verifiers on kept workspaces, rewrite pass/check
   run.py strata-nothink [--tasks a,b]    pi + Strata, thinking off, instruct sampling (pi.nix)
   run.py strata-think   [--tasks a,b]    pi + Strata, thinking on, Qwen think sampling
+  run.py strata-harness [--tasks a,b]    strata-nothink plus harness/junior.ts (plan, budget, finish)
   run.py gemma          [--tasks a,b]    pi + gemma-4-12B on work-vm-00's llama-server
   run.py claude-sonnet  [--tasks a,b]    Claude Code + Sonnet on the subscription (reference)
 
@@ -37,6 +38,8 @@ ROOT = "/tmp/realtasks"
 SRC = ROOT + "/src"
 PI_DIR = os.path.expanduser("~/.pi/agent")
 PI_TOOLS = "read,bash,edit,write,grep,find,ls,web_search,web_fetch"
+JUNIOR_TS = os.path.join(HERE, "harness", "junior.ts")
+JUNIOR_CALLS = 100  # the harness's own budget; the proxy cap (--max-calls) sits above it
 CLAUDE = os.path.realpath(os.path.expanduser("~/.local/bin/claude"))
 CARGO_SEED = ROOT + "/cargo-home"  # crates.io index and sources, fetched once, copied per run
 
@@ -93,6 +96,8 @@ def pi_agent_dir(home, contender, proxy_url):
     os.makedirs(os.path.join(ad, "extensions"), exist_ok=True)
     shutil.copy(os.path.join(PI_DIR, "settings.json"), ad)
     shutil.copy(os.path.join(PI_DIR, "extensions", "web.ts"), os.path.join(ad, "extensions"))
+    if contender == "strata-harness":
+        shutil.copy(JUNIOR_TS, os.path.join(ad, "extensions"))
     models = json.load(open(os.path.join(PI_DIR, "models.json")))
     if contender.startswith("strata"):
         prov = models["providers"]["strata"]
@@ -124,7 +129,10 @@ def strata_status():
 
 
 def wait_strata_idle(log):
-    """Three idle readings 10 s apart; returns the seconds spent waiting."""
+    """Three idle readings 10 s apart; returns the seconds spent waiting. REALTASKS_NO_WAIT=1 skips it
+    (Strata queues requests; wall times are then not comparable)."""
+    if os.environ.get("REALTASKS_NO_WAIT") == "1":
+        return 0
     t0, ok = time.time(), 0
     while ok < 3:
         s = strata_status()
@@ -190,14 +198,19 @@ def pi_final(jsonl):
     return last
 
 
-def run_task(contender, task, a, log):
+def run_task(contender, task, a, log, d=None, prompt=None, ws=None):
+    """d, prompt, ws: a review round reuses an existing workspace with a new prompt."""
     t = T.TASKS[task]
-    d = os.path.join(ROOT, "runs", contender, task)
+    d = d or os.path.join(ROOT, "runs", contender, task)
     if os.path.exists(d):
         shutil.rmtree(d)
-    ws, home = os.path.join(d, "ws"), new_home(os.path.join(d, "home"), task)
-    base = prepare(task, ws)
-    prompt = t["prompt"]
+    home = new_home(os.path.join(d, "home"), task)
+    if ws:  # the diff stays against commit^, even if an earlier round committed
+        base = git("rev-parse", t["commit"] + "^", cwd=source(t["repo"])).strip()
+    else:
+        ws = os.path.join(d, "ws")
+        base = prepare(task, ws)
+    prompt = prompt or t["prompt"]
     waited, status0 = 0, None
     proxy = None
     ro = []
@@ -213,8 +226,14 @@ def run_task(contender, task, a, log):
         proxy = CaptureProxy(upstream(contender), os.path.join(d, "calls.jsonl"), a.max_calls).start()
         ad, provider, model = pi_agent_dir(home, contender, "http://127.0.0.1:%d" % proxy.port)
         envx = {"PI_CODING_AGENT_DIR": ad, "PI_OFFLINE": "1", "PI_TELEMETRY": "0"}
+        tools = PI_TOOLS
+        if contender == "strata-harness":
+            tools += ",plan,finish"
+            envx.update({"JUNIOR_MAX_CALLS": str(JUNIOR_CALLS), "JUNIOR_SECONDS": str(a.timeout),
+                         "JUNIOR_DEADLINE": str(int(time.time()) + a.timeout), "JUNIOR_REPORT": os.path.join(home, "finish.json"),
+                         "JUNIOR_BASE": base})
         cmd = ["pi", "--mode", "json", "-p", "--session-dir", os.path.join(home, "sessions"), "--provider", provider,
-               "--model", model, "--thinking", "medium" if contender == "strata-think" else "off", "--tools", PI_TOOLS, prompt]
+               "--model", model, "--thinking", "medium" if contender == "strata-think" else "off", "--tools", tools, prompt]
     argv = S.wrap(cmd, [ws, home], ws, nix=bool(t.get("nix")), ro=ro)
     t0, timed_out = time.time(), False
     with open(os.path.join(d, "agent.jsonl"), "w") as out, open(os.path.join(d, "agent.stderr"), "w") as err:
@@ -236,6 +255,15 @@ def run_task(contender, task, a, log):
                                             "formatErrors", "maxRepeat", "httpErrors")}
         r["capHit"] = (w.get("calls") or 0) >= a.max_calls
         final = pi_final(os.path.join(d, "agent.jsonl"))
+        fj = os.path.join(home, "finish.json")
+        if os.path.exists(fj):  # the harness's accepted finish is the final report
+            rep = json.load(open(fj))
+            r["finish"] = {"forced": rep.get("forced"), "calls": rep.get("calls"), "problems": len(rep.get("problems") or []),
+                           "claims": len(rep.get("claims") or []), "verification": len(rep.get("verification") or [])}
+            final = json.dumps({k: rep.get(k) for k in ("summary", "files", "claims", "verification", "not_verified", "problems")},
+                               ensure_ascii=False, indent=1)
+        elif contender == "strata-harness":
+            r["finish"] = None
     else:
         c = claude_digest(os.path.join(d, "agent.jsonl"))
         final = c.pop("final", "")
@@ -287,7 +315,7 @@ def selftest(task, log):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("contender", choices=["selftest", "reverify", "strata-nothink", "strata-think", "gemma", "claude-sonnet"])
+    ap.add_argument("contender", choices=["selftest", "reverify", "strata-nothink", "strata-think", "strata-harness", "gemma", "claude-sonnet"])
     ap.add_argument("--tasks", default=",".join(T.TASKS))
     ap.add_argument("--timeout", type=int, default=1800, help="wall-clock cap per task, seconds")
     ap.add_argument("--of", help="reverify: the contender whose results to recheck")
