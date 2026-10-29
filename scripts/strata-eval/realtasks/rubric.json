@@ -1,0 +1,202 @@
+{
+ "strata-nothink": {
+  "k-nas-diff-extra": [
+   3,
+   "Igual que el commit real (extras en un dict aparte, solo para name+size), --dump en cualquier posición, docstring al día; probado con listados sintéticos. Algo más verboso en el docstring."
+  ],
+  "k-backup-deleted-pvc": [
+   1,
+   "Encuentra la causa (|| true en la asignación bajo set -e, cita anisub-data y fa892da), pero gasta las 150 llamadas probando, deja un fichero basura `survived` en la raíz, un comentario con una regla de set -e falsa y ningún resumen final."
+  ],
+  "k-autotaint-deployment": [
+   2,
+   "Deployment correcto, pero reescribe la lógica del jq de reconcile.sh sin que se pidiera y el comentario de cabecera inventa el mecanismo (kubelet y token audience)."
+  ],
+  "k-seal-secrets-shrink": [
+   2,
+   "Cumple todo; añade sin pedirlo ficheros .rejected junto a cada sealedsecrets.yaml y un párrafo en README."
+  ],
+  "k-snapshot-class-why": [
+   1,
+   "Causa bien explicada, pero el texto dice 16 afectados y la línea AFFECTED lista 37 (todos los volúmenes): se contradice."
+  ],
+  "d-paperclip-env": [
+   1,
+   "El arreglo funciona (lee /proc/self/environ), pero la causa que documenta es inventada (una función compgen de bash-completion y detalles de ssh.ts de Paperclip). Agota las 150 llamadas."
+  ],
+  "d-guard-subcommand": [
+   2,
+   "Pasa todos los casos, pero añade verbos al bloqueo (taint, cordon, uncordon, autoscale) que nadie pidió y se queda sin tiempo antes de resumir."
+  ],
+  "d-whisper-newlines": [
+   1,
+   "Quita los saltos según response_format, pero 30 min y 128 llamadas, sin resumen final; reescribe también el text de verbose_json."
+  ],
+  "d-gke-context-why": [
+   3,
+   "Respuesta correcta y precisa, con los hosts reales (work-vm-01, kubernetes-10, kubernetes-20) y KUBECONFIG."
+  ],
+  "d-meeting-env-quote": [
+   3,
+   "KEY=\"valor\" en cada entrada, explicación correcta comprobada con systemd. 107 llamadas para un cambio de 3 líneas."
+  ],
+  "d-rebuild-nopasswd": [
+   3,
+   "Módulo compartido, t480 sin cambios, asus-rog igual. 30 min por las evaluaciones de nix."
+  ],
+  "b-tradeskill-nummade": [
+   2,
+   "Correcto en los casos pedidos, pero inventa un caso más (min_made == 0 → 1,1) que no está en la referencia."
+  ],
+  "b-dial-ipv4": [
+   2,
+   "Funciona y pasa los tests ocultos, pero 209 líneas con un enum HostAddress nuevo donde bastaba un filtro de 5."
+  ],
+  "b-light-band-cycle": [
+   0,
+   "Se agota el tiempo con el crate sin compilar (E0308)."
+  ]
+ },
+ "claude-sonnet": {
+  "k-backup-deleted-pvc": [
+   3,
+   "Causa exacta (asignación $(...) bajo set -e); usa --ignore-not-found para distinguir 'no existe' de un error real de la API, que sigue marcando FAILED. Añade un caso al test existente. Mejor que el commit."
+  ],
+  "k-nas-diff-extra": [
+   3,
+   "Hace lo pedido con argparse.parse_intermixed_args y una clase nueva moved-extra para los hallazgos en extras. Decisión de diseño razonable, distinta del commit."
+  ],
+  "k-autotaint-deployment": [
+   3,
+   "Deployment Recreate, bucle con || echo, intervalo en env. Añade --request-timeout a kubectl sin que se pidiera, pero lo dice y lo justifica."
+  ],
+  "k-seal-secrets-shrink": [
+   3,
+   "Temp file, cuenta de SealedSecret, REFUSED por stderr, exit 1, DRY_RUN; probado con kubeseal falso y lo dice."
+  ],
+  "k-snapshot-class-why": [
+   3,
+   "Causa y los 17 volúmenes exactos."
+  ],
+  "d-paperclip-env": [
+   3,
+   "Causa real (el bash de writeShellApplication no tiene compgen) y arreglo con env -0. Explicación correcta."
+  ],
+  "d-guard-subcommand": [
+   3,
+   "Extrae el subcomando saltando flags globales en cada llamada a kubectl; tests nuevos con kubectl simulado."
+  ],
+  "d-whisper-newlines": [
+   3,
+   "Quita los \\n según response_format pedido (json y text) y deja verbose_json. También recorta el espacio inicial; inocuo."
+  ],
+  "d-gke-context-why": [
+   3,
+   "Correcto y más preciso que el mensaje del commit: los hosts con server.nix eran work-vm-01, kubernetes-10 y kubernetes-20. Avisa del conflicto de KUBECONFIG."
+  ],
+  "d-meeting-env-quote": [
+   3,
+   "Entrecomilla y además escapa \\\\, comillas y % de systemd. Mejor que el commit."
+  ],
+  "d-rebuild-nopasswd": [
+   3,
+   "Módulo compartido, sudoers de t480 idéntico, asus-rog igual, regla suelta eliminada."
+  ],
+  "b-tradeskill-nummade": [
+   3,
+   "Cambio de una línea más los tests; cargo test y fmt limpios."
+  ],
+  "b-dial-ipv4": [
+   3,
+   "first_ipv4 más tests; también lo aplica al dial del world server (fuera del commit, coherente con el enunciado)."
+  ],
+  "b-light-band-cycle": [
+   3,
+   "Reescribe segment como ciclo en orden de fichero, con tests; idéntico en lo esencial al commit."
+  ]
+ },
+ "gemma": {
+  "k-nas-diff-extra": [
+   0,
+   "Diff vacío y el resumen describe cambios que no hizo (afirmación falsa)."
+  ],
+  "k-backup-deleted-pvc": [
+   0,
+   "Solo cambia ERROR por WARNING y quita FAILED=1; no ve la causa (set -e) y la copia sigue muriendo en el primer PVC borrado."
+  ],
+  "k-autotaint-deployment": [
+   2,
+   "Deployment mínimo con while/sleep 120; correcto, sin estrategia Recreate ni explicación del manejo de fallos."
+  ],
+  "k-seal-secrets-shrink": [
+   1,
+   "Cuenta y rechaza, pero no instala el resultado bueno (equal_replaced falla): el script deja de servir para su uso normal."
+  ],
+  "k-snapshot-class-why": [
+   1,
+   "Ve la clase -lan, pero la lista AFFECTED no coincide con ninguno de los 17."
+  ],
+  "d-paperclip-env": [
+   0,
+   "No encuentra la causa (compgen); añade una exclusión de PAPERCLIP_API_KEY que rompe el uso."
+  ],
+  "d-guard-subcommand": [
+   1,
+   "Arregla los exec pero rompe dos casos de bloqueo reales (secret de ExternalSecret, scale tras get)."
+  ],
+  "d-whisper-newlines": [
+   0,
+   "294 líneas que no compilan con los tests."
+  ],
+  "d-gke-context-why": [
+   1,
+   "Encuentra server.nix pero no por qué work-vm-00 no lo recibe (no menciona agonbar.nix)."
+  ],
+  "d-meeting-env-quote": [
+   0,
+   "Escribe un literal `{ home = <CODE>; ... }` en el módulo; rompe la evaluación."
+  ],
+  "d-rebuild-nopasswd": [
+   0,
+   "El flake deja de evaluar (error en t480/configuration.nix)."
+  ],
+  "b-tradeskill-nummade": [
+   0,
+   "Diff vacío; afirma haber cambiado api.rs y pasado los tests (falso)."
+  ],
+  "b-dial-ipv4": [
+   0,
+   "No compila (E0432/E0433), agota las 150 llamadas."
+  ],
+  "b-light-band-cycle": [
+   0,
+   "Compila pero no implementa el ciclo; el test oculto falla."
+  ]
+ },
+ "strata-think": {
+  "k-backup-deleted-pvc": [
+   1,
+   "Causa correcta y quita anisub-data de la lista, pero añade sin pedirlo borrados de VolumeSnapshot en las rutas de fallo (cambio destructivo), 341 líneas y dos scripts de test; se agota el tiempo sin resumen."
+  ],
+  "k-seal-secrets-shrink": [
+   2,
+   "Cumple todo y nombra los secretos que se perderían; vuelve a tocar README sin que se pida."
+  ],
+  "k-snapshot-class-why": [
+   3,
+   "Causa precisa (driver del VolumeSnapshotContent frente al provisioner) y los 17 volúmenes exactos. Aquí pensar sí arregla el fallo de la pasada sin pensar."
+  ],
+  "d-paperclip-env": [
+   0,
+   "30 minutos y 47 llamadas sin tocar ni un fichero."
+  ],
+  "d-rebuild-nopasswd": [
+   3,
+   "Módulo compartido correcto; actualiza también el comentario de update.sh que apuntaba al bloque de t480."
+  ],
+  "b-light-band-cycle": [
+   1,
+   "La semántica del ciclo es correcta (los tests ocultos pasan si se adapta la firma), pero cambia segment() a Option, deja un test del crate en rojo y se agota el tiempo con 446 líneas."
+  ]
+ }
+}
