@@ -84,7 +84,7 @@ spec:
             - name: data
               mountPath: /data
         - name: gateway
-          image: ghcr.io/agonbar/strata-gateway:9e57ec10
+          image: ghcr.io/agonbar/strata-gateway:4154a306
           env:
             - name: UPSTREAM
               value: http://127.0.0.1:8081

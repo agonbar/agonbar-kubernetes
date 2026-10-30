@@ -31,7 +31,6 @@ import itertools
 import json
 import logging
 import os
-import re
 import time
 
 from aiohttp import ClientConnectionError, ClientSession, ClientTimeout, TCPConnector, web
@@ -45,7 +44,6 @@ BEAT_S = float(os.environ.get("BEAT_S", "10"))
 PRIORITIES = ("hot", "batch", "research", "junior")
 RANK = {name: i for i, name in enumerate(PRIORITIES)}
 GENERATE = {"/v1/chat/completions", "/v1/completions", "/v1/messages", "/v1/responses", "/v1/images/generations"}
-CACHE_CONTROL = re.compile(r'"cache_control": \{[^{}]*\}(, )?')
 HOP = {"connection", "keep-alive", "transfer-encoding", "te", "trailer", "upgrade", "proxy-connection",
        "content-length", "host"}
 
@@ -60,17 +58,25 @@ def priority_of(headers) -> str:
     return name if name in RANK else "hot"
 
 
+def text_of(content) -> str:
+    """The text of a prompt part, whether a string or a list of blocks: Claude Code sends the same message either way
+    from turn to turn, and moves cache_control around."""
+    if isinstance(content, list):
+        return "\n".join(text_of(b.get("text", b.get("content", ""))) if isinstance(b, dict) else str(b)
+                         for b in content)
+    return content if isinstance(content, str) else ""
+
+
 def conversation_of(body: dict) -> str:
     """Hash of what every turn of one conversation starts with: the system prompt and the first user message (OpenAI
-    chat, Anthropic messages, Responses). Without cache_control, which Claude Code moves from turn to turn."""
-    head = [body.get("system"), body.get("instructions"), body.get("prompt")]
+    chat, Anthropic messages, Responses)."""
+    head = [text_of(body.get(k)) for k in ("system", "instructions", "prompt")]
     for field in ("messages", "input"):
         items = body.get(field)
         if isinstance(items, list):
-            head += [m for m in items if isinstance(m, dict) and m.get("role") in ("system", "developer")][:1]
-            head += [m for m in items if isinstance(m, dict) and m.get("role") == "user"][:1]
-    text = json.dumps(head, sort_keys=True, default=str)
-    return hashlib.sha1(CACHE_CONTROL.sub("", text).encode()).hexdigest()[:10]
+            for roles in (("system", "developer"), ("user",)):
+                head += [text_of(m.get("content")) for m in items if isinstance(m, dict) and m.get("role") in roles][:1]
+    return hashlib.sha1("\0".join(head).encode()).hexdigest()[:10]
 
 
 class Waiter:
