@@ -8,6 +8,10 @@
 # a RAM fijada (mlock, por eso k3s corre con LimitMEMLOCK=infinity) en cada
 # arranque, de ahí la startupProbe larga.
 # Imagen construida en el propio nodo (código CPU nativo de Zen 4, sm_86).
+# Strata atiende una generación cada vez. Delante, en el mismo pod, va
+# strata-gateway (scripts/strata-gateway): sirve el 8080 del Service y deja pasar
+# las peticiones por prioridad de cliente (cabecera X-Strata-Priority:
+# hot|batch|research|junior, sin ella hot). Strata escucha en el 8081 (PORT).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -45,24 +49,26 @@ spec:
               value: "yes"
             - name: GPU
               value: "0"
+            - name: PORT
+              value: "8081"
           ports:
-            - name: http
-              containerPort: 8080
+            - name: engine
+              containerPort: 8081
           startupProbe:
             httpGet:
               path: /health
-              port: http
+              port: engine
             periodSeconds: 30
             failureThreshold: 180  # 90 min: el primer arranque monta el MTP y lee 76 GB del HDD
           readinessProbe:
             httpGet:
               path: /health
-              port: http
+              port: engine
             periodSeconds: 15
           livenessProbe:
             httpGet:
               path: /health
-              port: http
+              port: engine
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 6
@@ -77,6 +83,31 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /data
+        - name: gateway
+          image: ghcr.io/agonbar/strata-gateway:a749cad1
+          env:
+            - name: UPSTREAM
+              value: http://127.0.0.1:8081
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /gateway/status
+              port: http
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /gateway/status
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 1Gi  # cuerpos con imágenes de hasta 256 MiB
       volumes:
         - name: data
           hostPath:
