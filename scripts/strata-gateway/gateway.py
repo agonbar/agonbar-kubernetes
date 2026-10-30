@@ -31,6 +31,7 @@ import itertools
 import json
 import logging
 import os
+import re
 import time
 
 from aiohttp import ClientConnectionError, ClientSession, ClientTimeout, TCPConnector, web
@@ -44,6 +45,7 @@ BEAT_S = float(os.environ.get("BEAT_S", "10"))
 PRIORITIES = ("hot", "batch", "research", "junior")
 RANK = {name: i for i, name in enumerate(PRIORITIES)}
 GENERATE = {"/v1/chat/completions", "/v1/completions", "/v1/messages", "/v1/responses", "/v1/images/generations"}
+CACHE_CONTROL = re.compile(r'"cache_control": \{[^{}]*\}(, )?')
 HOP = {"connection", "keep-alive", "transfer-encoding", "te", "trailer", "upgrade", "proxy-connection",
        "content-length", "host"}
 
@@ -59,14 +61,16 @@ def priority_of(headers) -> str:
 
 
 def conversation_of(body: dict) -> str:
-    """Hash of what every turn of one conversation starts with (OpenAI chat, Anthropic messages, Responses)."""
-    head = [body.get("system"), body.get("instructions")]
+    """Hash of what every turn of one conversation starts with: the system prompt and the first user message (OpenAI
+    chat, Anthropic messages, Responses). Without cache_control, which Claude Code moves from turn to turn."""
+    head = [body.get("system"), body.get("instructions"), body.get("prompt")]
     for field in ("messages", "input"):
-        if isinstance(body.get(field), list):
-            head += body[field][:2]
-    if isinstance(body.get("prompt"), str):
-        head.append(body["prompt"][:4096])
-    return hashlib.sha1(json.dumps(head, sort_keys=True, default=str).encode()).hexdigest()[:10]
+        items = body.get(field)
+        if isinstance(items, list):
+            head += [m for m in items if isinstance(m, dict) and m.get("role") in ("system", "developer")][:1]
+            head += [m for m in items if isinstance(m, dict) and m.get("role") == "user"][:1]
+    text = json.dumps(head, sort_keys=True, default=str)
+    return hashlib.sha1(CACHE_CONTROL.sub("", text).encode()).hexdigest()[:10]
 
 
 class Waiter:
