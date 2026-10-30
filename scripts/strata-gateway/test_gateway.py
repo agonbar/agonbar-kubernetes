@@ -159,8 +159,11 @@ async def test_conversation_key_stable_across_turns(s):
     cc = {"type": "ephemeral"}
     sys_ = [{"type": "text", "text": "You are Claude Code", "cache_control": cc}]
     turn1 = {"system": sys_, "messages": [{"role": "user", "content": [{"type": "text", "text": "fix it",
-                                                                         "cache_control": cc}]}]}
+                                                                         "cache_control": cc}]},
+                                          {"role": "system", "content": [{"type": "text", "text": "# Environment",
+                                                                          "cache_control": cc}]}]}
     turn2 = {"system": sys_, "messages": [{"role": "user", "content": [{"type": "text", "text": "fix it"}]},
+                                          {"role": "system", "content": "# Environment"},
                                           {"role": "assistant", "content": "calling a tool"},
                                           {"role": "user", "content": [{"type": "text", "text": "result",
                                                                         "cache_control": cc}]}]}
