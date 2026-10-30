@@ -154,6 +154,24 @@ async def test_non_generation_passes_through(s):
     await blocker
 
 
+async def test_conversation_key_stable_across_turns(s):
+    conv = gateway.conversation_of
+    cc = {"type": "ephemeral"}
+    sys_ = [{"type": "text", "text": "You are Claude Code", "cache_control": cc}]
+    turn1 = {"system": sys_, "messages": [{"role": "user", "content": [{"type": "text", "text": "fix it",
+                                                                         "cache_control": cc}]}]}
+    turn2 = {"system": sys_, "messages": [{"role": "user", "content": [{"type": "text", "text": "fix it"}]},
+                                          {"role": "assistant", "content": "calling a tool"},
+                                          {"role": "user", "content": [{"type": "text", "text": "result",
+                                                                        "cache_control": cc}]}]}
+    other = {"system": sys_, "messages": [{"role": "user", "content": [{"type": "text", "text": "other task"}]}]}
+    assert conv(turn1) == conv(turn2) != conv(other)
+    oa1 = {"messages": [{"role": "system", "content": "pi"}, {"role": "user", "content": "task"}]}
+    oa2 = {"messages": oa1["messages"] + [{"role": "assistant", "content": "x"}, {"role": "tool", "content": "y"}]}
+    assert conv(oa1) == conv(oa2) != conv({"messages": [{"role": "system", "content": "pi"},
+                                                         {"role": "user", "content": "other"}]})
+
+
 async def main():
     fake = web.Application()
     fake.router.add_route("*", "/{tail:.*}", fake_strata)
