@@ -22,15 +22,22 @@ an error from Strata after that is sent as an SSE error event. A client that han
 closes the upstream connection, which Strata takes as a cancel.
 
 GET /gateway/status: the queue by priority and what is in flight.
+
+AUTH_PORT, if set, is a second port for clients from outside the cluster (the tailnet, through the strata-tailnet
+proxy). There every request but /health needs API_KEY, as `Authorization: Bearer <key>` or `x-api-key: <key>`, and the
+priority comes only from the header. The key is not passed on to Strata. PORT stays open: in the cluster Strata's own
+port is open anyway.
 """
 from __future__ import annotations
 
 import asyncio
 import hashlib
+import hmac
 import itertools
 import json
 import logging
 import os
+import socket
 import time
 
 from aiohttp import ClientConnectionError, ClientSession, ClientTimeout, TCPConnector, web
@@ -40,6 +47,8 @@ PORT = int(os.environ.get("PORT", "8080"))
 HOLD_S = float(os.environ.get("HOLD_S", "3"))
 STREAK_MAX = int(os.environ.get("STREAK_MAX", "8"))
 BEAT_S = float(os.environ.get("BEAT_S", "10"))
+AUTH_PORT = int(os.environ.get("AUTH_PORT", "0"))
+API_KEY = os.environ.get("API_KEY", "")
 
 PRIORITIES = ("hot", "batch", "research", "junior")
 RANK = {name: i for i, name in enumerate(PRIORITIES)}
@@ -50,10 +59,14 @@ HOP = {"connection", "keep-alive", "transfer-encoding", "te", "trailer", "upgrad
 log = logging.getLogger("strata-gateway")
 
 
+def key_of(headers) -> str:
+    return headers.get("x-api-key") or headers.get("Authorization", "").removeprefix("Bearer ").strip()
+
+
 def priority_of(headers) -> str:
     name = headers.get("X-Strata-Priority", "").strip().lower()
     if not name:
-        key = headers.get("x-api-key") or headers.get("Authorization", "").removeprefix("Bearer ").strip()
+        key = key_of(headers)
         name = key.removeprefix("prio-") if key.startswith("prio-") else ""
     return name if name in RANK else "hot"
 
@@ -164,7 +177,20 @@ class Scheduler:
 
 
 def upstream_headers(request: web.Request) -> dict:
-    return {k: v for k, v in request.headers.items() if k.lower() not in HOP and k.lower() != "x-strata-priority"}
+    drop = HOP | {"x-strata-priority"} | ({"authorization", "x-api-key"} if request.get("keyed") else set())
+    return {k: v for k, v in request.headers.items() if k.lower() not in drop}
+
+
+@web.middleware
+async def require_key(request: web.Request, handler):
+    """On AUTH_PORT every request but /health needs API_KEY. With no API_KEY set nothing gets through there."""
+    sockname = request.transport.get_extra_info("sockname") if request.transport else None
+    if AUTH_PORT and sockname and sockname[1] == AUTH_PORT and request.path != "/health":
+        if not (API_KEY and hmac.compare_digest(key_of(request.headers).encode(), API_KEY.encode())):
+            return web.json_response({"error": {"type": "authentication_error",
+                                                "message": "missing or wrong API key"}}, status=401)
+        request["keyed"] = True
+    return await handler(request)
 
 
 def unavailable(e: Exception) -> dict:
@@ -266,7 +292,7 @@ async def on_cleanup(app: web.Application):
 
 
 def make_app() -> web.Application:
-    app = web.Application(client_max_size=256 << 20)
+    app = web.Application(client_max_size=256 << 20, middlewares=[require_key])
     app.router.add_get("/gateway/status", status)
     app.router.add_route("*", "/{tail:.*}", handle)
     app.on_startup.append(on_startup)
@@ -276,7 +302,9 @@ def make_app() -> web.Application:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
-    log.info("listening on :%d, upstream %s, hold %.1fs, streak %d, beat %.0fs", PORT, UPSTREAM, HOLD_S, STREAK_MAX,
-             BEAT_S)
+    log.info("listening on :%d%s, upstream %s, hold %.1fs, streak %d, beat %.0fs", PORT,
+             f" and :{AUTH_PORT} with key{'' if API_KEY else ' (NO API_KEY: all refused)'}" if AUTH_PORT else "",
+             UPSTREAM, HOLD_S, STREAK_MAX, BEAT_S)
+    auth_sock = socket.create_server(("0.0.0.0", AUTH_PORT)) if AUTH_PORT else None
     # handler_cancellation: a client that hangs up cancels its handler, which leaves the queue or closes upstream
-    web.run_app(make_app(), port=PORT, handler_cancellation=True, access_log=None, print=None)
+    web.run_app(make_app(), port=PORT, sock=auth_sock, handler_cancellation=True, access_log=None, print=None)

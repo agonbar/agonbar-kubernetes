@@ -8,15 +8,20 @@ import json
 import os
 import time
 
-os.environ.update(UPSTREAM="http://127.0.0.1:18581", HOLD_S="0.3", STREAK_MAX="2", BEAT_S="0.2")
+os.environ.update(UPSTREAM="http://127.0.0.1:18581", HOLD_S="0.3", STREAK_MAX="2", BEAT_S="0.2", AUTH_PORT="18582",
+                  API_KEY="s3cret")
 import gateway  # noqa: E402
 from aiohttp import ClientSession, web  # noqa: E402
 
 GW = "http://127.0.0.1:18580"
-started, cancelled = [], []
+GW_KEYED = "http://127.0.0.1:18582"
+started, cancelled, keys_seen = [], [], []
 
 
 async def fake_strata(request: web.Request):
+    if request.path == "/health":
+        return web.json_response({"status": "ok"})
+    keys_seen.append(gateway.key_of(request.headers))
     body = await request.json()
     tid = body["test_id"]
     started.append(tid)
@@ -175,14 +180,37 @@ async def test_conversation_key_stable_across_turns(s):
                                                          {"role": "user", "content": "other"}]})
 
 
+async def test_auth_port_needs_key(s):
+    started.clear(), keys_seen.clear()
+    path, headers, body = req("N1", "convN", "junior")
+    for h in ({}, {"Authorization": "Bearer wrong"}, {"Authorization": "Bearer prio-junior"}):
+        async with s.post(GW_KEYED + path, headers={**headers, **h}, json=body) as r:
+            assert r.status == 401, (h, r.status)
+    async with s.get(GW_KEYED + "/v1/models") as r:
+        assert r.status == 401
+    async with s.get(GW_KEYED + "/health") as r:
+        assert r.status == 200                      # probes and curious clients
+    assert started == [], started
+    before = (await (await s.get(GW + "/gateway/status")).json())["served"]["junior"]
+    for h in ({"Authorization": "Bearer s3cret"}, {"x-api-key": "s3cret"}):
+        async with s.post(GW_KEYED + path, headers={**headers, **h}, json=body) as r:
+            assert r.status == 200 and "N1-1" in await r.text()
+    after = (await (await s.get(GW + "/gateway/status")).json())["served"]["junior"]
+    assert after == before + 2, (before, after)    # priority from the header, not from the key
+    assert keys_seen == ["", ""], keys_seen         # the key stops at the gateway
+    status, _, _ = await call(s, *req("O1", "convO", key="prio-batch"))
+    assert status == 200 and keys_seen[-1] == "prio-batch"  # the open port is as it was
+
+
 async def main():
     fake = web.Application()
     fake.router.add_route("*", "/{tail:.*}", fake_strata)
     runners = [web.AppRunner(fake, handler_cancellation=True),
                web.AppRunner(gateway.make_app(), handler_cancellation=True)]
-    for runner, port in zip(runners, (18581, 18580)):
+    for runner, ports in zip(runners, ((18581,), (18580, 18582))):
         await runner.setup()
-        await web.TCPSite(runner, "127.0.0.1", port).start()
+        for port in ports:
+            await web.TCPSite(runner, "127.0.0.1", port).start()
     tests = [v for k, v in globals().items() if k.startswith("test_")]
     try:
         async with ClientSession() as s:

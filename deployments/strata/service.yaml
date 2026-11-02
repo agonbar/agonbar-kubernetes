@@ -14,3 +14,8 @@ spec:
       port: 8080
       targetPort: http
       protocol: TCP
+    # Pide clave (strata-api-key). Solo lo usa el proxy del tailnet (tailnet.yaml).
+    - name: keyed
+      port: 8082
+      targetPort: keyed
+      protocol: TCP

@@ -1,0 +1,109 @@
+# Strata en el tailnet como strata.senseizero.lan:80, para clientes fuera de lamg
+# (pi y los agentes de Paperclip en work-vm-00 sin k3s). Un pod aparte con solo
+# tailscale, en el patrón de deployments/knowledge (nodo de headscale sin tag,
+# del usuario agonbar@, estado en un Secret), con dos cambios:
+#   - va en un pod propio y no de sidecar de Strata: en el tailnet un nodo expone
+#     todos los puertos de su pod, y el de Strata tiene el 8081 sin clave;
+#   - modo userspace con TS_SERVE_CONFIG: el puerto 80 del tailnet se reenvía
+#     por TCP al 8082 del Service strata (el del gateway que pide clave), y
+#     nada más. Sin NET_ADMIN ni /dev/net/tun.
+# TCP y no el proxy HTTP de serve: headscale no da certificados y así el SSE
+# pasa tal cual.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: strata-tailnet
+  namespace: strata
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: strata-tailnet
+  namespace: strata
+rules:
+  # create cannot be restricted to a resourceName
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["strata-tailnet-ts-state"]
+    verbs: ["get", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: strata-tailnet
+  namespace: strata
+subjects:
+  - kind: ServiceAccount
+    name: strata-tailnet
+    namespace: strata
+roleRef:
+  kind: Role
+  name: strata-tailnet
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: strata-tailnet-serve
+  namespace: strata
+data:
+  serve.json: |
+    {"TCP": {"80": {"TCPForward": "strata.strata.svc.cluster.local:8082"}}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: strata-tailnet
+  namespace: strata
+  labels:
+    app: strata-tailnet
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate  # un solo nodo de tailnet con este estado
+  selector:
+    matchLabels:
+      app: strata-tailnet
+  template:
+    metadata:
+      labels:
+        app: strata-tailnet
+    spec:
+      serviceAccountName: strata-tailnet
+      containers:
+        - name: tailscale
+          image: ghcr.io/tailscale/tailscale:latest
+          env:
+            - name: TS_KUBE_SECRET
+              value: strata-tailnet-ts-state
+            - name: TS_HOSTNAME
+              value: strata
+            - name: TS_USERSPACE
+              value: "true"
+            - name: TS_SERVE_CONFIG
+              value: /config/serve.json
+            - name: TS_EXTRA_ARGS
+              value: "--login-server=https://headscale.prd.senseizero.es"
+            - name: TS_AUTHKEY
+              valueFrom:
+                secretKeyRef:
+                  name: tailscale-auth
+                  key: TS_AUTHKEY
+                  optional: true
+          volumeMounts:
+            - name: serve
+              mountPath: /config
+              readOnly: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+      volumes:
+        - name: serve
+          configMap:
+            name: strata-tailnet-serve
