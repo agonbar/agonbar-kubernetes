@@ -12,6 +12,9 @@
 # strata-gateway (scripts/strata-gateway): sirve el 8080 del Service y deja pasar
 # las peticiones por prioridad de cliente (cabecera X-Strata-Priority:
 # hot|batch|research|junior, sin ella hot). Strata escucha en el 8081 (PORT).
+# El gateway abre además el 8082 (AUTH_PORT), que pide la clave del Secret
+# strata-api-key: es el que publica tailnet.yaml en el tailnet. El 8080 sigue
+# sin clave para el clúster, donde el 8081 de Strata está abierto de todos modos.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -84,13 +87,22 @@ spec:
             - name: data
               mountPath: /data
         - name: gateway
-          image: ghcr.io/agonbar/strata-gateway:4154a306
+          image: ghcr.io/agonbar/strata-gateway:26c85abb
           env:
             - name: UPSTREAM
               value: http://127.0.0.1:8081
+            - name: AUTH_PORT
+              value: "8082"
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: strata-api-key
+                  key: api-key
           ports:
             - name: http
               containerPort: 8080
+            - name: keyed
+              containerPort: 8082
           readinessProbe:
             httpGet:
               path: /gateway/status
