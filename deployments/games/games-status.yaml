@@ -84,7 +84,7 @@ spec:
         - name: ghcr-agonbar
       containers:
         - name: games-status
-          image: ghcr.io/agonbar/games-status:e5d76a5
+          image: ghcr.io/agonbar/games-status:bf11be6
           env:
             - name: PALWORLD_ADMIN_PASSWORD
               valueFrom:
