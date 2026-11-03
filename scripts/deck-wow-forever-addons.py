@@ -7,7 +7,10 @@ Deck's _forever_/Interface/AddOns. It also seeds WTF with the gamepad CVars and
 the ConsolePort/DialogueUI/... settings from the retail install on the VM-TINY11
 disk (/mnt/win11, the SATA controller is passed through to work-vm-00).
 
-    deck-wow-forever-addons.py [--host 192.168.1.218] [--dry-run]
+    TMPDIR=/mnt/strata deck-wow-forever-addons.py [--host 192.168.1.218] [--dry-run]
+
+Staging takes about 4 GB with the Spoken packs; work-vm-00's root sits near
+kubelet's 15 % free eviction line, hence TMPDIR on the strata disk.
 
 Rerun it any time to pick up addon updates. WTF files are only written when the
 Deck does not have them yet, so in-game changes are never overwritten.
