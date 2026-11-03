@@ -24,7 +24,18 @@ log() { echo "$(date '+%F %T') $*"; }
 die() { log "STOP: $*"; exit 1; }
 
 QBIT_PW=$($K get secret qbit-creds -o jsonpath='{.data.password}' | base64 -d)
-qbit() {
+# Every call into a pod is retried: a node that goes NotReady for a few
+# minutes (orange-pi5 under load) makes `kubectl exec` fail with a 502.
+retry() { # retry <cmd...> ; stdin is buffered so it can be replayed
+  local in out i; in=$(cat)
+  for i in $(seq 1 15); do
+    out=$("$@" <<<"$in") && { printf '%s\n' "$out"; return 0; }
+    log "retry $i: $1 failed" >&2; sleep 60
+  done
+  return 1
+}
+qbit() { retry qbit_once "$@" </dev/null; }
+qbit_once() {
   $K exec -i deploy/qbittorrent-deployment -c qbittorrent -- sh -c "
     curl -s -c /tmp/qc -X POST 'http://localhost:8080/api/v2/auth/login' \
       -H 'Referer: http://localhost:8080' \
@@ -35,7 +46,8 @@ torrent() { qbit "http://localhost:8080/api/v2/torrents/info?hashes=$HASH" | jq 
 
 SONARR_KEY=$($K exec deploy/sonarr-deployment -c sonarr -- \
   sh -c 'grep -o "<ApiKey>[^<]*" /config/config.xml | cut -c9-')
-sonarr() { # sonarr <method> <path> [json body on stdin]
+sonarr() { retry sonarr_once "$@"; } # sonarr <method> <path> [json body on stdin]
+sonarr_once() {
   $K exec -i deploy/sonarr-deployment -c sonarr -- curl -sf -m 300 -X "$1" \
     -H "X-Api-Key: $SONARR_KEY" -H 'Content-Type: application/json' \
     --data-binary @- "http://localhost:8989/api/v3/$2"
@@ -43,7 +55,8 @@ sonarr() { # sonarr <method> <path> [json body on stdin]
 
 # alloc_report <deploy> <container> : reads paths on stdin, prints "<pct> <path>"
 # (allocated / apparent size; ZFS stores zero runs as nothing, so <95 % = holes)
-alloc_report() {
+alloc_report() { retry alloc_report_once "$@"; }
+alloc_report_once() {
   $K exec -i "deploy/$1" -c "$2" -- sh -c '
     while IFS= read -r f; do
       s=$(stat -c %s "$f"); k=$(du -k "$f" | cut -f1)
@@ -56,6 +69,8 @@ log "waiting for recheck"
 while [[ $(torrent | jq -r .state) == checking* ]]; do sleep 60; done
 log "after recheck: $(torrent | jq -r '"\(.state) \(.progress*1000|floor/10)% left=\(.amount_left/1073741824|floor)G"')"
 
+qbit -X POST http://localhost:8080/api/v2/torrents/setDownloadLimit \
+  --data "hashes=$HASH" --data "limit=$(( ${DL_LIMIT_MIB:-4} * 1048576 ))" >/dev/null
 qbit -X POST http://localhost:8080/api/v2/torrents/start --data "hashes=$HASH" >/dev/null
 qbit -X POST http://localhost:8080/api/v2/torrents/resume --data "hashes=$HASH" >/dev/null
 log "resumed"
