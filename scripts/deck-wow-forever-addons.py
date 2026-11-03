@@ -14,8 +14,9 @@ Deck does not have them yet, so in-game changes are never overwritten.
 
 Why this set: ConsolePort is the controller layer the user already plays retail
 with (3.3.13+ supports Forever and hides the native gamepad bar itself). The
-rest is what the user runs on retail that has a Forever build and costs little.
-Left out on purpose: EnhanceQoL (big suite, overlaps ConsolePort), OPie
+rest is what the user runs on retail that has a Forever build and costs little,
+plus EnhanceQoL, which the user wants and which does not clash with ConsolePort.
+Left out on purpose: OPie
 (ConsolePort Rings does it), Clique (mouse click-casting), RareScanner and
 Narcissus (large databases), Auctionator's and Syndicator's retail data (other
 economy, other characters). No Forever build on 2026-11-03: TSM, Kaliel's
@@ -42,6 +43,7 @@ ADDONS = {  # CurseForge project ids, taken from the retail WowUp addons.json
     "TomTom": 18808,
     "WaypointUI": 1275146,
     "BigWigs": 2382,
+    "EnhanceQoL": 1076354,
 }
 FOREVER_VERSION = "1.60"
 
@@ -50,7 +52,7 @@ ACCOUNT = "411663972#1"
 SAVED_VARIABLES = [
     "ConsolePort.lua", "ConsolePort_Cursor.lua", "ConsolePort_Keyboard.lua",
     "ConsolePort_Rings.lua", "consoleport_bar.lua", "DialogueUI.lua",
-    "Plumber.lua", "Baganator.lua", "TomTom.lua", "WaypointUI.lua", "BigWigs.lua",
+    "Plumber.lua", "Baganator.lua", "TomTom.lua", "WaypointUI.lua", "BigWigs.lua", "EnhanceQoL.lua",
 ]
 # Low graphics to get past the first load under Proton (the one Linux report
 # needed the slider at 1); raise it in game once it runs.
