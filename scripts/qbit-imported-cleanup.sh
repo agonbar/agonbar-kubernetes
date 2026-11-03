@@ -37,16 +37,46 @@ arr_imports() { # arr_imports <name> <port> <apiver> <eventType> : prints import
     jq -r '.records[] | .downloadId // empty | ascii_upcase'
 }
 
-# eventType 3 = downloadFolderImported (sonarr/radarr), 8 = downloadImported (lidarr)
-{ arr_imports sonarr 8989 v3 3; arr_imports radarr 7878 v3 3; arr_imports lidarr 8686 v1 8; } |
+# Sonarr's /history 500s on a series with a malformed Actors column and is
+# ~1.5 s/record with includeSeries=false (16k+ records), so read its Postgres.
+sonarr_imports() {
+  local cfg
+  cfg=$($K exec deploy/sonarr-deployment -c sonarr -- cat /config/config.xml)
+  xml() { grep -o "<$1>[^<]*" <<<"$cfg" | cut -d'>' -f2; }
+  # podAffinity: only sonarr's node has a route to the nas02 LAN address
+  xml PostgresPassword | $K run "psql-$$" --rm -i -q --restart=Never \
+    --image=postgres:17-alpine --overrides='{"spec":{"affinity":{"podAffinity":{
+      "requiredDuringSchedulingIgnoredDuringExecution":[{"topologyKey":"kubernetes.io/hostname",
+      "labelSelector":{"matchLabels":{"app":"sonarr"}}}]}}}}' --command -- sh -c "read -r PGPASSWORD; export PGPASSWORD
+      psql -h $(xml PostgresHost) -p $(xml PostgresPort) -U $(xml PostgresUser) -d $(xml PostgresMainDb) -At \
+        -c 'SELECT DISTINCT upper(\"DownloadId\") FROM \"History\" WHERE \"EventType\" = 3 AND \"DownloadId\" IS NOT NULL'"
+}
+
+arr_queue() { # arr_queue <name> <port> <apiver> : prints hashes still in the *arr queue
+  local name=$1 port=$2 ver=$3 key
+  key=$($K exec "deploy/$name-deployment" -c "$name" -- \
+    sh -c 'grep -o "<ApiKey>[^<]*" /config/config.xml | cut -c9-')
+  $K exec "deploy/$name-deployment" -c "$name" -- \
+    curl -sf -m 300 -H "X-Api-Key: $key" "http://localhost:$port/api/$ver/queue?page=1&pageSize=5000" |
+    jq -r '.records[] | .downloadId // empty | ascii_upcase'
+}
+
+# eventType 3 = downloadFolderImported (radarr), 8 = downloadImported (lidarr)
+{ sonarr_imports; arr_imports radarr 7878 v3 3; arr_imports lidarr 8686 v1 8; } |
   sort -u > "$WORK/imported.txt"
+# A torrent can be imported and still have pending imports (a season pack
+# imported halfway): anything still queued is never deleted.
+{ arr_queue sonarr 8989 v3; arr_queue radarr 7878 v3; arr_queue lidarr 8686 v1; } |
+  sort -u > "$WORK/queued.txt"
 qbit 'http://localhost:8080/api/v2/torrents/info' > "$WORK/qbit.json"
 
 # state: progress==1 only; imported/private flags; size in GiB
-jq -r --rawfile imp "$WORK/imported.txt" '
-  ($imp | split("\n") | map(select(length>0)) | map({key:., value:true}) | from_entries) as $i
+jq -r --rawfile imp "$WORK/imported.txt" --rawfile que "$WORK/queued.txt" '
+  def set: split("\n") | map(select(length>0)) | map({key:., value:true}) | from_entries;
+  ($imp | set) as $i | ($que | set) as $q
   | .[] | select(.progress == 1)
-  | [ (if $i[(.hash|ascii_upcase)] then "IMPORTED" else "not-imported" end),
+  | [ (if $q[(.hash|ascii_upcase)] then "in-queue"
+       elif $i[(.hash|ascii_upcase)] then "IMPORTED" else "not-imported" end),
       (if .private then "private" else "public" end),
       (.size/1073741824*10|floor/10|tostring) + "G",
       .category, .hash, .name ] | @tsv' "$WORK/qbit.json" | sort > "$WORK/report.tsv"
