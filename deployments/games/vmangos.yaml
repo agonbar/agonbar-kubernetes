@@ -1,0 +1,294 @@
+# VMaNGOS, a WoW 1.12.1 (build 5875) server, moved here from the docker compose
+# stack on work-vm-00 on 2026-11-03. Clients use `set realmlist 80.241.214.254`.
+#
+# One pod, three containers, so games-status scales a single Deployment:
+# - database: MariaDB with the vmangos-deploy init. It is a native sidecar
+#   (an init container with restartPolicy Always), so realmd and mangosd only
+#   start once its startupProbe sees the deploy's "ready" marker, and it is
+#   stopped after them. Every start rewrites realm 1 in realmd.realmlist from
+#   VMANGOS_REALMLIST_*.
+# - realmd (logon, 3724) and mangosd (world, 8085). Their binaries connect to
+#   the host "database" on 3306, hard-coded by the image, so hostAliases points
+#   that name at the pod's own loopback.
+#
+# Images: the mserajnik/vmangos-deploy builds for core 68334f7 (deploy revision
+# 02c6608). Upstream deleted those tags, so the exact images the compose stack
+# ran were pushed to ghcr.io/agonbar (private, pulled with ghcr-agonbar).
+# Before moving to a newer core, read upstream docs/breaking-changes.md.
+#
+# Placement: the realm list hands out 80.241.214.254, so the pod must run on
+# the node that owns that address. The node carries it as a label, set by hand:
+#   kubectl label node ovh02 network/public-ipv4=80.241.214.254
+# The local-path volumes then stay on that node.
+#
+# Passwords: the vmangos SealedSecret (sealedsecrets.yaml). games-status reads
+# the online count through the ClusterIP vmangos-db as the read-only "panel"
+# user (SELECT on characters.characters), created by hand in the mysql schema:
+#   CREATE USER 'panel'@'%' IDENTIFIED BY '<panelPassword>';
+#   GRANT SELECT ON characters.characters TO 'panel'@'%';
+#
+# Console: kubectl -n games attach -it deploy/vmangos -c mangosd, detach with
+# Ctrl-P Ctrl-Q.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vmangos
+  namespace: games
+  labels:
+    app: vmangos
+spec:
+  # games-status owns the replicas (start button, 2h idle stop) and ArgoCD
+  # ignores them, so this only applies when the Deployment is created.
+  replicas: 0
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: vmangos
+  template:
+    metadata:
+      labels:
+        app: vmangos
+    spec:
+      nodeSelector:
+        network/public-ipv4: "80.241.214.254"
+      hostAliases:
+        - ip: 127.0.0.1
+          hostnames: [database]
+      imagePullSecrets:
+        - name: ghcr-agonbar
+      # mangosd saves the characters when it stops; compose gave it 2 min.
+      terminationGracePeriodSeconds: 150
+      initContainers:
+        - name: database
+          image: ghcr.io/agonbar/vmangos-database:68334f7
+          restartPolicy: Always
+          env:
+            - name: VMANGOS_DEPLOY_VERSION
+              value: "1"
+            - name: TZ
+              value: Europe/Madrid
+            - name: MARIADB_USER
+              value: mangos
+            - name: MARIADB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vmangos
+                  key: dbPassword
+            - name: MARIADB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vmangos
+                  key: rootPassword
+            - name: VMANGOS_REALMLIST_NAME
+              value: VMaNGOS
+            - name: VMANGOS_REALMLIST_ADDRESS
+              value: "80.241.214.254"
+            - name: VMANGOS_REALMLIST_PORT
+              value: "8085"
+            - name: VMANGOS_REALMLIST_ICON
+              value: "1"
+            - name: VMANGOS_REALMLIST_TIMEZONE
+              value: "0"
+            - name: VMANGOS_REALMLIST_ALLOWED_SECURITY_LEVEL
+              value: "0"
+            - name: VMANGOS_ENABLE_AUTOMATIC_WORLD_DB_CORRECTIONS
+              value: "1"
+            - name: VMANGOS_HALT_ON_MIGRATION_EDITS
+              value: "1"
+            - name: VMANGOS_PROCESS_CUSTOM_SQL
+              value: "0"
+          ports:
+            - containerPort: 3306
+              name: mysql
+          # A first start imports the world database, which takes minutes;
+          # later starts only check for migrations.
+          startupProbe:
+            exec:
+              command: [vmangos-healthcheck]
+            periodSeconds: 10
+            failureThreshold: 360
+          readinessProbe:
+            exec:
+              command: [vmangos-healthcheck]
+            periodSeconds: 60
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: database
+              mountPath: /var/lib/mysql
+          resources:
+            requests:
+              cpu: 10m
+              memory: 160Mi
+            limits:
+              memory: 2Gi
+      containers:
+        - name: realmd
+          image: ghcr.io/agonbar/vmangos-server:5875-68334f7
+          command: [realmd]
+          env: &server-env
+            - name: VMANGOS_DEPLOY_VERSION
+              value: "1"
+            - name: TZ
+              value: Europe/Madrid
+            - name: VMANGOS_UID
+              value: "1000"
+            - name: VMANGOS_GID
+              value: "100"
+            - name: VMANGOS_DATABASE_USER
+              value: mangos
+            - name: VMANGOS_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vmangos
+                  key: dbPassword
+          ports:
+            - containerPort: 3724
+              name: realmd
+          readinessProbe:
+            tcpSocket:
+              port: realmd
+            periodSeconds: 30
+          volumeMounts:
+            - name: config
+              mountPath: /opt/vmangos/config/realmd.conf
+              subPath: realmd.conf
+            - name: storage
+              mountPath: /opt/vmangos/storage/logs
+              subPath: realmd/logs
+          resources:
+            requests:
+              cpu: 5m
+              memory: 16Mi
+            limits:
+              memory: 512Mi
+        - name: mangosd
+          image: ghcr.io/agonbar/vmangos-server:5875-68334f7
+          command: [mangosd]
+          # The console reads the TTY; without one mangosd would see EOF.
+          stdin: true
+          tty: true
+          env: *server-env
+          ports:
+            - containerPort: 8085
+              name: world
+          # The world port opens once the world is loaded ("World initialized").
+          startupProbe:
+            tcpSocket:
+              port: world
+            periodSeconds: 15
+            failureThreshold: 80
+          readinessProbe:
+            tcpSocket:
+              port: world
+            periodSeconds: 30
+          volumeMounts:
+            - name: config
+              mountPath: /opt/vmangos/config/mangosd.conf
+              subPath: mangosd.conf
+            - name: data
+              mountPath: /opt/vmangos/storage/data
+              readOnly: true
+            - name: storage
+              mountPath: /opt/vmangos/storage/logs
+              subPath: mangosd/logs
+            - name: storage
+              mountPath: /opt/vmangos/storage/honor
+              subPath: mangosd/honor
+          resources:
+            requests:
+              cpu: 20m
+              memory: 320Mi
+            limits:
+              memory: 3Gi
+      volumes:
+        - name: config
+          configMap:
+            name: vmangos-config
+        - name: database
+          persistentVolumeClaim:
+            claimName: vmangos-database
+        - name: data
+          persistentVolumeClaim:
+            claimName: vmangos-data
+        - name: storage
+          persistentVolumeClaim:
+            claimName: vmangos-storage
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: vmangos
+  namespace: games
+spec:
+  type: LoadBalancer
+  selector:
+    app: vmangos
+  ports:
+    - port: 3724
+      targetPort: realmd
+      name: realmd
+      protocol: TCP
+    - port: 8085
+      targetPort: world
+      name: world
+      protocol: TCP
+---
+# MariaDB, cluster-internal only, for games-status (online characters). Never
+# add 3306 to the LoadBalancer Service above.
+kind: Service
+apiVersion: v1
+metadata:
+  name: vmangos-db
+  namespace: games
+spec:
+  selector:
+    app: vmangos
+  ports:
+    - port: 3306
+      targetPort: mysql
+      name: mysql
+      protocol: TCP
+---
+# MariaDB data directory.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vmangos-database
+  namespace: games
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+# maps, vmaps, mmaps and dbc extracted from the 1.12.1 client (2.9 GB),
+# copied from work-vm-00:/home/agonbar/wow/vmangos-data/extracted.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vmangos-data
+  namespace: games
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+# Server logs and the honor files: realmd/logs, mangosd/logs, mangosd/honor.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vmangos-storage
+  namespace: games
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi
