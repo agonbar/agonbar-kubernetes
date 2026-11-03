@@ -24,6 +24,11 @@ spec:
           env:
             - name: TZ
               value: Europe/Madrid
+            # TEMPORARY (2026-11-03): pauses cruncharr while the InuYasha pack is
+            # re-downloaded in the shared SSD/torrents refquota (raised to 260G).
+            # Revert this together with the refquota once the pack is imported.
+            - name: ANIDL_MIN_FREE_SPACE_MB
+              value: "80000"
             - name: ANIDL_CRUNCHYROLL_USERNAME
               valueFrom:
                 secretKeyRef:
