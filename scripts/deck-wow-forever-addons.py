@@ -21,9 +21,13 @@ Left out on purpose: OPie
 Narcissus (large databases), Auctionator's and Syndicator's retail data (other
 economy, other characters). No Forever build on 2026-11-03: TSM, Kaliel's
 Tracker, World Quest Tab, LittleWigs, Better Timeline.
+
+Spoken reads quests, zones and books aloud in Castilian Spanish (it follows the
+client language, esES here). The player and the books pack are on CurseForge;
+the esES quest and zone packs are only published as GitHub releases of
+rusty-key/spoken-wow, about 1.8 GB between them.
 """
 import argparse
-import io
 import json
 import shutil
 import subprocess
@@ -44,6 +48,13 @@ ADDONS = {  # CurseForge project ids, taken from the retail WowUp addons.json
     "WaypointUI": 1275146,
     "BigWigs": 2382,
     "EnhanceQoL": 1076354,
+    "Spoken": 1700375,
+    "SpokenBooksEsES": 1723280,
+}
+GITHUB_REPO = "rusty-key/spoken-wow"
+GITHUB_PACKS = {  # name -> release tag prefix; the newest matching release wins
+    "SpokenQuestsEsES": "quests-audio-esES/",
+    "SpokenZonesEsES": "zones-audio-esES/",
 }
 FOREVER_VERSION = "1.60"
 
@@ -64,10 +75,22 @@ SSH = ["ssh", "-i", str(Path.home() / ".ssh/nas"), "-o", "IdentitiesOnly=yes",
        "-o", "BatchMode=yes", "-o", "HostKeyAlias=192.168.1.218"]
 
 
+def get(url):
+    return urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"}),
+                                  timeout=60)
+
+
 def cf(path):
-    req = urllib.request.Request("https://www.curseforge.com/api/v1/" + path,
-                                 headers={"User-Agent": "Mozilla/5.0"})
-    return urllib.request.urlopen(req, timeout=60)
+    return get("https://www.curseforge.com/api/v1/" + path)
+
+
+def unzip(url, dest):
+    """Stream the zip to disk (the Spoken packs are over a GB) and unpack it."""
+    with tempfile.TemporaryFile() as tmp:
+        shutil.copyfileobj(get(url), tmp, 1 << 20)
+        with zipfile.ZipFile(tmp) as z:
+            z.extractall(dest)
+            return sorted({n.split("/")[0] for n in z.namelist() if "/" in n})
 
 
 def fetch(name, pid, dest):
@@ -76,11 +99,17 @@ def fetch(name, pid, dest):
     hit = next((f for f in files if any(v.startswith(FOREVER_VERSION) for v in f["gameVersions"])), None)
     if not hit:
         sys.exit(f"{name}: no file tagged {FOREVER_VERSION}.x on CurseForge")
-    blob = cf(f"mods/{pid}/files/{hit['id']}/download").read()
-    with zipfile.ZipFile(io.BytesIO(blob)) as z:
-        z.extractall(dest)
-        dirs = sorted({n.split("/")[0] for n in z.namelist() if "/" in n})
+    dirs = unzip(f"https://www.curseforge.com/api/v1/mods/{pid}/files/{hit['id']}/download", dest)
     print(f"{name:12} {hit['displayName']:28} {', '.join(dirs)}")
+    return dirs
+
+
+def fetch_github(name, prefix, dest):
+    releases = json.load(get(f"https://api.github.com/repos/{GITHUB_REPO}/releases?per_page=100"))
+    rel = max((r for r in releases if r["tag_name"].startswith(prefix)), key=lambda r: r["published_at"])
+    asset = next(a for a in rel["assets"] if a["name"].endswith(".zip"))
+    dirs = unzip(asset["browser_download_url"], dest)
+    print(f"{name:12} {rel['tag_name']:28} {', '.join(dirs)}")
     return dirs
 
 
@@ -111,6 +140,7 @@ def main():
     stage = Path(tempfile.mkdtemp(prefix="wow-forever-"))
     addons = stage / "Interface/AddOns"
     dirs = [d for n, p in ADDONS.items() for d in fetch(n, p, addons)]
+    dirs += [d for n, p in GITHUB_PACKS.items() for d in fetch_github(n, p, addons)]
 
     wtf = stage / "WTF"
     sv = wtf / "Account" / ACCOUNT / "SavedVariables"
