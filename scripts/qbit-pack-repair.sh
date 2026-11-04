@@ -5,7 +5,7 @@
 #
 # Run it after a forced recheck. It waits for the recheck, resumes the torrent,
 # waits for 100 %, checks every file is fully allocated, deletes the broken
-# episode files in Sonarr so it re-imports them from the pack, waits for the
+# episode files in Sonarr and manual-imports them from the pack, waits for the
 # import, re-checks the library, then deletes the torrent and reverts the
 # temporary refquota and cruncharr pause. Any failed check stops it without
 # deleting anything.
@@ -107,14 +107,29 @@ EPS=$(sonarr GET "episode?seriesId=$SERIES_ID" </dev/null |
 if [ "$(jq length <<<"$IDS")" -gt 0 ]; then
   jq -n --argjson ids "$IDS" '{episodeFileIds: $ids}' | sonarr DELETE episodefile/bulk >/dev/null
 fi
-log "deleted them ($(jq length <<<"$EPS") episodes); waiting for Sonarr to re-import from the pack"
+log "deleted them ($(jq length <<<"$EPS") episodes)"
+
+# Sonarr never re-imports on its own: its history marks the pack "already
+# imported". Manual-import every pack file whose episodes now lack a file.
+# The folder is the current content_path (qBittorrent moves it on completion);
+# passing seriesId/downloadId instead makes Sonarr scan the series folder.
+FOLDER=$(torrent | jq -r .content_path)
+sonarr GET "episode?seriesId=$SERIES_ID" </dev/null |
+  jq '[.[] | select(.hasFile | not) | .id]' > /tmp/pack-repair-missing.json
+sonarr GET "manualimport?filterExistingFiles=false&folder=$(jq -rn --arg f "$FOLDER" '$f|@uri')" </dev/null |
+  jq -c --slurpfile m /tmp/pack-repair-missing.json --arg h "${HASH^^}" '
+    {name: "ManualImport", importMode: "copy", files: [.[]
+      | select((.episodes | length) > 0 and (.rejections | length) == 0
+               and ([.episodes[].id] - $m[0] | length) == 0)
+      | {path, folderName, seriesId: .series.id, episodeIds: [.episodes[].id],
+         quality, languages, releaseGroup, indexerFlags, releaseType, downloadId: $h}]}' \
+  > /tmp/pack-repair-import.json
+log "manual import of $(jq '.files | length' /tmp/pack-repair-import.json) pack files"
+sonarr POST command < /tmp/pack-repair-import.json >/dev/null
 
 # --- 4. wait for those episodes to have a file again, then re-check --------
-# (not "until the pack leaves the queue": episodes that are no upgrade keep
-# it in importPending forever)
 deadline=$(( $(date +%s) + 6 * 3600 ))
 while :; do
-  echo '{"name":"RefreshMonitoredDownloads"}' | sonarr POST command >/dev/null
   sleep 300
   left=$(sonarr GET "episode?seriesId=$SERIES_ID" </dev/null |
     jq --argjson e "$EPS" '[.[] | select(.id as $i | $e | index($i)) | select(.hasFile | not)] | length')
