@@ -20,3 +20,8 @@ spec:
     - name: dashboard
       port: 80
       targetPort: 9119
+    # Webhooks (see deployment.yaml): the meeting bot's worker posts here over
+    # NetBird, http://hermes.hermes.svc.cluster.local:8644/webhooks/<route>.
+    - name: webhook
+      port: 8644
+      targetPort: 8644
