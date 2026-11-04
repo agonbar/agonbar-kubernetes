@@ -125,6 +125,8 @@ spec:
               printf %s "$PAPERCLIP_BOARD_KEY" > /opt/data/.config/paperclip/board-key
               printf %s "$MCP_PASEO_API_KEY" > /opt/data/.config/paseo/password
               umask 022
+              # The agent's terminal runs as hermes (10000), not root.
+              chown -R 10000:10000 /opt/data/.config/paperclip /opt/data/.config/paseo
 
               # The Paseo MCP was wired here on 2026-11-04 and dropped the same
               # day: with list_agents in reach the model stopped there and never
