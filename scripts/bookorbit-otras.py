@@ -482,6 +482,33 @@ class Strata:
 
 
 LANG3 = {"spa": "es", "es": "es", "eng": "en", "en": "en", "fre": "fr", "fra": "fr", "ita": "it", "por": "pt", "cat": "ca", "eus": "eu", "baq": "eu", "glg": "gl", "deu": "de", "ger": "de"}
+PN_COMMON = set("El La Los Las Un Una Y En De Del Al Pero Si No Por Para Con Que Qué Cuando Como Cómo Él Ella Yo Tú "
+                "Nosotros Era Fue Había Se Me Le Lo Su Sus Mi Este Esta Ese Esa Aquel Hay Ya Sin Así Entonces Luego "
+                "Después Antes Ahora Señor Señora Capítulo".split())
+
+
+def same_work(a, b):
+    """Sin LLM, con los dos fragmentos: True (mismo texto, o mismos personajes en otra traducción), False
+    (ningún nombre propio en común) o None (que decida Strata). Medido sobre los 3.397 dudosos: 2.416 mismo
+    texto, 64 mismos personajes, 189 distintos y 270 intermedios."""
+    def sh(t):
+        w = re.findall(r"\w+", t.lower())
+        return {" ".join(w[i:i + 4]) for i in range(len(w) - 3)}
+    def pn(t):
+        return {m for m in re.findall(r"(?<![.!?¡¿«—\"]\s)\b([A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,})", t) if m not in PN_COMMON}
+    A, B = sh(a), sh(b)
+    if len(A & B) / max(1, min(len(A), len(B))) >= 0.3:
+        return True
+    PA, PB = pn(a), pn(b)
+    shared = len(PA & PB)
+    po = shared / max(1, min(len(PA), len(PB)))
+    if po >= 0.5 and shared >= 5:
+        return True
+    if po < 0.1:
+        return False
+    return None
+
+
 SYS = "Eres un bibliotecario. Respondes solo con el JSON que se pide, sin texto alrededor."
 
 
@@ -505,8 +532,6 @@ def judge(args):
         for i in range(0, len(ids), 2000):
             for r in sql(f"select b.id, m.title, coalesce((select string_agg(a.name, ' & ') from book_authors ba join authors a on a.id=ba.author_id where ba.book_id=b.id), '') au from books b join book_metadata m on m.book_id=b.id where b.id in ({','.join(map(str, ids[i:i + 2000]))})"):
                 titles[r["id"]] = f"{r['title']} ({r['au']})"
-    st = Strata()
-    n = 0
     with open(out_path, "a") as fh:
         def save(k, d):
             fh.write(json.dumps({"k": k, **d}, ensure_ascii=False) + "\n")
@@ -516,7 +541,9 @@ def judge(args):
             todo = [c for c in todo if c["src"] == args.only]
         if args.limit:
             todo = todo[:args.limit]
-        batch = []
+        # Fase 1, sin LLM: idioma, duplicados claros y etiquetas. Fase 2: lo que necesita a Strata, que es
+        # compartido y a ratos tiene delante prompts de 60K tokens de otros clientes.
+        pend_check, pend_class = [], []
         for c in todo:
             k = f"{c['src']}:{c['sid']}"
             text = ex.get(k)
@@ -525,34 +552,49 @@ def judge(args):
                 save(k, {"lang": lang, "skip": "idioma"})
                 continue
             if c["verdict"] == "check":
-                others = [(i, ex.get(f"bo:{i}")) for i in c["match"]]
-                same = None
-                for i, t in others:
-                    if not text or not t:
-                        continue
-                    r = st.ask(SYS, f"Libro A: {c['title']} ({', '.join(c['authors'])})\nFragmento A: {text[:2000]}\n\n"
-                                    f"Libro B: {titles.get(i, '')}\nFragmento B: {t[:2000]}\n\n"
-                                    "¿Son la misma obra (aunque sean ediciones o traducciones distintas)? "
-                                    'Devuelve {"misma_obra": true|false}', 60)
-                    if r.get("misma_obra") is True:
-                        same = i
-                        break
-                if same:
-                    save(k, {"dup": same})
+                verdicts = [(i, same_work(text, ex[f"bo:{i}"]) if text and ex.get(f"bo:{i}") else None) for i in c["match"]]
+                hit = next((i for i, v in verdicts if v is True), None)
+                if hit:
+                    save(k, {"dup": hit})
+                    continue
+                unsure = [i for i, v in verdicts if v is None]
+                if unsure:
+                    pend_check.append((k, c, text, lang, unsure))
                     continue
             g = genres_of(c)
             if g and c["src"] != "biblioteca":   # etiquetas útiles y metadatos fiables: sin LLM
                 save(k, {"lang": lang or "es", "genres": g})
                 continue
-            batch.append((k, c, text))
-            if len(batch) == 5:
-                classify(st, batch, allowed, save)
-                batch = []
-            n += 1
-            if n % 50 == 0:
-                log(f"  {n}")
-        if batch:
-            classify(st, batch, allowed, save)
+            pend_class.append((k, c, text))
+        log(f"fase 1 hecha; para Strata quedan {len(pend_check)} dudosos y {len(pend_class)} por clasificar")
+        st = Strata()
+        for n, (k, c, text, lang, unsure) in enumerate(pend_check):
+            same = None
+            for i in unsure:
+                t = ex.get(f"bo:{i}")
+                if text and t:
+                    q = (f"Libro A: {c['title']} ({', '.join(c['authors'])})\nFragmento A: {text[:2000]}\n\n"
+                         f"Libro B: {titles.get(i, '')}\nFragmento B: {t[:2000]}\n\n")
+                else:
+                    q = f"Libro A: {c['title']} ({', '.join(c['authors'])})\nLibro B: {titles.get(i, '')}\n"
+                r = st.ask(SYS, q + "¿Son la misma obra (aunque sean ediciones o traducciones distintas)? Devuelve {\"misma_obra\": true|false}", 60)
+                if r.get("misma_obra") is True:
+                    same = i
+                    break
+            if same:
+                save(k, {"dup": same})
+            else:
+                g = genres_of(c)
+                if g and c["src"] != "biblioteca":
+                    save(k, {"lang": lang or "es", "genres": g})
+                else:
+                    pend_class.append((k, c, text))
+            if (n + 1) % 25 == 0:
+                log(f"  dudosos {n + 1}/{len(pend_check)}")
+        for i in range(0, len(pend_class), 5):
+            classify(st, pend_class[i:i + 5], allowed, save)
+            if (i // 5 + 1) % 10 == 0:
+                log(f"  clasificados {min(i + 5, len(pend_class))}/{len(pend_class)}")
     st.close()
     log("hecho")
 
