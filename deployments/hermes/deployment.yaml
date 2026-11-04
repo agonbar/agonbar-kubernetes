@@ -247,11 +247,27 @@ spec:
                 secretKeyRef:
                   name: hermes-env
                   key: API_SERVER_KEY
+            # Webhook adapter. The meeting bot's transcription worker
+            # (work-vm-00, over NetBird) POSTs each meeting's summary and
+            # transcript to /webhooks/meeting-transcript, signed with this
+            # secret (V2: HMAC-SHA256 of "<timestamp>.<body>"). The route is a
+            # `hermes webhook subscribe` on the PVC, not part of this manifest.
+            - name: WEBHOOK_ENABLED
+              value: "true"
+            - name: WEBHOOK_PORT
+              value: "8644"
+            - name: WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: hermes-env
+                  key: WEBHOOK_SECRET
           ports:
             - name: gateway
               containerPort: 8642
             - name: dashboard
               containerPort: 9119
+            - name: webhook
+              containerPort: 8644
           startupProbe:
             httpGet:
               path: /health
