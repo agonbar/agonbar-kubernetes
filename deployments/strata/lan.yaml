@@ -1,0 +1,26 @@
+# El 8082 (el del gateway que pide clave) para llm-proxy, el proxy del clúster
+# de Redytel (redytel-iot/infra, kubernetes/llm). Ese proxy corre en
+# kubernetes-11, VM del mismo proxmox-redytel-01 que kubernetes-10, y llega por
+# la vmbr1 del host: http://10.10.10.2:30082. La LAN 192.168.1.0/24 no sirve,
+# el firewall de los Proxmox no deja a las VMs de vmbr1 hablar con ella.
+# externalTrafficPolicy Local: solo abre el puerto el nodo con el pod de Strata.
+# Con Cluster lo abriría cualquier nodo de lamg, también ovh02 en su IP pública.
+# Ni el 8080 ni el 8081, que no piden clave.
+apiVersion: v1
+kind: Service
+metadata:
+  name: strata-lan
+  namespace: strata
+  labels:
+    app: strata
+spec:
+  type: NodePort
+  externalTrafficPolicy: Local
+  selector:
+    app: strata
+  ports:
+    - name: keyed
+      port: 8082
+      targetPort: keyed
+      nodePort: 30082
+      protocol: TCP
