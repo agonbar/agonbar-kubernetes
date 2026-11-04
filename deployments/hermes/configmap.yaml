@@ -40,6 +40,8 @@ data:
 
     When the user asks about one of their own projects, hosts, services or past decisions, search the knowledge-vault MCP before you answer and before you reach for the web. That vault is where their infrastructure is written down; the web knows nothing about it. "t480", "nas02", "lamg" and the like are their machines, not products to look up. The `knowledge-vault` skill explains how to use it.
 
+    When the user asks how a piece of work is going ("¿cómo va X?", "¿esto está?", "¿se ha reiniciado?", "¿qué tengo pendiente?"), look it up before you answer: Paseo threads through the paseo MCP, Paperclip issues through the agent-status skill. Never guess a status, and never answer from what you remember of an earlier check.
+
   # Skill copied into the agent's skills dir on every boot. It tells the agent
   # that the vault is the MCP and not a directory, and passes on the index-lag
   # warning the MCP server itself ships in its handshake instructions.
@@ -100,6 +102,115 @@ data:
     Deleting, renaming and moving notes are deliberately not available to you, and
     neither is forcing a git sync or a reindex. If the user asks for one of those,
     say so plainly and let them do it from their laptop.
+
+  # Skill + script copied into the agent's skills dir on every boot. Hermes only
+  # reports on the user's agents: Paseo threads (paseo MCP, read-only tools) and
+  # Paperclip issues (this script, GET only).
+  agent-status-skill.md: |
+    ---
+    name: agent-status
+    description: Report how the user's AI agents are doing - Paseo threads on work-vm-00 and Paperclip board issues. Use when the user asks how a task, thread, job or issue is going, whether something finished, what is pending, or whether work survived a restart.
+    ---
+
+    # Agent status
+
+    The user runs coding agents in two places. You only report on them: you never
+    start, steer, stop or edit anything in either one.
+
+    ## Paseo threads (paseo MCP)
+
+    Interactive Claude Code threads on work-vm-00.
+
+    1. `list_agents` gives every recent thread. `title` is the start of the user's
+       first message, so match the user's words against it ("lo de InuYasha" is the
+       thread whose title or latest activity mentions InuYasha or cruncharr).
+    2. `get_agent_activity` with that `agentId` and `limit: 3` gives the latest
+       entries, already summarised. Read them before you answer.
+    3. Status meaning:
+       - `running`: working right now.
+       - `idle`: its turn is over. Either it finished, or it is waiting for the
+         user. The last entry says which.
+       - `error`: it failed. Say so and quote the error.
+    4. If the MCP does not answer, work-vm-00 is off or restarting. Tell the user
+       that, not "there are no threads".
+
+    ## Paperclip issues (script)
+
+    Long autonomous work: issues worked by the Lead, Engineer and Reviewer agents.
+
+    ```
+    python3 /opt/data/skills/agent-status/paperclip-status.py open           # both companies
+    python3 /opt/data/skills/agent-status/paperclip-status.py open adrian    # or sensei
+    python3 /opt/data/skills/agent-status/paperclip-status.py show ADR-36
+    ```
+
+    Each `open` line reads `ADR-36 [in_review, Reviewer] title`. The name in the
+    brackets is who holds the issue. When it says `Adrián`, the issue is waiting on
+    the user, and that is the part to lead with.
+
+    ## How to answer
+
+    In Spanish, short. One line per thread or issue: what it is, its state, and what
+    it is waiting for. Lead with whatever needs the user. Link Paperclip issues as
+    `https://paperclip.dev.senseizero.es/ADR/issues/ADR-36`.
+
+  paperclip-status.py: |
+    #!/usr/bin/env python3
+    """Read-only view of the Paperclip board.
+
+      paperclip-status.py open [adrian|sensei]   open issues, newest activity first
+      paperclip-status.py show ADR-12            status, title and latest comment
+    """
+    import json
+    import os
+    import sys
+    import urllib.request
+
+    API = "https://paperclip.dev.senseizero.es/api"
+    KEY_FILE = os.environ.get("PAPERCLIP_BOARD_KEY_FILE", "/opt/data/.config/paperclip/board-key")
+    COMPANIES = {
+        "adrian": "da6ec615-7998-4cae-89d2-94b0bdadfd9a",
+        "sensei": "f969d203-196d-4fae-b086-bec12b810a27",
+    }
+    OPEN = "todo,in_progress,in_review,blocked"
+
+
+    def get(path):
+        key = open(KEY_FILE).read().strip()
+        req = urllib.request.Request(API + path, headers={"Authorization": "Bearer " + key})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return json.load(r)
+
+
+    def show_open(names):
+        for name in names:
+            cid = COMPANIES[name]
+            agents = {a["id"]: a["name"] for a in get(f"/companies/{cid}/agents")}
+            issues = get(f"/companies/{cid}/issues?status={OPEN}&limit=100")
+            issues.sort(key=lambda i: i.get("lastActivityAt") or "", reverse=True)
+            print(f"## {name}: {len(issues)} open")
+            for i in issues:
+                who = agents.get(i.get("assigneeAgentId"), "Adrián" if i.get("assigneeUserId") else "nobody")
+                active = " (working now)" if i.get("activeRun") else ""
+                print(f"{i['identifier']} [{i['status']}, {who}{active}] {i['title'][:90]}")
+
+
+    def show_one(ident):
+        i = get(f"/issues/{ident}")
+        print(f"{i['identifier']} [{i['status']}] {i['title']}")
+        comments = sorted(get(f"/issues/{ident}/comments"), key=lambda c: c["createdAt"])
+        if comments:
+            print(f"latest comment {comments[-1]['createdAt']}:\n{comments[-1]['body'][:1500]}")
+
+
+    if __name__ == "__main__":
+        args = sys.argv[1:]
+        if args[:1] == ["open"]:
+            show_open(args[1:] or list(COMPANIES))
+        elif args[:1] == ["show"] and len(args) == 2:
+            show_one(args[1])
+        else:
+            sys.exit(__doc__)
 
   # kubectl reads this through KUBECONFIG. `tokenFile` instead of an inline
   # token so the kubelet's rotating ServiceAccount token keeps working.
