@@ -40,7 +40,7 @@ data:
 
     When the user asks about one of their own projects, hosts, services or past decisions, search the knowledge-vault MCP before you answer and before you reach for the web. That vault is where their infrastructure is written down; the web knows nothing about it. "t480", "nas02", "lamg" and the like are their machines, not products to look up. The `knowledge-vault` skill explains how to use it.
 
-    When the user asks how a piece of work is going ("¿cómo va X?", "¿esto está?", "¿se ha reiniciado?", "¿qué tengo pendiente?"), look it up before you answer: Paseo threads through the paseo MCP, Paperclip issues through the agent-status skill. Never guess a status, and never answer from what you remember of an earlier check.
+    When the user asks how a piece of work is going ("¿cómo va X?", "¿esto está?", "¿se ha reiniciado?", "¿qué tengo pendiente?"), look it up before you answer with the agent-status skill: `python3 /opt/data/skills/agent-status/agent-status.py threads <one word of the topic>` for Paseo threads, `issues` for Paperclip. Never guess a status, and never answer from what you remember of an earlier check.
 
   # Skill copied into the agent's skills dir on every boot. It tells the agent
   # that the vault is the MCP and not a directory, and passes on the index-lag
@@ -104,8 +104,9 @@ data:
     say so plainly and let them do it from their laptop.
 
   # Skill + script copied into the agent's skills dir on every boot. Hermes only
-  # reports on the user's agents: Paseo threads (paseo MCP, read-only tools) and
-  # Paperclip issues (this script, GET only).
+  # reports on the user's agents, Paseo threads and Paperclip issues, through one
+  # read-only script. The script does the fan-out over every thread's activity,
+  # which gemma-4-12b would not do with the MCP tools (tested 2026-11-04).
   agent-status-skill.md: |
     ---
     name: agent-status
@@ -115,102 +116,194 @@ data:
     # Agent status
 
     The user runs coding agents in two places. You only report on them: you never
-    start, steer, stop or edit anything in either one.
-
-    ## Paseo threads (paseo MCP)
-
-    Interactive Claude Code threads on work-vm-00.
-
-    1. `list_agents` gives every recent thread. `title` is the start of the user's
-       first message, so match the user's words against it ("lo de InuYasha" is the
-       thread whose title or latest activity mentions InuYasha or cruncharr).
-    2. `get_agent_activity` with that `agentId` and `limit: 3` gives the latest
-       entries, already summarised. Read them before you answer.
-    3. Status meaning:
-       - `running`: working right now.
-       - `idle`: its turn is over. Either it finished, or it is waiting for the
-         user. The last entry says which.
-       - `error`: it failed. Say so and quote the error.
-    4. If the MCP does not answer, work-vm-00 is off or restarting. Tell the user
-       that, not "there are no threads".
-
-    ## Paperclip issues (script)
-
-    Long autonomous work: issues worked by the Lead, Engineer and Reviewer agents.
+    start, steer, stop or edit anything in either one. One script answers every
+    status question:
 
     ```
-    python3 /opt/data/skills/agent-status/paperclip-status.py open           # both companies
-    python3 /opt/data/skills/agent-status/paperclip-status.py open adrian    # or sensei
-    python3 /opt/data/skills/agent-status/paperclip-status.py show ADR-36
+    python3 /opt/data/skills/agent-status/agent-status.py threads <topic>   # Paseo threads about <topic>
+    python3 /opt/data/skills/agent-status/agent-status.py threads           # every running or recent thread
+    python3 /opt/data/skills/agent-status/agent-status.py issues            # open Paperclip issues
+    python3 /opt/data/skills/agent-status/agent-status.py issue ADR-36      # one issue, latest comment
     ```
 
-    Each `open` line reads `ADR-36 [in_review, Reviewer] title`. The name in the
+    ## Paseo threads
+
+    Interactive Claude Code threads on work-vm-00. `threads <topic>` already reads
+    the recent activity of every running thread and every thread active in the last
+    24 hours, and keeps those that mention the topic. Use one word from the user's
+    question as the topic ("¿cómo va lo de InuYasha?" -> `threads InuYasha`). If
+    nothing matches, run `threads` with no topic and pick the thread from its
+    activity before you say there is none.
+
+    Status: `running` is working right now. `idle` means its turn is over: the
+    activity says whether it finished or is waiting for the user. If the script says
+    it cannot reach Paseo, work-vm-00 is off or restarting. Say that.
+
+    ## Paperclip issues
+
+    Long autonomous work, worked by the Lead, Engineer and Reviewer agents. Each
+    `issues` line reads `ADR-36 [in_review, Reviewer] title`. The name in the
     brackets is who holds the issue. When it says `Adrián`, the issue is waiting on
-    the user, and that is the part to lead with.
+    the user, and that goes first in your answer.
 
     ## How to answer
 
-    In Spanish, short. One line per thread or issue: what it is, its state, and what
-    it is waiting for. Lead with whatever needs the user. Link Paperclip issues as
-    `https://paperclip.dev.senseizero.es/ADR/issues/ADR-36`.
+    In Spanish, short. One or two lines per thread or issue: what it is, its state,
+    what it is waiting for. Lead with whatever needs the user. Link Paperclip issues
+    as `https://paperclip.dev.senseizero.es/ADR/issues/ADR-36`.
 
-  paperclip-status.py: |
+  agent-status.py: |
     #!/usr/bin/env python3
-    """Read-only view of the Paperclip board.
+    """Read-only status of the user's coding agents.
 
-      paperclip-status.py open [adrian|sensei]   open issues, newest activity first
-      paperclip-status.py show ADR-12            status, title and latest comment
+      agent-status.py threads [topic]        Paseo threads, with their latest activity
+      agent-status.py issues [adrian|sensei]  open Paperclip issues
+      agent-status.py issue ADR-12            one issue and its latest comment
     """
     import json
     import os
     import sys
     import urllib.request
+    from datetime import datetime, timedelta, timezone
 
-    API = "https://paperclip.dev.senseizero.es/api"
-    KEY_FILE = os.environ.get("PAPERCLIP_BOARD_KEY_FILE", "/opt/data/.config/paperclip/board-key")
+    CONF = os.environ.get("AGENT_STATUS_CONF", "/opt/data/.config")
+    PASEO = os.environ.get("PASEO_MCP_URL", "http://work-vm-00:6767/mcp/agents")
+    # Paseo answers 403 unless Host is in PASEO_HOSTNAMES; `work-vm-00` is not.
+    PASEO_HOST = os.environ.get("PASEO_HOST", "work-vm-00.agonbar.senseizero.lan")
+    PAPERCLIP = "https://paperclip.dev.senseizero.es/api"
     COMPANIES = {
         "adrian": "da6ec615-7998-4cae-89d2-94b0bdadfd9a",
         "sensei": "f969d203-196d-4fae-b086-bec12b810a27",
     }
-    OPEN = "todo,in_progress,in_review,blocked"
 
 
-    def get(path):
-        key = open(KEY_FILE).read().strip()
-        req = urllib.request.Request(API + path, headers={"Authorization": "Bearer " + key})
+    def secret(name):
+        return open(os.path.join(CONF, name)).read().strip()
+
+
+    class Paseo:
+        """Minimal MCP client over streamable HTTP: initialize once, then tools/call."""
+
+        def __init__(self):
+            self.session = None
+            self.n = 0
+            self.headers = {
+                "Authorization": "Bearer " + secret("paseo/password"),
+                "Host": PASEO_HOST,
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+            }
+            self.rpc("initialize", {"protocolVersion": "2025-03-26", "capabilities": {},
+                                    "clientInfo": {"name": "agent-status", "version": "1"}})
+            self.rpc("notifications/initialized", None)
+
+        def rpc(self, method, params):
+            msg = {"jsonrpc": "2.0", "method": method}
+            if params is not None:
+                self.n += 1
+                msg.update(id=self.n, params=params)
+            headers = dict(self.headers)
+            if self.session:
+                headers["mcp-session-id"] = self.session
+            req = urllib.request.Request(PASEO, json.dumps(msg).encode(), headers)
+            with urllib.request.urlopen(req, timeout=30) as r:
+                self.session = r.headers.get("mcp-session-id") or self.session
+                body = r.read().decode()
+            if params is None:
+                return None
+            for line in body.splitlines():
+                if line.startswith("data:"):
+                    body = line[5:]
+            return json.loads(body)["result"]
+
+        def tool(self, name, **args):
+            res = self.rpc("tools/call", {"name": name, "arguments": args})
+            if res.get("structuredContent"):
+                return res["structuredContent"]
+            # Text results can carry a "key=value" header before the JSON body.
+            text = "".join(c.get("text", "") for c in res.get("content", []))
+            starts = [i for i in (text.find("{"), text.find("[")) if i >= 0]
+            try:
+                return json.loads(text[min(starts):]) if starts else text
+            except ValueError:
+                return text
+
+
+    def local(iso):
+        try:
+            from zoneinfo import ZoneInfo
+            tz = ZoneInfo("Europe/Madrid")
+        except Exception:  # image without tzdata
+            tz = timezone.utc
+        return datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone(tz).strftime("%d-%b %H:%M")
+
+
+    def threads(topic):
+        p = Paseo()
+        listing = p.tool("list_agents", limit=100)
+        agents = listing.get("agents", listing) if isinstance(listing, dict) else listing
+        since = datetime.now(timezone.utc) - timedelta(hours=24)
+        found = 0
+        for a in agents:
+            when = a.get("lastActivityAt") or a.get("updatedAt") or ""
+            recent = when and datetime.fromisoformat(when.replace("Z", "+00:00")) >= since
+            if a.get("status") != "running" and not recent:
+                continue
+            # A topic can sit further back than the latest entries, so search wider.
+            act = p.tool("get_agent_activity", agentId=a["id"], limit=10 if topic else 3)
+            text = act.get("content", "") if isinstance(act, dict) else str(act)
+            title = a.get("title") or ""
+            if topic and topic.lower() not in (title + text).lower():
+                continue
+            found += 1
+            last = text.split("\n", 2)[-1].strip()
+            print(f"### {title[:70]}\nid {a['id'][:8]} | {a.get('status')} | last activity {local(when)}")
+            print(last[-900:] + "\n")
+        if not found:
+            print(f"No running or recent thread mentions {topic!r}." if topic else "No running or recent threads.")
+
+
+    def paperclip(path):
+        req = urllib.request.Request(PAPERCLIP + path,
+                                     headers={"Authorization": "Bearer " + secret("paperclip/board-key")})
         with urllib.request.urlopen(req, timeout=20) as r:
             return json.load(r)
 
 
-    def show_open(names):
+    def issues(names):
         for name in names:
             cid = COMPANIES[name]
-            agents = {a["id"]: a["name"] for a in get(f"/companies/{cid}/agents")}
-            issues = get(f"/companies/{cid}/issues?status={OPEN}&limit=100")
-            issues.sort(key=lambda i: i.get("lastActivityAt") or "", reverse=True)
-            print(f"## {name}: {len(issues)} open")
-            for i in issues:
+            agents = {a["id"]: a["name"] for a in paperclip(f"/companies/{cid}/agents")}
+            rows = paperclip(f"/companies/{cid}/issues?status=todo,in_progress,in_review,blocked&limit=100")
+            rows.sort(key=lambda i: i.get("lastActivityAt") or "", reverse=True)
+            print(f"## {name}: {len(rows)} open")
+            for i in rows:
                 who = agents.get(i.get("assigneeAgentId"), "Adrián" if i.get("assigneeUserId") else "nobody")
                 active = " (working now)" if i.get("activeRun") else ""
                 print(f"{i['identifier']} [{i['status']}, {who}{active}] {i['title'][:90]}")
 
 
-    def show_one(ident):
-        i = get(f"/issues/{ident}")
+    def issue(ident):
+        i = paperclip(f"/issues/{ident}")
         print(f"{i['identifier']} [{i['status']}] {i['title']}")
-        comments = sorted(get(f"/issues/{ident}/comments"), key=lambda c: c["createdAt"])
+        comments = sorted(paperclip(f"/issues/{ident}/comments"), key=lambda c: c["createdAt"])
         if comments:
             print(f"latest comment {comments[-1]['createdAt']}:\n{comments[-1]['body'][:1500]}")
 
 
     if __name__ == "__main__":
-        args = sys.argv[1:]
-        if args[:1] == ["open"]:
-            show_open(args[1:] or list(COMPANIES))
-        elif args[:1] == ["show"] and len(args) == 2:
-            show_one(args[1])
-        else:
-            sys.exit(__doc__)
+        cmd, args = (sys.argv[1:2] or [""])[0], sys.argv[2:]
+        try:
+            if cmd == "threads":
+                threads(" ".join(args))
+            elif cmd == "issues":
+                issues(args or list(COMPANIES))
+            elif cmd == "issue" and len(args) == 1:
+                issue(args[0])
+            else:
+                sys.exit(__doc__)
+        except OSError as e:  # URLError, timeouts, refused connections
+            sys.exit(f"Cannot reach the service ({e}). If it is Paseo, work-vm-00 is off or restarting.")
 
   # kubectl reads this through KUBECONFIG. `tokenFile` instead of an inline
   # token so the kubelet's rotating ServiceAccount token keeps working.
