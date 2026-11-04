@@ -9,8 +9,9 @@
 # iSCSI on purpose: a fallback cannot depend on nas02 over the WAN.
 #
 # hostNetwork because the entrypoint creates wg0 and the NAT/FORWARD rules in
-# the host namespace. The UI listens on :8888 plain HTTP and is not published
-# by any ingress; reach it through the tunnel or an SSH forward.
+# the host namespace. The UI listens on :8889 plain HTTP and is not published
+# by any ingress; reach it through the tunnel or an SSH forward. Not :8888:
+# the games/satisfactory LoadBalancer takes that port on every node over IPv4.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -18,7 +19,7 @@ metadata:
   namespace: subspace
 spec:
   replicas: 1
-  # hostNetwork binds wg0, :51820 and :8888, so a rolling update would fight itself.
+  # hostNetwork binds wg0, :51820 and :8889, so a rolling update would fight itself.
   strategy:
     type: Recreate
   selector:
@@ -45,7 +46,7 @@ spec:
             - name: SUBSPACE_HTTP_HOST
               value: wg.adriangonzalezbarbosa.eu
             - name: SUBSPACE_HTTP_ADDR
-              value: ":8888"
+              value: ":8889"
             - name: SUBSPACE_HTTP_INSECURE
               value: "true"
             - name: SUBSPACE_LETSENCRYPT
