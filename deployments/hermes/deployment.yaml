@@ -112,6 +112,14 @@ spec:
               # and `hermes skills list` shows the skill as disabled afterwards.
               hermes config set skills.disabled '["obsidian"]'
 
+              # Model: Strata first, the free gemma group on LiteLLM when Strata
+              # is down, overloaded or rate-limited. Strata serves one request
+              # at a time, so a slow answer while a Paperclip run holds it is a
+              # queue, not a failure, and does not trigger the fallback.
+              hermes config set model.default qwen3.8-flash-next-iq3_xxs
+              hermes config set fallback_model \
+                '[{"provider":"openai","model":"gemma-4-12b-free","base_url":"https://litellm.senseivision.ai/v1","key_env":"LITELLM_API_KEY"}]'
+
               # agent-status: Hermes reports on the user's coding agents through
               # one read-only script. Its two secrets go to files because the
               # terminal tool strips the env before it runs anything. The Paseo
@@ -172,9 +180,15 @@ spec:
           image: nousresearch/hermes-agent@sha256:fdf7ab656e9c80ed490958c4733778d8bb33396ed7ddf7e4d0a1b69635bcc8d1
           args: ["gateway", "run"]
           env:
+            # Main model: Strata's in-cluster gateway, which takes no key. The
+            # client still wants one, so it gets a dummy and the LiteLLM key
+            # stays out of Strata's logs.
             - name: OPENAI_BASE_URL
-              value: https://litellm.senseivision.ai/v1
+              value: http://strata.strata.svc.cluster.local:8080/v1
             - name: OPENAI_API_KEY
+              value: none
+            # Read by the fallback entry's key_env (see the initContainer).
+            - name: LITELLM_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: hermes-env
