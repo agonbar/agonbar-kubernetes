@@ -112,32 +112,26 @@ spec:
               # and `hermes skills list` shows the skill as disabled afterwards.
               hermes config set skills.disabled '["obsidian"]'
 
-              # agent-status: Hermes reports on the user's coding agents. The
-              # Paperclip board key goes to a file because the terminal tool
-              # strips the env before it runs anything.
-              mkdir -p /opt/data/skills/agent-status /opt/data/.config/paperclip
+              # agent-status: Hermes reports on the user's coding agents through
+              # one read-only script. Its two secrets go to files because the
+              # terminal tool strips the env before it runs anything. The Paseo
+              # one is the daemon password, which can do everything; only the
+              # script reads it, the model never gets Paseo's MCP tools.
+              mkdir -p /opt/data/skills/agent-status /opt/data/.config/paperclip /opt/data/.config/paseo
+              rm -f /opt/data/skills/agent-status/paperclip-status.py
               cp /config/agent-status-skill.md /opt/data/skills/agent-status/SKILL.md
-              cp /config/paperclip-status.py /opt/data/skills/agent-status/paperclip-status.py
+              cp /config/agent-status.py /opt/data/skills/agent-status/agent-status.py
               umask 077
               printf %s "$PAPERCLIP_BOARD_KEY" > /opt/data/.config/paperclip/board-key
+              printf %s "$MCP_PASEO_API_KEY" > /opt/data/.config/paseo/password
               umask 022
 
-              # Paseo's daemon on work-vm-00. `work-vm-00` resolves through
-              # CoreDNS NodeHosts (it is a k3s node, registered even while its
-              # desktop profile keeps it NotReady) to its tailnet IP. The bearer
-              # is the daemon password, which can do everything, so the agent
-              # only gets the three read tools. Paseo checks the Host header
-              # against PASEO_HOSTNAMES (*.agonbar.senseizero.lan,
-              # *.nb.senseizero.lan) and answers 403 to `work-vm-00`; neither
-              # suffix resolves from a pod, so the request goes to the NodeHosts
-              # name and carries the tailnet name in Host.
-              hermes config set mcp_servers.paseo.url http://work-vm-00:6767/mcp/agents
-              hermes config set mcp_servers.paseo.headers.Host \
-                work-vm-00.agonbar.senseizero.lan
-              hermes config set mcp_servers.paseo.headers.Authorization \
-                'Bearer ${MCP_PASEO_API_KEY}'
-              hermes config set mcp_servers.paseo.tools.include \
-                '["list_agents","get_agent_activity","get_agent_status"]'
+              # The Paseo MCP was wired here on 2026-11-04 and dropped the same
+              # day: with list_agents in reach the model stopped there and never
+              # read any thread's activity. `hermes config set` does not prune,
+              # so the entry is removed explicitly. Delete this line once the
+              # live config.yaml no longer has mcp_servers.paseo.
+              hermes mcp remove paseo >/dev/null 2>&1 || true
 
               # Deferred tool search is off. By default hermes hides most tools
               # behind tool_search/tool_describe, so reaching the vault costs
@@ -161,6 +155,11 @@ spec:
                 secretKeyRef:
                   name: hermes-env
                   key: PAPERCLIP_BOARD_KEY
+            - name: MCP_PASEO_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: hermes-env
+                  key: MCP_PASEO_API_KEY
           volumeMounts:
             - name: data
               mountPath: /opt/data
@@ -197,12 +196,6 @@ spec:
                 secretKeyRef:
                   name: hermes-env
                   key: MCP_KNOWLEDGE_VAULT_API_KEY
-            # Read by the ${MCP_PASEO_API_KEY} placeholder in mcp_servers.paseo.
-            - name: MCP_PASEO_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: hermes-env
-                  key: MCP_PASEO_API_KEY
             - name: KUBECONFIG
               value: /opt/data/.kube/config
             # Dashboard web: lista de bots, chats y ficheros. El servicio de s6
