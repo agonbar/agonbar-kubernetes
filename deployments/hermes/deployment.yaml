@@ -126,8 +126,14 @@ spec:
               # CoreDNS NodeHosts (it is a k3s node, registered even while its
               # desktop profile keeps it NotReady) to its tailnet IP. The bearer
               # is the daemon password, which can do everything, so the agent
-              # only gets the three read tools.
+              # only gets the three read tools. Paseo checks the Host header
+              # against PASEO_HOSTNAMES (*.agonbar.senseizero.lan,
+              # *.nb.senseizero.lan) and answers 403 to `work-vm-00`; neither
+              # suffix resolves from a pod, so the request goes to the NodeHosts
+              # name and carries the tailnet name in Host.
               hermes config set mcp_servers.paseo.url http://work-vm-00:6767/mcp/agents
+              hermes config set mcp_servers.paseo.headers.Host \
+                work-vm-00.agonbar.senseizero.lan
               hermes config set mcp_servers.paseo.headers.Authorization \
                 'Bearer ${MCP_PASEO_API_KEY}'
               hermes config set mcp_servers.paseo.tools.include \
