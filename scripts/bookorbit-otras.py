@@ -18,7 +18,7 @@ Fuera a propósito: EBOOKS/Biblioteca (copia idéntica de Biblioteca), 7000 eboo
 dentro de Biblioteca) y las carpetas sin orden (Megapack, biblioteca digital...), que cuentan
 capítulos, poemas y recetas como libros.
 """
-import argparse, collections, html, importlib.util, json, os, re, sqlite3, subprocess, sys, unicodedata
+import argparse, collections, html, importlib.util, json, os, re, sqlite3, subprocess, sys, time, unicodedata
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 _spec = importlib.util.spec_from_file_location("bc", os.path.join(HERE, "bookorbit-calibre.py"))
@@ -627,15 +627,272 @@ def classify(st, batch, allowed, save):
                  "genres": [g for g in (x.get("generos") or []) if g in allowed][:2], "title": title, "author": author})
 
 
+# ---------------------------------------------------------------- importación
+
+ROMAN = re.compile(r"^[IVXLC]+$")
+
+
+LOWER_ALWAYS = set("a al ante bajo con contra de del desde durante e el en entre hacia hasta la las lo los mediante "
+                   "ni o para pero por que según sin so sobre su sus tras u un una unas unos y".split())
+MID_CAP = re.compile(r"(?<=[a-záéíóúüñ,;:] )([A-ZÁÉÍÓÚÜÑ][a-záéíóúüñ]+)\b")
+MID_LOW = re.compile(r"(?<=[a-záéíóúüñ,;:] )([a-záéíóúüñ]+)\b")
+
+
+def case_counts(texts):
+    """Por palabra, cuántas veces va con mayúscula en mitad de frase y cuántas en minúscula, en todos los
+    fragmentos: "España" o "Madrid" casi siempre con mayúscula, "guerra" casi siempre en minúscula."""
+    cap, low = collections.Counter(), collections.Counter()
+    for t in texts:
+        if t:
+            cap.update(w.lower() for w in MID_CAP.findall(t))
+            low.update(MID_LOW.findall(t))
+    return cap, low
+
+
+def fix_case(title, text, counts=None):
+    """"LA GUERRA DE LOS ABUELOS" o "La Bestia De Altdorf" -> minúsculas, salvo la primera palabra, los
+    números romanos y los nombres propios: los que en el texto del libro, o en el conjunto de fragmentos,
+    van con mayúscula en mitad de frase ("Altdorf", "España"). Un título ya normal no se toca."""
+    words = title.split()
+    alpha = [w for w in words if w[:1].isalpha()]
+    if not alpha:
+        return title
+    shouting = title.isupper()
+    capped = sum(1 for w in alpha if w[:1].isupper()) / len(alpha) > 0.7 and len(alpha) >= 3
+    if not (shouting or capped):
+        return title
+    cap, low = counts or (collections.Counter(), collections.Counter())
+    own_cap = {w.lower() for w in MID_CAP.findall(text or "")}
+    own_low = set(MID_LOW.findall(text or ""))
+    out = []
+    for i, w in enumerate(words):
+        core = re.sub(r"^\W+|\W+$", "", w)
+        if not core or not core[:1].isalpha():
+            out.append(w)
+            continue
+        lw = core.lower()
+        proper = (lw in own_cap and lw not in own_low) or (cap[lw] >= 3 and cap[lw] > 3 * low[lw])
+        if core.isupper() and len(core) > 1 and ROMAN.match(core):
+            new = core
+        elif i == 0 or (proper and lw not in LOWER_ALWAYS):
+            new = lw[:1].upper() + lw[1:]
+        else:
+            new = lw
+        out.append(w.replace(core, new))
+    return " ".join(out)
+
+
+def author_key(name):
+    return " ".join(sorted(norm(name).split()))
+
+
+def prepare(_):
+    """Metadatos finales de cada libro a importar, último dedupe con ellos y plan en import.json."""
+    cands = {f"{c['src']}:{c['sid']}": c for c in json.load(open(f"{STATE}/dedupe.json"))}
+    J = {json.loads(l)["k"]: json.loads(l) for l in open(f"{STATE}/judge.jsonl")}
+    ex = {}
+    for line in open(f"{STATE}/excerpts.jsonl"):
+        j = json.loads(line)
+        ex[j["k"]] = j["text"]
+    counts = case_counts(ex.values())
+    cal = bc.Calibre()
+    # Grafía de autor: la de BookOrbit (75.452 incluida), casando las palabras del nombre en cualquier orden.
+    have = bc.library_books()
+    canon = {}
+    for b in have:
+        for a in b["au"]:
+            canon.setdefault(author_key(a), a)
+    seen = {bc.key(b["title"], b["au"]) for b in have}
+    plan, why = [], collections.Counter()
+    for k in sorted(J, key=lambda k: PRIORITY.index(k.split(":")[0])):
+        j, c = J[k], cands[k]
+        if "dup" in j or j.get("skip") or j.get("book") is False or (j.get("lang") and j["lang"] != "es") or "err" in j:
+            continue
+        title = j.get("title") or c["title"]
+        authors = [j["author"]] if j.get("author") else c["authors"]
+        authors = [canon.get(author_key(a), a) for a in authors if a]
+        title = fix_case(title.strip(), ex.get(k), counts)
+        key = bc.key(title, authors)
+        if key in seen:
+            why["repetido tras limpiar"] += 1
+            continue
+        seen.add(key)
+        saga, coll = cal.split_series(c.get("series"))
+        if saga:
+            saga = next((cal.series_by_author[(norm(a), norm(saga))] for a in authors if (norm(a), norm(saga)) in cal.series_by_author), saga)
+        g = j.get("genres") or genres_of(c)
+        nf = (bool(set(g) & bc.NONFICTION) and not set(g) & bc.FICTION) if g else j.get("fiction") is False
+        f = best_file(c)
+        if not f:
+            why["sin fichero"] += 1
+            continue
+        plan.append({"k": k, "title": title, "authors": authors, "seriesName": saga,
+                     "seriesIndex": bc.fmt_index(c.get("index")) if saga else None,
+                     "tags": [f"Colección: {coll}"] if coll else [], "genres": g, "language": "es",
+                     "publishedYear": c.get("year"), "lib": "nf" if nf else "f",
+                     "file": f["rel"], "fmt": f["fmt"], "convert": f["fmt"] in ("doc", "docx", "rtf", "lit", "odt", "txt")})
+    json.dump(plan, open(f"{STATE}/import.json", "w"), ensure_ascii=False)
+    log(f"{len(plan)} libros a importar ({sum(1 for p in plan if p['lib'] == 'nf')} de no ficción, "
+        f"{sum(1 for p in plan if p['convert'])} por convertir); fuera: {dict(why)}")
+
+
+OUT = "/mnt/RAID/ivan/.otras-out"            # nas03: una carpeta por libro, otras-<n>
+STAGE_NAS = "/mnt/SSD/torrents/.otras-stage"  # nas02; en el pod /downloads/.otras-stage
+STAGE_POD = "/downloads/.otras-stage"
+BUILD_PY = r'''
+import json, os, sys
+src, out = sys.argv[1], sys.argv[2]
+n = 0
+for i, p in enumerate(json.load(sys.stdin)):
+    d = os.path.join(out, p["unit"])
+    os.makedirs(d, exist_ok=True)
+    if not p["convert"]:
+        ext = "mobi" if p["fmt"] == "prc" else p["fmt"]       # un prc es un mobi; BookOrbit solo conoce el segundo
+        dst = os.path.join(d, "libro." + ext)
+        if not os.path.exists(dst):
+            os.link(os.path.join(src, p["file"]), dst); n += 1
+    cover = os.path.join(src, os.path.dirname(p["file"]), "cover.jpg")
+    if os.path.exists(cover) and not os.path.exists(os.path.join(d, "cover.jpg")):
+        os.link(cover, os.path.join(d, "cover.jpg"))
+print(f"{n} ficheros enlazados")
+'''
+
+
+def units(plan):
+    for i, p in enumerate(plan):
+        p["unit"] = f"otras-{i:05d}"
+    return plan
+
+
+def build(_):
+    plan = units(json.load(open(f"{STATE}/import.json")))
+    print(ssh(f"python3 -c {sh(BUILD_PY)} {sh(OTRAS)} {sh(OUT)}", json.dumps(plan)).strip())
+
+
+def convert(_):
+    """doc, lit y compañía a epub, con LibreOffice y calibre de nix, aquí; el epub sube a su carpeta de OUT."""
+    import shutil, tempfile
+    plan = [p for p in units(json.load(open(f"{STATE}/import.json"))) if p["convert"]]
+    have = set(ssh(f"cd {sh(OUT)} && find . -name libro.epub -printf '%h\\n'").split())
+    todo = [p for p in plan if f"./{p['unit']}" not in have]
+    log(f"{len(todo)} por convertir de {len(plan)}")
+    tmp = tempfile.mkdtemp(prefix="otras-conv-", dir=STATE)
+    ok = bad = 0
+    try:
+        for n, p in enumerate(todo):
+            for f in os.listdir(tmp):
+                shutil.rmtree(os.path.join(tmp, f), ignore_errors=True) if os.path.isdir(os.path.join(tmp, f)) else os.remove(os.path.join(tmp, f))
+            src = os.path.join(tmp, "in." + p["fmt"])
+            if subprocess.run(["scp", "-q", "-o", "BatchMode=yes", f"nas03:{OTRAS}/{p['file']}", src]).returncode:
+                bad += 1
+                continue
+            if p["fmt"] in ("doc", "docx", "rtf", "odt"):
+                cmd = ["soffice", "--headless", "--convert-to", "epub", "--outdir", tmp, src]
+            else:
+                cmd = ["ebook-convert", src, os.path.join(tmp, "in.epub")]
+            r = subprocess.run(["timeout", "-k", "30", "600", "nix", "shell", "nixpkgs#calibre", "nixpkgs#libreoffice", "-c"] + cmd, capture_output=True)
+            epub = os.path.join(tmp, "in.epub")
+            if r.returncode or not os.path.exists(epub):
+                bad += 1
+                log(f"  FALLA {p['file']}")
+                continue
+            if subprocess.run(["scp", "-q", "-o", "BatchMode=yes", epub, f"nas03:{OUT}/{p['unit']}/libro.epub"]).returncode:
+                bad += 1
+                continue
+            ok += 1
+            if (n + 1) % 50 == 0:
+                log(f"  {n + 1}/{len(todo)}")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    log(f"{ok} convertidos, {bad} fallidos")
+
+
+def _cm():
+    spec = importlib.util.spec_from_file_location("cm", os.path.join(HERE, "bookorbit-comics.py"))
+    cm = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cm)
+    cm.OUT, cm.DEST, cm.TAG = OUT, STAGE_NAS, "bookorbit-otras"
+    cm.ALIVE = f"{{ [ -f ~/{cm.TAG}.pid ] && kill -0 $(cat ~/{cm.TAG}.pid) 2>/dev/null; }}"
+    return cm
+
+
+def copy(a):
+    ssh_nas02 = ["ssh", "-o", "BatchMode=yes", "nas02", f"mkdir -p {STAGE_NAS}"]
+    subprocess.run(ssh_nas02, check=True)
+    _cm().copy(a)
+
+
+def import_(args):
+    """Del stage de nas02 al dock en tandas, con los metadatos del plan, a Ficción o No ficción."""
+    plan = {p["unit"]: p for p in units(json.load(open(f"{STATE}/import.json")))}
+    present = set(bc.pod_node(r'''const fs=require("fs");console.log(fs.readdirSync(process.argv[1]).join("\n"))''', STAGE_POD).split())
+    todo = sorted(u for u in present if u in plan)
+    if args.limit:
+        todo = todo[:args.limit]
+    log(f"{len(todo)} libros en el stage por importar")
+    if not todo:
+        return
+    api = bc.Api()
+    settings = api("GET", "/book-dock/settings")
+    nf = bc.nf_target()
+    try:
+        api("PUT", "/book-dock/settings", {**{k: v for k, v in settings.items() if k != "bookDockPath"}, "autoFetchMetadata": False})
+        for i in range(0, len(todo), args.batch):
+            chunk = todo[i:i + args.batch]
+            bc.pod_node(r'''const fs=require("fs"),p=require("path");const [s,d,...u]=process.argv.slice(1);
+for(const n of u){if(fs.existsSync(p.join(d,n)))fs.rmSync(p.join(s,n),{recursive:true});else fs.renameSync(p.join(s,n),p.join(d,n));}''',
+                        STAGE_POD, bc.DOCK_POD, *chunk)
+            want = set(chunk)
+            for _ in range(600):
+                rows = [r for r in bc.sql("select id, status, unit_directory u from book_dock_files where unit_directory is not null")
+                        if os.path.basename(r["u"]) in want]
+                if len(rows) >= len(want) and all(r["status"] in ("ready", "error") for r in rows):
+                    break
+                time.sleep(3)
+            ids, by_file = [], {}
+            for r in rows:
+                p = plan[os.path.basename(r["u"])]
+                if r["status"] == "error":
+                    log(f"  error en el dock: {p['title']}")
+                    continue
+                lib, folder = nf if p["lib"] == "nf" else (bc.LIBRARY_ID, bc.FOLDER_ID)
+                sel = {k: p.get(k) for k in ("title", "authors", "seriesName", "seriesIndex", "publishedYear", "language", "genres")}
+                api("PATCH", f"/book-dock/files/{r['id']}", {"selectedMetadata": sel, "targetLibraryId": lib, "targetFolderId": folder})
+                ids.append(r["id"])
+                by_file[r["id"]] = p
+            pre = api("POST", "/book-dock/finalize/preview", {"fileIds": ids, "defaultLibraryId": bc.LIBRARY_ID, "defaultFolderId": bc.FOLDER_ID})
+            bad = {x["fileId"] for x in pre["items"] if x["status"] != "ready"}
+            for fid in bad:
+                log(f"  se queda en el dock: {by_file[fid]['title']}")
+            ok = [x for x in ids if x not in bad]
+            res = api("POST", "/book-dock/finalize", {"fileIds": ok, "defaultLibraryId": bc.LIBRARY_ID, "defaultFolderId": bc.FOLDER_ID}) if ok else {"results": []}
+            done = 0
+            for r in res["results"]:
+                if r.get("success"):
+                    p = by_file[r["fileId"]]
+                    bc.apply_metadata(api, r["bookId"], {k: p.get(k) for k in ("title", "authors", "seriesName", "seriesIndex",
+                                                                                 "publishedYear", "language", "genres", "tags")})
+                    done += 1
+            log(f"tanda {i // args.batch + 1}: {done}/{len(chunk)} importados, {len(bad)} en el dock; progreso {i + len(chunk)}/{len(todo)}")
+        bc.prune()
+    finally:
+        api("PUT", "/book-dock/settings", {**{k: v for k, v in settings.items() if k != "bookDockPath"}, "autoFetchMetadata": True})
+        api.close()
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for c in ("inventory", "dedupe"):
+    for c in ("inventory", "dedupe", "prepare", "build", "convert", "copy"):
         sub.add_parser(c)
+    p = sub.add_parser("import")
+    p.add_argument("--limit", type=int, default=0)
+    p.add_argument("--batch", type=int, default=150)
     p = sub.add_parser("judge")
     p.add_argument("--limit", type=int, default=0)
     p.add_argument("--only", help="una sola fuente, p. ej. calibre")
     p = sub.add_parser("excerpt")
     p.add_argument("--limit", type=int, default=0, help="solo los N primeros de cada tipo, para probar")
     a = ap.parse_args()
-    {"inventory": inventory, "dedupe": dedupe, "excerpt": excerpt, "judge": judge}[a.cmd](a)
+    {"inventory": inventory, "dedupe": dedupe, "excerpt": excerpt, "judge": judge, "prepare": prepare,
+     "build": build, "convert": convert, "copy": copy, "import": import_}[a.cmd](a)
