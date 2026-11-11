@@ -11,6 +11,7 @@
 #   - nodes with a 0 worker limit (Tdarr gives every new or renamed node 0 of
 #     everything; kubernetes-00/10 lost their health-check slot that way)
 #   - tdarr-node pods the DaemonSet wants but the server doesn't see
+#   - workers running for over 12h (a hung ffmpeg keeps its slot and looks busy)
 set -euo pipefail
 K="kubectl --context ${CTX:-lamg} -n piracy"
 POD=$($K get pods -l app=tdarr -o jsonpath='{.items[0].metadata.name}')
@@ -41,8 +42,19 @@ const count = t => api('client/status-tables',
     const on = (l.schedule || []).find(s => s._id === slot);
     console.log('library        ' + l._id + ' slot ' + slot + ' ' + (on && on.checked ? 'IN schedule' : 'OUT of schedule'));
   }
-  let idle = 0;
+  let idle = 0, stuck = 0;
   for (const n of Object.values(nodes)) {
+    // A worker can hang with its slot taken and still look busy: on 2026-11-11 two
+    // SVT-AV1 ffmpegs sat at 99.8 % on the same episode for 13 and 27 days. Fix: kill -9
+    // the tdarr-ffmpeg in that node pod; the file goes to "Transcode error".
+    for (const x of Object.values(n.workers || {})) {
+      const h = x.startTime ? (now - x.startTime) / 3600000 : 0;
+      if (h > 12) {
+        stuck++;
+        console.log('worker         ' + n.nodeName.padEnd(18) + ' ' + x.workerType + ' ' + x.percentage + '% for ' +
+          Math.round(h) + 'h  <-- STUCK: ' + (x.file || '').split('/').pop());
+      }
+    }
     const w = Object.values(n.workers || {}).map(x => x.workerType);
     const L = n.workerLimits;
     const tcFree = L.transcodecpu + L.transcodegpu - w.filter(t => t.startsWith('transcode')).length;
@@ -52,7 +64,8 @@ const count = t => api('client/status-tables',
       ' paused=' + n.nodePaused + ' running=[' + (w.join(',') || '-') + ']' +
       (zero.length ? '  <-- ' + zero.join(',') + '=0' : ''));
   }
-  if (tq > 0 && idle > 0) console.log('VERDICT        ' + idle + ' transcode slot(s) idle with ' + tq + ' queued');
+  if (stuck) console.log('VERDICT        ' + stuck + ' worker(s) stuck for over 12h');
+  else if (tq > 0 && idle > 0) console.log('VERDICT        ' + idle + ' transcode slot(s) idle with ' + tq + ' queued');
   else console.log('VERDICT        ok');
 })().catch(e => { console.error(e); process.exit(1); });
 JS
