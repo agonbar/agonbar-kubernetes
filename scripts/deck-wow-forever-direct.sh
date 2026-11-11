@@ -15,7 +15,7 @@ set -euo pipefail
 DECK=(ssh -i ~/.ssh/nas -o HostKeyAlias=192.168.1.218 deck@steamdeck.local)
 CEF="$(dirname "$0")/steam-cef-eval.mjs"
 PREFIX_APPID=2792117172
-PROTON=GE-Proton11-11
+PROTON=GE-Proton11-11-x86_64  # internal name, see CompatToolMapping in config.vdf
 
 "${DECK[@]}" 'install -Dm755 /dev/stdin "$HOME/.local/bin/wow-forever-direct"' <<'EOF'
 #!/usr/bin/env bash
