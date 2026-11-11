@@ -1,5 +1,6 @@
 # Tdarr distributed worker, runs as a DaemonSet on every node labelled
-# workload=media (work-vm-{00,01,02}).
+# workload=media (work-vm-{00,01,02}), plus nodes labelled tdarr=strata-idle,
+# where it transcodes only while Strata is idle (tdarr-strata-yield.yaml).
 #
 # Each pod registers as ${HOSTNAME}-pod (downward API) so the server sees
 # them as distinct nodes. CPU limit is ~80% of an 8c/16t Ryzen 7 7700.
@@ -45,8 +46,15 @@ spec:
                 app: tdarr-node
         spec:
             enableServiceLinks: false
-            nodeSelector:
-                workload: media
+            serviceAccountName: tdarr-node
+            affinity:
+                nodeAffinity:
+                    requiredDuringSchedulingIgnoredDuringExecution:
+                        nodeSelectorTerms:
+                            - matchExpressions:
+                                  - {key: workload, operator: In, values: [media]}
+                            - matchExpressions:
+                                  - {key: tdarr, operator: In, values: [strata-idle]}
             tolerations:
                 - key: dedicated
                   operator: Equal
@@ -95,6 +103,9 @@ spec:
                         mountPath: /media
                       - name: sidecar
                         mountPath: /sidecar
+                      # s6 runs it next to tdarr_node; see tdarr-strata-yield.yaml.
+                      - name: strata-yield
+                        mountPath: /etc/services.d/strata-yield
                   resources:
                       requests:
                           memory: 1Gi
@@ -139,6 +150,10 @@ spec:
                           memory: 128Mi
                           cpu: 100m
             volumes:
+                - name: strata-yield
+                  configMap:
+                      name: tdarr-strata-yield
+                      defaultMode: 0755
                 - name: configs
                   emptyDir: {}
                 - name: sidecar
