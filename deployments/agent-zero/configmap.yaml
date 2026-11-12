@@ -1,0 +1,59 @@
+# Seeded once into /a0/usr/plugins/_model_config/presets.yaml. After that the
+# file belongs to Agent Zero (the preset editor in Settings rewrites it), so
+# changing this ConfigMap does nothing until that file is deleted.
+#
+# chat: Strata through its gateway. Thinking off and the instruct sampling
+#   preset, the same as pi in dotfiles nix/home/modules/pi.nix. Priority hot:
+#   she is a person waiting at a browser, like interactive pi.
+# utility: gemma-4-12B on work-vm-00. Agent Zero uses it for history
+#   compaction and memory extraction, text-in text-out with no tool choice,
+#   and it keeps those calls out of Strata's one-at-a-time queue.
+# embedding: multilingual on CPU in the pod. The image default
+#   (all-MiniLM-L6-v2) is English-only and she will write in Spanish.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-zero-seed
+  namespace: agent-zero
+data:
+  presets.yaml: |
+    - name: Default
+      chat:
+        provider: other
+        name: qwen3.8-flash-next-iq3_xxs
+        api_base: http://strata.strata.svc.cluster.local:8080/v1
+        ctx_length: 131072
+        ctx_history: 0.7
+        vision: true
+        max_embeds: 10
+        rl_requests: 0
+        rl_input: 0
+        rl_output: 0
+        kwargs:
+          temperature: 0.7
+          top_p: 0.8
+          extra_headers:
+            X-Strata-Priority: hot
+          extra_body:
+            top_k: 20
+            min_p: 0
+            presence_penalty: 1.5
+            chat_template_kwargs:
+              enable_thinking: false
+      utility:
+        provider: llama_cpp
+        name: gemma-4-12B-it-qat-UD-Q4_K_XL.gguf
+        api_base: http://work-vm-00:8080/v1
+        ctx_length: 32768
+        ctx_input: 0.7
+        rl_requests: 0
+        rl_input: 0
+        rl_output: 0
+        kwargs: {}
+      embedding:
+        provider: huggingface
+        name: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+        api_base: ""
+        rl_requests: 0
+        rl_input: 0
+        kwargs: {}

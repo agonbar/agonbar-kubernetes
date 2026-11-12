@@ -1,0 +1,19 @@
+# /a0/usr: settings, model presets, chats, memory, knowledge and the agent's
+# workdir. Only usr/ is persisted, not all of /a0: the image copies its code into
+# /a0 on first boot and never again, so a whole-/a0 volume would freeze the code
+# at whatever version first ran and make image upgrades do nothing.
+#
+# local-path for the same reason as hermes: no SQLite or FAISS over the
+# tailnet-iSCSI classes from ovh02 (~110 ms to nas02).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: agent-zero-usr
+  namespace: agent-zero
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 20Gi

@@ -1,0 +1,117 @@
+# Agent Zero (agent0ai/agent-zero): a general-purpose agent with a chat web UI,
+# for a non-technical user (slides, research, worksheets). The container is the
+# sandbox: the agent runs code as root inside it, under supervisord with nginx,
+# sshd (its own code-execution channel, never exposed), cron and a bundled
+# SearXNG that serves its web search.
+#
+# Hardening, because ovh02 already had one cryptojacking incident:
+#   - no service account token, so a shell in here cannot talk to the API
+#   - not privileged, no host mounts, CPU and memory capped
+#   - egress limited by networkpolicy.yaml to DNS, Strata, work-vm-00's
+#     llama.cpp and the public internet
+#
+# Settings come from the environment: A0_SET_<name> for settings.py fields
+# and API_KEY_<PROVIDER> for keys (both read with os.getenv). The model presets
+# are a file, seeded by the init container.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-zero
+  namespace: agent-zero
+  labels:
+    app: agent-zero
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate          # one RWO volume; never two writers
+  selector:
+    matchLabels:
+      app: agent-zero
+  template:
+    metadata:
+      labels:
+        app: agent-zero
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      # Same always-on node as hermes (ovh02). local-path pins the volume to
+      # the first node it lands on.
+      nodeSelector:
+        workload: agents
+      volumes:
+        - name: usr
+          persistentVolumeClaim:
+            claimName: agent-zero-usr
+        - name: seed
+          configMap:
+            name: agent-zero-seed
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi
+      initContainers:
+        - name: seed-presets
+          image: busybox:1.37.0
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              d=/a0/usr/plugins/_model_config
+              mkdir -p "$d"
+              [ -f "$d/presets.yaml" ] || cp /seed/presets.yaml "$d/presets.yaml"
+          volumeMounts:
+            - name: usr
+              mountPath: /a0/usr
+            - name: seed
+              mountPath: /seed
+      containers:
+        - name: agent-zero
+          image: agent0ai/agent-zero:v2.15@sha256:05d6ab347bd7db4b6bd5a7d902c9965281ff852ff23f29fffcc1c8919e628bd8
+          env:
+            # Web UI login. AUTH_LOGIN is the username, not a boolean.
+            - name: AUTH_LOGIN
+              valueFrom:
+                secretKeyRef:
+                  name: agent-zero-auth
+                  key: AUTH_LOGIN
+            - name: AUTH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: agent-zero-auth
+                  key: AUTH_PASSWORD
+            # Strata's :8080 takes no key; LiteLLM's openai client still wants
+            # one. Priority travels in X-Strata-Priority (see the configmap).
+            - name: API_KEY_OTHER
+              value: none
+            - name: A0_SET_timezone
+              value: Europe/Madrid
+            - name: A0_SET_time_format
+              value: 24h
+            # Image upgrades go through this manifest, not the in-app updater.
+            - name: A0_SET_update_check_enabled
+              value: "false"
+          ports:
+            - name: http
+              containerPort: 80
+          startupProbe:
+            tcpSocket:
+              port: 80
+            periodSeconds: 10
+            failureThreshold: 60     # first boot builds the venv and pulls the embedding model
+          livenessProbe:
+            tcpSocket:
+              port: 80
+            periodSeconds: 30
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 500m
+              memory: 2Gi
+            limits:
+              cpu: "4"
+              memory: 6Gi
+          volumeMounts:
+            - name: usr
+              mountPath: /a0/usr
+            - name: dshm
+              mountPath: /dev/shm
