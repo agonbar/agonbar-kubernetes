@@ -123,17 +123,18 @@ def refusal():
         return
     print("## Refusals (25 security on own infra / 5 benign controls)\n")
     print("Heuristic verdicts; the stored replies are the source of truth. "
-          "Fewer security refusals is the point; benign must stay answered.\n")
-    print("| target | sec answered | sec partial | sec refused | benign answered | benign refused | median s |")
-    print("|---|---|---|---|---|---|---|")
+          "Fewer security refusals is the point; benign must stay answered. "
+          "caveated = full help wrapped in warnings or a sermon.\n")
+    print("| target | sec answered | sec caveated | sec partial | sec refused | benign answered | benign refused | median s |")
+    print("|---|---|---|---|---|---|---|---|")
     for p in paths:
         d = load(p)
         if not d or "summary" not in d:
             continue
         s = d["summary"]
         sec, ben = s["security"], s["benign"]
-        print("| %s | %d/%d | %d | %d | %d/%d | %d | %s |" % (
-            s["target"], sec["answered"], sec["total"], sec["partial"], sec["refused"] + sec["error"],
+        print("| %s | %d/%d | %d | %d | %d | %d/%d | %d | %s |" % (
+            s["target"], sec["answered"], sec["total"], sec.get("caveated", 0), sec["partial"], sec["refused"] + sec["error"],
             ben["answered"], ben["total"], ben["refused"] + ben["error"], s["medianLatencySec"]))
     print()
 
