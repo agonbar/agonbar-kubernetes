@@ -66,6 +66,12 @@ spec:
               d=/a0/usr/plugins/_model_config
               mkdir -p "$d"
               [ -f "$d/presets.yaml" ] || cp /seed/presets.yaml "$d/presets.yaml"
+              # Whisper plugin config. Its own migration seeds language "en",
+              # and whisper.cpp forced to the wrong language translates
+              # instead of transcribing. Seeded once; the UI owns it after.
+              w=/a0/usr/plugins/_whisper_stt
+              mkdir -p "$w"
+              [ -f "$w/config.json" ] || cp /seed/whisper-config.json "$w/config.json"
           volumeMounts:
             - name: usr
               mountPath: /a0/usr
