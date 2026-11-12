@@ -49,6 +49,9 @@ spec:
           configMap:
             name: agent-zero-no-tunnel
             defaultMode: 0755
+        - name: whisper-runtime
+          configMap:
+            name: agent-zero-whisper-runtime
         - name: dshm
           emptyDir:
             medium: Memory
@@ -95,6 +98,11 @@ spec:
                 secretKeyRef:
                   name: agent-zero-auth
                   key: API_KEY_LLAMA_CPP
+            # Microphone STT: the Wyoming bridge on work-vm-00 (whisper.cpp
+            # large-v3-turbo), the same one Home Assistant uses. See
+            # whisper-runtime.yaml.
+            - name: WYOMING_STT_ADDR
+              value: 100.72.0.8:7891
             - name: A0_SET_timezone
               value: Europe/Madrid
             - name: A0_SET_time_format
@@ -130,3 +138,6 @@ spec:
             - name: no-tunnel
               mountPath: /exe/run_tunnel_api.sh
               subPath: run_tunnel_api.sh
+            - name: whisper-runtime
+              mountPath: /a0/plugins/_whisper_stt/helpers/runtime.py
+              subPath: runtime.py
