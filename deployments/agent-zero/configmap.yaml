@@ -57,3 +57,18 @@ data:
         rl_requests: 0
         rl_input: 0
         kwargs: {}
+---
+# Replaces the image's /exe/run_tunnel_api.sh. That service lets the UI (or the
+# agent, talked into it by a web page) open a public tunnel to the web UI,
+# which would bypass the basicAuth on the Ingress. supervisord restarts what
+# exits, so the stub sleeps instead.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-zero-no-tunnel
+  namespace: agent-zero
+data:
+  run_tunnel_api.sh: |
+    #!/bin/sh
+    echo "tunnel API disabled by agonbar-kubernetes deployments/agent-zero"
+    exec sleep infinity

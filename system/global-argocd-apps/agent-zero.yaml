@@ -9,6 +9,8 @@ spec:
     repoURL: 'https://github.com/agonbar/agonbar-kubernetes.git'
     path: deployments/agent-zero
     targetRevision: HEAD
+    plugin:
+      name: envsubst-plugin-v1
   destination:
     namespace: agent-zero
     name: in-cluster

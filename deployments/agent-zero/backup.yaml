@@ -1,0 +1,65 @@
+# Nightly tar of /a0/usr (chats, memory, knowledge, her documents) to nas02
+# over NFS. The source is a local-path RWO volume on ovh02, so the job is pinned
+# to the same node; RWO allows a second pod there. 14 days kept.
+#
+# Restore: scale the deployment to 0, mount both PVCs in a throwaway pod on
+# ovh02, `tar -xzf <file> -C /a0/usr`, scale back to 1.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: agent-zero-backups
+  namespace: agent-zero
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: truenas-nfs-raid
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: agent-zero-backup
+  namespace: agent-zero
+spec:
+  schedule: "30 3 * * *"
+  timeZone: Europe/Madrid
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          nodeSelector:
+            workload: agents
+          containers:
+            - name: tar
+              image: busybox:1.37.0
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  out="/backups/a0-usr-$(date +%Y%m%d-%H%M%S).tar.gz"
+                  tar -czf "$out.part" -C /a0/usr .
+                  tar -tzf "$out.part" > /dev/null
+                  mv "$out.part" "$out"
+                  find /backups -name 'a0-usr-*.tar.gz' -mtime +14 -delete
+                  ls -la /backups | tail -5
+              volumeMounts:
+                - name: usr
+                  mountPath: /a0/usr
+                  readOnly: true
+                - name: backups
+                  mountPath: /backups
+          volumes:
+            - name: usr
+              persistentVolumeClaim:
+                claimName: agent-zero-usr
+            - name: backups
+              persistentVolumeClaim:
+                claimName: agent-zero-backups
