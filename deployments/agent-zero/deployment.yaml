@@ -83,6 +83,14 @@ spec:
             # one. Priority travels in X-Strata-Priority (see the configmap).
             - name: API_KEY_OTHER
               value: none
+            # gemma's llama-server on work-vm-00 does check a bearer token
+            # (--api-key-file, agenix llm-api-key). Without it every utility
+            # call (history compaction, behaviour rules, memory) is a 401.
+            - name: API_KEY_LLAMA_CPP
+              valueFrom:
+                secretKeyRef:
+                  name: agent-zero-auth
+                  key: API_KEY_LLAMA_CPP
             - name: A0_SET_timezone
               value: Europe/Madrid
             - name: A0_SET_time_format

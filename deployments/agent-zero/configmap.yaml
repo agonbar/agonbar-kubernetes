@@ -5,7 +5,7 @@
 # chat: Strata through its gateway. Thinking off and the instruct sampling
 #   preset, the same as pi in dotfiles nix/home/modules/pi.nix. Priority hot:
 #   she is a person waiting at a browser, like interactive pi.
-# utility: gemma-4-12B on work-vm-00. Agent Zero uses it for history
+# utility: gemma-4-12B on work-vm-00 (bearer key in API_KEY_LLAMA_CPP). Agent Zero uses it for history
 #   compaction and memory extraction, text-in text-out with no tool choice,
 #   and it keeps those calls out of Strata's one-at-a-time queue.
 # embedding: multilingual on CPU in the pod. The image default
