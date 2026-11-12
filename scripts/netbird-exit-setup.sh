@@ -16,6 +16,11 @@
 #
 #   scripts/netbird-exit-setup.sh            create what is missing
 #   scripts/netbird-exit-setup.sh status     show what exists
+#   scripts/netbird-exit-setup.sh guest EMAIL [HOURS]
+#       wait up to HOURS (default 24) for EMAIL's first SSO login, then approve
+#       the user as a plain `user` with auto_groups [exit-users] and turn off
+#       login expiration on each of their peers, so they are not sent back to
+#       the Authentik login every 24 h. Stops once a peer has been handled.
 set -euo pipefail
 
 API=https://netbird.senseivision.ai/api
@@ -77,6 +82,39 @@ if [ "${1:-}" = status ]; then
   nb GET peers | jq -r '.[] | select(any(.groups[]; .name | startswith("exit-"))) |
     "peer   \(.name)  \(.ip)  connected=\(.connected)  groups=\(.groups | map(.name) | join(","))"'
   exit
+fi
+
+if [ "${1:-}" = guest ]; then
+  email=${2:?usage: $0 guest EMAIL [HOURS]}
+  deadline=$(( $(date +%s) + ${3:-24} * 3600 ))
+  users=$(group_id exit-users)
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    user=$(nb GET users | jq -c --arg e "$email" '.[] | select(.email == $e)' || true)
+    if [ -n "$user" ]; then
+      uid=$(jq -r .id <<<"$user")
+      if [ "$(jq -r .pending_approval <<<"$user")" = true ]; then
+        nb POST "users/$uid/approve" >/dev/null && echo "$(date -Is) approved $email"
+      fi
+      if ! jq -e --arg g "$users" '.auto_groups | index($g)' <<<"$user" >/dev/null || [ "$(jq -r .role <<<"$user")" != user ]; then
+        nb PUT "users/$uid" "$(jq -nc --arg g "$users" '{role: "user", auto_groups: [$g], is_blocked: false}')" >/dev/null &&
+          echo "$(date -Is) $email -> role user, auto_groups [exit-users]"
+      fi
+      done_peers=0
+      while read -r peer; do
+        [ -n "$peer" ] || continue
+        done_peers=1
+        if [ "$(jq -r .login_expiration_enabled <<<"$peer")" = true ]; then
+          nb PUT "peers/$(jq -r .id <<<"$peer")" "$(jq -c '{name, ssh_enabled, login_expiration_enabled: false,
+            inactivity_expiration_enabled: false}' <<<"$peer")" >/dev/null &&
+            echo "$(date -Is) login expiration off on peer $(jq -r .name <<<"$peer")"
+        fi
+      done < <(nb GET peers | jq -c --arg u "$uid" '.[] | select(.user_id == $u)')
+      [ "$done_peers" = 1 ] && { echo "$(date -Is) done"; exit 0; }
+    fi
+    sleep 30
+  done
+  echo "$(date -Is) gave up waiting for $email" >&2
+  exit 1
 fi
 
 users=$(ensure_group exit-users)
