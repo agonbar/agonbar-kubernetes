@@ -1,0 +1,53 @@
+# Default deny, then only what the agent needs. The agent runs arbitrary code
+# as root inside the pod, so the rest of the cluster and the home LANs stay out
+# of reach: no other Services, no tailnet, no private ranges.
+#
+# Ingress is open on 80 so the Service works from inside the cluster and
+# NetBird; kubectl port-forward does not go through NetworkPolicy anyway.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agent-zero
+  namespace: agent-zero
+spec:
+  podSelector:
+    matchLabels:
+      app: agent-zero
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - ports:
+        - port: 80
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {port: 53, protocol: UDP}
+        - {port: 53, protocol: TCP}
+    # Strata's priority gateway (Service :8080 -> gateway container :8080).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: strata
+      ports:
+        - port: 8080
+    # gemma-4-12B (llama.cpp) on work-vm-00, over the tailnet.
+    - to:
+        - ipBlock:
+            cidr: 100.72.0.8/32
+      ports:
+        - port: 8080
+    # Public internet: web search, page fetches, pip/apt, Hugging Face.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 100.64.0.0/10
+              - 169.254.0.0/16
