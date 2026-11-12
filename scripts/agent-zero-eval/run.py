@@ -22,6 +22,23 @@ PORT = 18080
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 TASKS = {
+    # One-off setup, kept here so it can be replayed on a fresh volume. Agent
+    # Zero stores it as a persistent behaviour rule (needs the utility model).
+    "behavior": {
+        "msg": (
+            "Ajusta tu comportamiento de forma permanente (usa tu herramienta de ajuste de "
+            "comportamiento): cuando generes documentos Word (.docx) o PowerPoint (.pptx), "
+            "créalos con python-docx o python-pptx ejecutando /opt/venv-a0/bin/python, con "
+            "formato real (títulos con estilos de encabezado, negritas, listas, tablas, saltos "
+            "de página) y NUNCA metas sintaxis markdown como ##, ** o --- dentro del documento. "
+            "En las presentaciones añade una imagen o ilustración sencilla por diapositiva "
+            "cuando sea posible. Antes de entregar, convierte el archivo a PDF con "
+            "'soffice --headless --convert-to pdf' para comprobar que se abre y se ve bien. "
+            "Tus usuarios son maestros de primaria: los ejercicios y contenidos deben "
+            "ajustarse al currículo del curso indicado."
+        ),
+        "files": [],
+    },
     "slides": {
         "msg": (
             "Prepárame una presentación de PowerPoint de 8 diapositivas sobre el ciclo "
