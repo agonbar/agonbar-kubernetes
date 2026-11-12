@@ -1,0 +1,170 @@
+# Two NetBird internet exits for guest peers: one leaves through a lamg house
+# node ("Salida casa"), the other through ovh02 ("Salida OVH"). A guest selects
+# one in the NetBird client and all their traffic leaves from here, encrypted
+# up to this point, instead of in clear through their own ISP.
+#
+# The NetBird side (groups exit-users/exit-home/exit-ovh, the two 0.0.0.0/0
+# routes, the policies and the setup keys) lives in the mgmt DB and is created
+# by scripts/netbird-exit-setup.sh, which also writes the Secret
+# netbird-exit-keys here. Nothing secret is in git.
+#
+# The fence: an exit route covers ALL of 0.0.0.0/0, private ranges included, so
+# NetBird policies cannot stop a guest from reaching the LAN, the cluster or the
+# meshes through the exit. The NetworkPolicy below does: the pods only reach
+# public addresses. The keys are ephemeral and the state is an emptyDir, so a
+# restarted pod enrolls as a fresh peer and the old one is dropped after 10 min.
+#
+# Node choice is by the semantic label egress-site, set by hand:
+#   kubectl label node nas02-k3s egress-site=lamg
+#   kubectl label node ovh02 egress-site=ovh
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: exit-home
+  namespace: netbird-exit
+  labels:
+    app: netbird-exit
+    exit: home
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: netbird-exit
+      exit: home
+  template:
+    metadata:
+      labels:
+        app: netbird-exit
+        exit: home
+    spec:
+      nodeSelector:
+        egress-site: lamg
+      # Public resolvers only: cluster DNS sits on a private address the
+      # NetworkPolicy blocks, and must not be reachable through the exit anyway.
+      dnsPolicy: None
+      dnsConfig:
+        nameservers: [1.1.1.1, 9.9.9.9]
+      containers:
+        - name: netbird
+          image: netbirdio/netbird:0.76.0   # pinned to the management version
+          env:
+            - name: NB_MANAGEMENT_URL
+              value: https://netbird.senseivision.ai
+            - name: NB_HOSTNAME
+              value: exit-home
+            - name: NB_SETUP_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: netbird-exit-keys
+                  key: NB_SETUP_KEY_HOME
+          securityContext:
+            capabilities:
+              add: [NET_ADMIN]    # WireGuard + nftables masquerade + ip_forward
+          volumeMounts:
+            - name: nb-config
+              mountPath: /etc/netbird
+            - name: tun
+              mountPath: /dev/net/tun
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+      volumes:
+        - name: nb-config
+          emptyDir: {}
+        - name: tun
+          hostPath:
+            path: /dev/net/tun
+            type: CharDevice
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: exit-ovh
+  namespace: netbird-exit
+  labels:
+    app: netbird-exit
+    exit: ovh
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: netbird-exit
+      exit: ovh
+  template:
+    metadata:
+      labels:
+        app: netbird-exit
+        exit: ovh
+    spec:
+      nodeSelector:
+        egress-site: ovh
+      dnsPolicy: None
+      dnsConfig:
+        nameservers: [1.1.1.1, 9.9.9.9]
+      containers:
+        - name: netbird
+          image: netbirdio/netbird:0.76.0
+          env:
+            - name: NB_MANAGEMENT_URL
+              value: https://netbird.senseivision.ai
+            - name: NB_HOSTNAME
+              value: exit-ovh
+            - name: NB_SETUP_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: netbird-exit-keys
+                  key: NB_SETUP_KEY_OVH
+          securityContext:
+            capabilities:
+              add: [NET_ADMIN]
+          volumeMounts:
+            - name: nb-config
+              mountPath: /etc/netbird
+            - name: tun
+              mountPath: /dev/net/tun
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+      volumes:
+        - name: nb-config
+          emptyDir: {}
+        - name: tun
+          hostPath:
+            path: /dev/net/tun
+            type: CharDevice
+---
+# Public internet only. Nothing may come in from the cluster, and nothing may go
+# out to private, CGNAT (Tailscale), link-local or NetBird space. ovh02's own
+# public IP is excluded too: from a pod on ovh02 it reaches the host directly,
+# past the firewall that faces the internet.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: netbird-exit-public-only
+  namespace: netbird-exit
+spec:
+  podSelector:
+    matchLabels:
+      app: netbird-exit
+  policyTypes: [Ingress, Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 100.64.0.0/10
+              - 169.254.0.0/16
+              - 80.241.214.254/32
