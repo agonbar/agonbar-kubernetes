@@ -1,4 +1,4 @@
-# ClusterIP only, no Ingress yet: tested by port-forward first. The web UI and
+# Reached from outside through ingress.yaml. The web UI and
 # the /api_message endpoint both answer on 80 (nginx in the image).
 apiVersion: v1
 kind: Service

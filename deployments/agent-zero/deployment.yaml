@@ -45,6 +45,10 @@ spec:
         - name: seed
           configMap:
             name: agent-zero-seed
+        - name: no-tunnel
+          configMap:
+            name: agent-zero-no-tunnel
+            defaultMode: 0755
         - name: dshm
           emptyDir:
             medium: Memory
@@ -123,3 +127,6 @@ spec:
               mountPath: /a0/usr
             - name: dshm
               mountPath: /dev/shm
+            - name: no-tunnel
+              mountPath: /exe/run_tunnel_api.sh
+              subPath: run_tunnel_api.sh
