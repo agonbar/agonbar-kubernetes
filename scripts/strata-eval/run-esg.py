@@ -13,7 +13,7 @@ import os, subprocess, sys, json
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import targets
 
-EVAL = "/mnt/strata/eval"
+EVAL = os.environ.get("STRATA_EVAL_DIR", "/mnt/strata/eval")
 
 if len(sys.argv) < 2:
     raise SystemExit(__doc__)

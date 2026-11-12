@@ -240,7 +240,8 @@ def main():
         done = {r["id"]: r for r in json.load(open(a.out)).get("results", [])}
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
 
-    results = []
+    ids = {c["id"] for c in cases}
+    results = [r for i, r in done.items() if i not in ids]   # --only with --resume keeps the file's other cases
     for n, c in enumerate(cases, 1):
         if c["id"] in done:
             results.append(done[c["id"]])

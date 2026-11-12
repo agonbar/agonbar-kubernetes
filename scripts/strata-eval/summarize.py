@@ -10,7 +10,7 @@ results/{toolcall,agent,longctx,vision,sampling-speed}*.json. Runs repeated with
 import glob, json, os, re, statistics
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ESG = "/mnt/strata/eval/esg-cases/_results"
+ESG = os.path.join(os.environ.get("STRATA_EVAL_DIR", "/mnt/strata/eval"), "esg-cases/_results")
 
 
 def load(p):
@@ -129,7 +129,7 @@ def refusal():
     print("|---|---|---|---|---|---|---|---|")
     for p in paths:
         d = load(p)
-        if not d or "summary" not in d:
+        if not d or not d.get("summary"):   # a run still in progress (refusal_bench.py --resume)
             continue
         s = d["summary"]
         sec, ben = s["security"], s["benign"]

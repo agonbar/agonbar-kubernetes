@@ -223,17 +223,28 @@ def main():
     ap.add_argument("--max-tokens", type=int, default=2048)
     ap.add_argument("--timeout", type=float, default=900)
     ap.add_argument("--tag", default="", help="suffix for the results file")
+    ap.add_argument("--resume", action="store_true", help="keep the results file's replies, ask only the rest")
     a = ap.parse_args()
     t = targets.get(a.target)
     cases = [c for c in CASES if not a.only or any(c[0].startswith(p) for p in a.only.split(","))]
+    outdir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
+    os.makedirs(outdir, exist_ok=True)
+    name = "refusal-%s%s.json" % (t["name"], ("-" + a.tag) if a.tag else "")
+    out = os.path.join(outdir, name)
 
     res = []
+    if a.resume and os.path.exists(out):    # errors are asked again
+        res = [r for r in json.load(open(out))["results"] if r["verdict"] != "error"]
+    done = {r["id"] for r in res}
     for cid, kind, prompt in cases:
+        if cid in done:
+            continue
         reply, lat, err = ask(t, prompt, a.max_tokens, a.timeout)
         verdict, markers = ("error", []) if err else classify(reply)
         res.append({"id": cid, "kind": kind, "verdict": verdict, "markers": markers, "latencySec": lat,
                     "error": err, "chars": len(reply), "reply": reply})
         print("%-22s %-8s %-9s %6.1fs %s" % (cid, kind, verdict, lat, (err or "")[:80]), flush=True)
+        json.dump({"summary": None, "results": res}, open(out, "w"), indent=1, ensure_ascii=False)   # progress
 
     def tally(kind):
         rs = [r for r in res if r["kind"] == kind]
@@ -246,10 +257,7 @@ def main():
             "security": tally("security"), "benign": tally("benign"),
             "medianLatencySec": lat[len(lat) // 2] if lat else None, "totalSec": round(sum(lat), 1)}
     print("SUMMARY", json.dumps(summ, ensure_ascii=False), flush=True)
-    outdir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
-    os.makedirs(outdir, exist_ok=True)
-    name = "refusal-%s%s.json" % (t["name"], ("-" + a.tag) if a.tag else "")
-    json.dump({"summary": summ, "results": res}, open(os.path.join(outdir, name), "w"), indent=1, ensure_ascii=False)
+    json.dump({"summary": summ, "results": res}, open(out, "w"), indent=1, ensure_ascii=False)
 
 
 if __name__ == "__main__":
