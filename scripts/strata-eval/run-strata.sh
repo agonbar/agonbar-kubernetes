@@ -2,7 +2,7 @@
 # Runs the whole battery against Strata, one request at a time, cheapest-signal first.
 # Needs the port-forward up in another shell:
 #   kubectl --context lamg port-forward -n strata svc/strata 18091:8080
-# Usage: run-strata.sh [step...]   steps: smoke esg-nothink tools-nothink agent agent-nothink longctx tools-think esg-think vision
+# Usage: run-strata.sh [step...]   steps: smoke esg-nothink tools-nothink agent agent-nothink longctx tools-think esg-think refusal vision
 #        run-strata.sh sampling-speed sampling-tools sampling-esg sampling-agent   (not in the default list:
 #        greedy against the model card's sampling presets, ~2.5 h)
 # Vision goes last: Strata loads the encoder on the first image and keeps it ~120 s,
@@ -13,7 +13,7 @@ cd "$(dirname "$0")"
 L=/tmp/strata-eval-logs
 mkdir -p "$L"
 steps=("$@")
-[ ${#steps[@]} -eq 0 ] && steps=(smoke esg-nothink tools-nothink agent agent-nothink longctx tools-think esg-think vision)
+[ ${#steps[@]} -eq 0 ] && steps=(smoke esg-nothink tools-nothink agent agent-nothink longctx tools-think esg-think refusal vision)
 
 for s in "${steps[@]}"; do
   echo "== $(date +%T) $s"
@@ -28,6 +28,7 @@ for s in "${steps[@]}"; do
     agent)         ./run_agent.py strata --task-timeout 3600 > "$L/$s.log" 2>&1 ;;
     agent-nothink) CLAUDE_CODE_EXTRA_BODY='{"thinking":{"type":"disabled"}}' \
                      ./run_agent.py strata --tag nothink --task-timeout 3600 > "$L/$s.log" 2>&1 ;;
+    refusal)       ./refusal_bench.py strata-nothink > "$L/$s.log" 2>&1 ;;
     vision)        ./vision.py strata-nothink > "$L/$s.log" 2>&1 ;;
     # sampled runs differ run to run: repeats, each to its own file (run-esg.py --resume would mix them).
     # Rerunning a step finishes what is missing: a complete file is skipped case by case.

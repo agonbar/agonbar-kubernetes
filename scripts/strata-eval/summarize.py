@@ -117,6 +117,27 @@ def vision():
     print()
 
 
+def refusal():
+    paths = sorted(glob.glob(os.path.join(HERE, "results/refusal-*.json")))
+    if not paths:
+        return
+    print("## Refusals (25 security on own infra / 5 benign controls)\n")
+    print("Heuristic verdicts; the stored replies are the source of truth. "
+          "Fewer security refusals is the point; benign must stay answered.\n")
+    print("| target | sec answered | sec partial | sec refused | benign answered | benign refused | median s |")
+    print("|---|---|---|---|---|---|---|")
+    for p in paths:
+        d = load(p)
+        if not d or "summary" not in d:
+            continue
+        s = d["summary"]
+        sec, ben = s["security"], s["benign"]
+        print("| %s | %d/%d | %d | %d | %d/%d | %d | %s |" % (
+            s["target"], sec["answered"], sec["total"], sec["partial"], sec["refused"] + sec["error"],
+            ben["answered"], ben["total"], ben["refused"] + ben["error"], s["medianLatencySec"]))
+    print()
+
+
 def spread(xs):
     m = statistics.mean(xs)
     return "%.1f ± %.1f (%s-%s)" % (m, statistics.stdev(xs) if len(xs) > 1 else 0, min(xs), max(xs))
@@ -168,4 +189,4 @@ def repeats():
 
 
 if __name__ == "__main__":
-    esg(); toolcall(); agent(); harnesses(); longctx(); vision(); repeats()
+    esg(); toolcall(); agent(); harnesses(); longctx(); vision(); refusal(); repeats()
