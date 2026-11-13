@@ -6,14 +6,14 @@
 
 Results go to /mnt/strata/eval/esg-cases/_results/<target>[-<tag>].json (next to the cases,
 never into this repo: the answers quote company data). Resumable (--resume): an existing
-file's cases are kept whatever produced them, so give every configuration and every repeat
+file's cases are kept whatever produced them (except request errors, which run again), so give every configuration and every repeat
 its own target name or --tag.
 """
 import os, subprocess, sys, json
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import targets
 
-EVAL = "/mnt/strata/eval"
+EVAL = os.environ.get("STRATA_EVAL_DIR", "/mnt/strata/eval")
 
 if len(sys.argv) < 2:
     raise SystemExit(__doc__)

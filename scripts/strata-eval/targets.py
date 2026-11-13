@@ -17,6 +17,9 @@ run config), and Claude Code sends none. A sampling preset is appended to a targ
 "+": `strata-nothink+qwen-instruct` merges SAMPLING["qwen-instruct"] into both API bodies, and
 the results files carry the full name. Strata takes these fields on both APIs (min_p and the
 penalties too, on /v1/messages); top_k is clamped to 64.
+
+A label after "@" names the model a run measured and only changes the results file names:
+`STRATA_URL=... STRATA_MODEL=swift-1.5 run-esg.py strata-nothink@swift` (run-strata.sh: STRATA_LABEL=swift).
 """
 import json, os
 
@@ -69,6 +72,7 @@ SAMPLING = {
 
 def get(name):
     base, _, preset = name.partition("+")
+    base = base.partition("@")[0]
     if base not in TARGETS:
         raise SystemExit("unknown target %r, one of: %s" % (base, ", ".join(TARGETS)))
     if preset and preset not in SAMPLING:

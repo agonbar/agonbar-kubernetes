@@ -10,7 +10,7 @@ results/{toolcall,agent,longctx,vision,sampling-speed}*.json. Runs repeated with
 import glob, json, os, re, statistics
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ESG = "/mnt/strata/eval/esg-cases/_results"
+ESG = os.path.join(os.environ.get("STRATA_EVAL_DIR", "/mnt/strata/eval"), "esg-cases/_results")
 
 
 def load(p):
@@ -117,6 +117,28 @@ def vision():
     print()
 
 
+def refusal():
+    paths = sorted(glob.glob(os.path.join(HERE, "results/refusal-*.json")))
+    if not paths:
+        return
+    print("## Refusals (25 security on own infra / 5 benign controls)\n")
+    print("Heuristic verdicts; the stored replies are the source of truth. "
+          "Fewer security refusals is the point; benign must stay answered. "
+          "caveated = full help wrapped in warnings or a sermon.\n")
+    print("| target | sec answered | sec caveated | sec partial | sec refused | benign answered | benign refused | median s |")
+    print("|---|---|---|---|---|---|---|---|")
+    for p in paths:
+        d = load(p)
+        if not d or not d.get("summary"):   # a run still in progress (refusal_bench.py --resume)
+            continue
+        s = d["summary"]
+        sec, ben = s["security"], s["benign"]
+        print("| %s | %d/%d | %d | %d | %d | %d/%d | %d | %s |" % (
+            s["target"], sec["answered"], sec["total"], sec.get("caveated", 0), sec["partial"], sec["refused"] + sec["error"],
+            ben["answered"], ben["total"], ben["refused"] + ben["error"], s["medianLatencySec"]))
+    print()
+
+
 def spread(xs):
     m = statistics.mean(xs)
     return "%.1f ± %.1f (%s-%s)" % (m, statistics.stdev(xs) if len(xs) > 1 else 0, min(xs), max(xs))
@@ -168,4 +190,4 @@ def repeats():
 
 
 if __name__ == "__main__":
-    esg(); toolcall(); agent(); harnesses(); longctx(); vision(); repeats()
+    esg(); toolcall(); agent(); harnesses(); longctx(); vision(); refusal(); repeats()
