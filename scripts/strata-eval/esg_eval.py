@@ -243,7 +243,8 @@ def main():
     ids = {c["id"] for c in cases}
     results = [r for i, r in done.items() if i not in ids]   # --only with --resume keeps the file's other cases
     for n, c in enumerate(cases, 1):
-        if c["id"] in done:
+        # a case that ended in a request error (tunnel drop, timeout) is not a model result: run it again
+        if c["id"] in done and not done[c["id"]].get("error"):
             results.append(done[c["id"]])
             continue
         if a.replay:

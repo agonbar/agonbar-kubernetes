@@ -6,7 +6,7 @@
 
 Results go to /mnt/strata/eval/esg-cases/_results/<target>[-<tag>].json (next to the cases,
 never into this repo: the answers quote company data). Resumable (--resume): an existing
-file's cases are kept whatever produced them, so give every configuration and every repeat
+file's cases are kept whatever produced them (except request errors, which run again), so give every configuration and every repeat
 its own target name or --tag.
 """
 import os, subprocess, sys, json
