@@ -116,7 +116,7 @@ spec:
               # is down, overloaded or rate-limited. Strata serves one request
               # at a time, so a slow answer while a Paperclip run holds it is a
               # queue, not a failure, and does not trigger the fallback.
-              hermes config set model.default qwen3.8-flash-next-iq3_xxs
+              hermes config set model.default swift-1.5-heretic-v2-iq3_s-85g
               hermes config set fallback_model \
                 '[{"provider":"openai","model":"gemma-4-12b-free","base_url":"https://litellm.senseivision.ai/v1","key_env":"LITELLM_API_KEY"}]'
 

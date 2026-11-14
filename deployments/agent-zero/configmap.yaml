@@ -22,7 +22,7 @@ data:
     - name: Default
       chat:
         provider: other
-        name: qwen3.8-flash-next-iq3_xxs
+        name: swift-1.5-heretic-v2-iq3_s-85g
         api_base: http://strata.strata.svc.cluster.local:8080/v1
         ctx_length: 131072
         ctx_history: 0.7

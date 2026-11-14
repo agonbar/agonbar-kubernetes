@@ -464,7 +464,7 @@ class Strata:
 
     def ask(self, system, user, max_tokens=600):
         import urllib.request, time
-        body = json.dumps({"model": "qwen3.8-flash-next-iq3_xxs", "temperature": 0, "max_tokens": max_tokens,
+        body = json.dumps({"model": "swift-1.5-heretic-v2-iq3_s-85g", "temperature": 0, "max_tokens": max_tokens,
                            "response_format": {"type": "json_object"}, "chat_template_kwargs": {"enable_thinking": False},
                            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}).encode()
         for attempt in range(4):
