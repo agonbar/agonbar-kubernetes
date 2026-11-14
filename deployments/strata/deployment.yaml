@@ -7,7 +7,14 @@
 # Con 70 GiB de VM el setup no usa el modo low-RAM: copia los ~43 GB de expertos
 # a RAM fijada (mlock, por eso k3s corre con LimitMEMLOCK=infinity) en cada
 # arranque, de ahí la startupProbe larga.
-# Imagen construida en el propio nodo (código CPU nativo de Zen 4, sm_86).
+# Imagen construida en el propio nodo con scripts/strata-build-image.sh (v0.2.13,
+# motor 0.1.59, sm_86). El entrypoint de la v0.2.x (strata launch) movería
+# /data/models, packs y mtp a /data/Strata-data y rompería la vuelta a 296b59d2,
+# así que el contenedor arranca serve/server.py directamente con una config de
+# /data/config. Las del motor nuevo son *-v0213.json y strata-heretic-v2.json;
+# strata-iq3_xxs.json y /data/mtp son de la imagen vieja y no se tocan. Modelos y
+# packs van en solo lectura; el MTP del motor nuevo es una copia (/data/mtp-v0213).
+# Vuelta atrás: imagen 296b59d2 con MODEL/CONTEXT/VISION/GPU/PORT y sin command.
 # Strata atiende una generación cada vez. Delante, en el mismo pod, va
 # strata-gateway (scripts/strata-gateway): sirve el 8080 del Service y deja pasar
 # las peticiones por prioridad de cliente (cabecera X-Strata-Priority:
@@ -42,18 +49,15 @@ spec:
       terminationGracePeriodSeconds: 60
       containers:
         - name: strata
-          image: ghcr.io/agonbar/strata:296b59d2
-          env:
-            - name: MODEL
-              value: IQ3_XXS
-            - name: CONTEXT
-              value: "262144"
-            - name: VISION
-              value: "yes"
-            - name: GPU
-              value: "0"
-            - name: PORT
-              value: "8081"
+          image: ghcr.io/agonbar/strata:d2f09647
+          workingDir: /opt/strata/terminal
+          command:
+            - /opt/strata/terminal/python/bin/python3
+            - serve/server.py
+            - --engine=strata
+            - --config=/data/config/strata-iq3_xxs-v0213.json
+            - --port=8081
+            - --no-api-key  # el gateway pone la clave en el 8082
           ports:
             - name: engine
               containerPort: 8081
@@ -86,6 +90,14 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /data
+            - name: data
+              mountPath: /data/models
+              subPath: models
+              readOnly: true
+            - name: data
+              mountPath: /data/packs
+              subPath: packs
+              readOnly: true
         - name: gateway
           image: ghcr.io/agonbar/strata-gateway:26c85abb
           env:
