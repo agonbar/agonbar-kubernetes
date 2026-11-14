@@ -55,7 +55,7 @@ spec:
             - /opt/strata/terminal/python/bin/python3
             - serve/server.py
             - --engine=strata
-            - --config=/data/config/strata-iq3_xxs-v0213.json
+            - --config=/data/config/strata-heretic-v2.json
             - --port=8081
             - --no-api-key  # el gateway pone la clave en el 8082
           ports:
