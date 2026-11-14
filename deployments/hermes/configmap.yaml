@@ -10,7 +10,7 @@ data:
   config.yaml: |
     _config_version: 46
 
-    # Strata (qwen3.8-flash-next on lamg) is the main model since 2026-11-04:
+    # Strata (Swift-1.5 Heretic V2 on lamg since 2026-11-14) is the main model since 2026-11-04:
     # gemma-4-12b picked the wrong tool for status questions at random, Strata
     # got them right first time. The initContainer re-asserts model.default and
     # the gemma fallback on every boot, so this seed only matters on a new PVC.
@@ -25,7 +25,7 @@ data:
     # luego gemma de OpenRouter gratis, y si todo cae devuelve error. Nunca
     # Copilot ni Vertex. gemma-4-12b-00 si caia a Copilot y a Vertex de pago.
     model:
-      default: "qwen3.8-flash-next-iq3_xxs"
+      default: "swift-1.5-heretic-v2-iq3_s-85g"
       provider: openai
 
     # Auxiliary calls (compression, curation) default to the Nous Portal, which
