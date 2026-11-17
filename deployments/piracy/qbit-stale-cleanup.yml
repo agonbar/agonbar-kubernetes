@@ -85,7 +85,9 @@ spec:
                     --data-urlencode "password=$QBIT_PASSWORD" \
                     -H "Referer: ${QBIT_URL}" \
                     "${QBIT_URL}/api/v2/auth/login")
-                  echo "$RESP" | grep -q "Ok." || { echo "[qbit-cleanup] auth FAILED: $RESP"; exit 1; }
+                  # qBittorrent 5.x answers a good login with 204 and no body; the
+                  # SID cookie is what proves it worked.
+                  grep -q SID "$COOKIE" || { echo "[qbit-cleanup] auth FAILED: $RESP"; exit 1; }
                   curl -sf -b "$COOKIE" "${QBIT_URL}/api/v2/torrents/info" > /tmp/torrents.json
                   total=$(jq length /tmp/torrents.json)
 
