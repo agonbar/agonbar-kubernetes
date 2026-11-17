@@ -24,7 +24,7 @@ spec:
         svccontroller.k3s.cattle.io/lbpool: lamg
       containers:
       - name: redis
-        image: redis:7.0-alpine
+        image: redis:8.10-alpine
         command: ["redis-server"]
         resources:
           requests:
