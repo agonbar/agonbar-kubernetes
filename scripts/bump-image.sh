@@ -64,7 +64,7 @@ snap() {
     IFS=/ read -r ns kind name <<<"$w"
     sel=$($K -n "$ns" get "$kind/$name" -o jsonpath='{.spec.selector.matchLabels}' |
       jq -r 'to_entries|map("\(.key)=\(.value)")|join(",")')
-    $K -n "$ns" get pods -l "$sel" --field-selector=status.phase!=Succeeded -o json |
+    $K -n "$ns" get pods -l "$sel" --field-selector=status.phase!=Succeeded,status.phase!=Failed -o json |
       jq -r '.items[] | "\(.metadata.name) \([.status.containerStatuses[]?.restartCount]|add) \([.status.containerStatuses[]?.ready]|all)"'
   done | sort
 }
