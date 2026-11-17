@@ -26,7 +26,7 @@ while [ $# -gt 0 ]; do
 done
 
 grep -qF -- "$old" "$file" || { echo "'$old' not in $file" >&2; exit 1; }
-sed -i "s|$(printf '%s' "$old" | sed 's/[|&.*^$[\]/\\]/\\&/g')|$new|g" "$file"
+OLD=$old NEW=$new perl -pi -e 's/\Q$ENV{OLD}\E/$ENV{NEW}/g' "$file"
 git add "$file"
 git commit -q -m "$(basename "$(dirname "$file")"): bump ${old##*/} -> ${new##*/}
 
