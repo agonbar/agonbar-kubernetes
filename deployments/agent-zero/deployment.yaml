@@ -8,7 +8,7 @@
 #   - no service account token, so a shell in here cannot talk to the API
 #   - not privileged, no host mounts, CPU and memory capped
 #   - egress limited by networkpolicy.yaml to DNS, Strata, work-vm-00's
-#     llama.cpp and the public internet
+#     whisper bridge and the public internet (LiteLLM is reached there)
 #
 # Settings come from the environment: A0_SET_<name> for settings.py fields
 # and API_KEY_<PROVIDER> for keys (both read with os.getenv). The model presets
@@ -96,14 +96,15 @@ spec:
             # one. Priority travels in X-Strata-Priority (see the configmap).
             - name: API_KEY_OTHER
               value: none
-            # gemma's llama-server on work-vm-00 does check a bearer token
-            # (--api-key-file, agenix llm-api-key). Without it every utility
-            # call (history compaction, behaviour rules, memory) is a 401.
-            - name: API_KEY_LLAMA_CPP
+            # LiteLLM virtual key `agent-zero` for the utility model, allowed
+            # only swift-1.5-27b and its Strata fallback (Bitwarden Sensei
+            # litellm-key-agent-zero). Without it every utility call (history
+            # compaction, behaviour rules, memory) is a 401.
+            - name: API_KEY_OPENAI
               valueFrom:
                 secretKeyRef:
                   name: agent-zero-auth
-                  key: API_KEY_LLAMA_CPP
+                  key: API_KEY_OPENAI
             # Microphone STT: the Wyoming bridge on work-vm-00 (whisper.cpp
             # large-v3-turbo), the same one Home Assistant uses. See
             # whisper-runtime.yaml.

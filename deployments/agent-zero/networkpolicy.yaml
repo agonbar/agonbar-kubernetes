@@ -35,13 +35,12 @@ spec:
               kubernetes.io/metadata.name: strata
       ports:
         - port: 8080
-    # work-vm-00 over the tailnet: gemma-4-12B (llama.cpp, 8080) and the
-    # whisper.cpp Wyoming bridge (7891).
+    # work-vm-00 over the tailnet: the whisper.cpp Wyoming bridge (7891).
+    # The utility model goes through LiteLLM on the public internet now.
     - to:
         - ipBlock:
             cidr: 100.72.0.8/32
       ports:
-        - port: 8080
         - port: 7891
     # Public internet: web search, page fetches, pip/apt, Hugging Face.
     - to:

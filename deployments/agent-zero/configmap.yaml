@@ -5,9 +5,12 @@
 # chat: Strata through its gateway. Thinking off and the instruct sampling
 #   preset, the same as pi in dotfiles nix/home/modules/pi.nix. Priority hot:
 #   she is a person waiting at a browser, like interactive pi.
-# utility: gemma-4-12B on work-vm-00 (bearer key in API_KEY_LLAMA_CPP). Agent Zero uses it for history
-#   compaction and memory extraction, text-in text-out with no tool choice,
-#   and it keeps those calls out of Strata's one-at-a-time queue.
+# utility: LiteLLM's swift-1.5-27b group (key in API_KEY_OPENAI; the openai
+#   provider is just the OpenAI-compatible client). That is Swift 1.5 on
+#   work-vm-00's 3090, then Strata when work-vm-00 is off, nothing paid.
+#   Agent Zero uses it for history compaction and memory extraction, text-in
+#   text-out with no tool choice, so thinking is off. While work-vm-00 is up
+#   it keeps those calls out of Strata's one-at-a-time queue.
 # embedding: multilingual on CPU in the pod. The image default
 #   (all-MiniLM-L6-v2) is English-only and she will write in Spanish.
 apiVersion: v1
@@ -43,15 +46,18 @@ data:
             chat_template_kwargs:
               enable_thinking: false
       utility:
-        provider: llama_cpp
-        name: gemma-4-12B-it-qat-UD-Q4_K_XL.gguf
-        api_base: http://work-vm-00:8080/v1
+        provider: openai
+        name: swift-1.5-27b
+        api_base: https://litellm.senseivision.ai/v1
         ctx_length: 32768
         ctx_input: 0.7
         rl_requests: 0
         rl_input: 0
         rl_output: 0
-        kwargs: {}
+        kwargs:
+          extra_body:
+            chat_template_kwargs:
+              enable_thinking: false
       embedding:
         provider: huggingface
         name: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
