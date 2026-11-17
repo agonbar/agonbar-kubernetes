@@ -139,7 +139,7 @@ spec:
             limits:
               memory: 1536Mi
         - name: tls
-          image: ghostunnel/ghostunnel:v1.11.3
+          image: ghostunnel/ghostunnel:v1.11.5
           args:
             - server
             - --listen=0.0.0.0:3443
