@@ -78,6 +78,7 @@ many `${...}` shell references inside initContainer scripts aren't mangled.
 │   ├── kube-vip/                # LoadBalancer IP pools
 │   ├── snapshots/ upgrades/ ...
 │
+├── scripts/                     # cluster tooling, see scripts/README.md
 ├── seal-secrets.sh              # encrypt secrets.yaml → sealedsecrets.yaml
 └── unseal-secrets.sh            # recover from the cluster
 ```
@@ -221,6 +222,10 @@ out of this tree because it necessarily carries per-node join tokens.
 | `seal-secrets.sh` | Encrypts plaintext `secrets.yaml` files into `sealedsecrets.yaml` using `kubeseal` |
 | `unseal-secrets.sh` | Recovers and decrypts sealed secrets for local inspection |
 | `deploy.sh` | Bulk `kubectl apply` across all deployment manifests (pre-ArgoCD fallback; rarely used now) |
+
+Operational tooling for the cluster and its storage (iSCSI repair, PVC moves,
+Postgres and backup jobs, *arr triage) lives in [`scripts/`](scripts/README.md),
+one row per script.
 
 ## Secret Management
 
