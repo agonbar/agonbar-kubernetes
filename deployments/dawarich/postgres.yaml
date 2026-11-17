@@ -30,7 +30,7 @@ spec:
         storage/local-db: "true"
       containers:
       - name: postgres
-        image: postgis/postgis:17-3.5-alpine
+        image: postgis/postgis:18-3.7-alpine
         env:
         - name: POSTGRES_USER
           value: "dawarich"
@@ -42,8 +42,10 @@ spec:
         - name: POSTGRES_DB
           value: "dawarich_development"
         volumeMounts:
+        # PG18 images keep PGDATA in /var/lib/postgresql/18/docker and expect
+        # the volume one level up.
         - name: dawarich-db-data
-          mountPath: /var/lib/postgresql/data
+          mountPath: /var/lib/postgresql
         - name: dawarich-shared
           mountPath: /var/shared
         livenessProbe:
@@ -70,7 +72,7 @@ spec:
       volumes:
       - name: dawarich-db-data
         persistentVolumeClaim:
-          claimName: dawarich-db-data-local
+          claimName: dawarich-db-data-pg18
       - name: dawarich-shared
         nfs:
           server: 192.168.0.29
@@ -106,6 +108,24 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: dawarich-db-data-local
+  namespace: dawarich
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 10Gi
+---
+# PostGIS 18 data, restored from a pg_dump of the 17 volume on 2026-11-17
+# (dawarich-20261117-113738.dump, 76900 points). The 17 claim above stays until
+# the 18 one has a few nightly "restore verified" runs behind it; its
+# index_points_on_raw_data_archive_id was corrupt (index-only count 127839,
+# heap 76900), which the restore rebuilt.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dawarich-db-data-pg18
   namespace: dawarich
 spec:
   accessModes:
