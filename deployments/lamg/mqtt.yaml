@@ -21,7 +21,7 @@ spec:
         app: mqtt
     spec:
       containers:
-        - image: emqx/emqx:6.2.2
+        - image: emqx/emqx:6.3.3
           name: mqtt
           env:
             # EMQX 6.0 changed the default authorization.no_match from allow to
