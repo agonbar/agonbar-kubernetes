@@ -112,13 +112,15 @@ spec:
               # and `hermes skills list` shows the skill as disabled afterwards.
               hermes config set skills.disabled '["obsidian"]'
 
-              # Model: Strata first, the free gemma group on LiteLLM when Strata
-              # is down, overloaded or rate-limited. Strata serves one request
-              # at a time, so a slow answer while a Paperclip run holds it is a
-              # queue, not a failure, and does not trigger the fallback.
+              # Model: Strata first, LiteLLM's swift-1.5-27b when Strata is
+              # down, overloaded or rate-limited. That group is Swift 1.5 on
+              # work-vm-00's 3090, then Strata again if work-vm-00 is off, and
+              # nothing paid. Strata serves one request at a time, so a slow
+              # answer while a Paperclip run holds it is a queue, not a
+              # failure, and does not trigger the fallback.
               hermes config set model.default swift-1.5-heretic-v2-iq3_s-85g
               hermes config set fallback_model \
-                '[{"provider":"openai","model":"gemma-4-12b-free","base_url":"https://litellm.senseivision.ai/v1","key_env":"LITELLM_API_KEY"}]'
+                '[{"provider":"openai","model":"swift-1.5-27b","base_url":"https://litellm.senseivision.ai/v1","key_env":"LITELLM_API_KEY"}]'
 
               # agent-status: Hermes reports on the user's coding agents through
               # one read-only script. Its two secrets go to files because the

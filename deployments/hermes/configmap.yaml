@@ -13,17 +13,16 @@ data:
     # Strata (Swift-1.5 Heretic V2 on lamg since 2026-11-14) is the main model since 2026-11-04:
     # gemma-4-12b picked the wrong tool for status questions at random, Strata
     # got them right first time. The initContainer re-asserts model.default and
-    # the gemma fallback on every boot, so this seed only matters on a new PVC.
+    # the LiteLLM fallback on every boot, so this seed only matters on a new PVC.
     # Strata's gateway (:8080) speaks the OpenAI protocol, so hermes reaches it
     # through its built-in "openai" provider plus OPENAI_BASE_URL.
     #
     # LiteLLM, now only the fallback, speaks it too. Naming a custom provider
     # under `providers:` and writing the model as `litellm/<model>` does NOT
     # work: hermes reads the unknown prefix as OpenRouter and 401s.
-    # Coste cero: gemma-4-12b-free es el grupo de LiteLLM que solo baja por
-    # escalones gratis: la 3090 de work-vm-00 (local-llm-00.dev.senseizero.es),
-    # luego gemma de OpenRouter gratis, y si todo cae devuelve error. Nunca
-    # Copilot ni Vertex. gemma-4-12b-00 si caia a Copilot y a Vertex de pago.
+    # Zero cost: the fallback is LiteLLM's swift-1.5-27b group (set by the
+    # initContainer), Swift 1.5 on work-vm-00's 3090, then Strata when
+    # work-vm-00 is off, then an error. Never Copilot, OpenRouter or Vertex.
     model:
       default: "swift-1.5-heretic-v2-iq3_s-85g"
       provider: openai
