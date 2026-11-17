@@ -62,7 +62,6 @@ spec:
                 --static-auth-secret="$TURN_SECRET" \
                 --fingerprint \
                 --no-tls \
-                --no-dtls \
                 --no-multicast-peers \
                 --user-quota=12 \
                 --total-quota=300 \
