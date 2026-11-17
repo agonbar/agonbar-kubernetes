@@ -36,6 +36,7 @@ not listed in this README, so adding one is a deliberate decision.
 
 | Script | What it does |
 | --- | --- |
+| `bump-image.sh` | Bumps one image or chart version through git and checks the workloads stay healthy. |
 | `audit-pod-requests.sh` | Compares what each pod uses against what it requests. |
 | `devbox-smoke.sh` | Smoke test for `deployments/agonbar/devbox.yaml`, run locally with podman. |
 | `netbird-exit-setup.sh` | NetBird management side of the internet exits in `deployments/netbird-exit`. |
