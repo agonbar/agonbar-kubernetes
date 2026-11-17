@@ -5,7 +5,8 @@ ArgoCD auto-syncs this directory from `main`, so an upgrade is an image bump in
 machine-learning always move together, to the same tag.
 
 Last upgrades: v2.7.5 → v3.0.1 (major), v3.0.3 → v3.2.4 on 2026-10-01,
-v3.2.4 → v3.3.5 on 2026-10-28. That one ran five migrations in under a second
+v3.2.4 → v3.3.5 on 2026-10-28, v3.3.5 → v3.4.1 on 2026-11-17 (pre-upgrade
+dump `immich-20261117-101412.dump`). The v3.3.5 one ran five migrations in under a second
 and switched `server` to `strategy: Recreate`, so the old pod is gone before
 the new one migrates. Since then the server warns about schema drift in
 `geodata_places` and `naturalearth_countries`: column types and `_pkey1`
