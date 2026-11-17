@@ -24,7 +24,7 @@ spec:
     spec:
       enableServiceLinks: false
       containers:
-        - image: docker.io/library/redis:6.2-alpine
+        - image: docker.io/library/redis:8.10-alpine
           name: broker
           ports:
             - containerPort: 6379
