@@ -56,7 +56,7 @@ spec:
           # Pinned for GitOps reproducibility. TypeORM runs migrations during
           # app.init(), before the port opens, so a version bump means a longer
           # first boot — that's what the startupProbe budget below is for.
-          image: phalcode/gamevault-backend:17.0.1
+          image: phalcode/gamevault-backend:17.2.0
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
