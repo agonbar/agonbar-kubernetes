@@ -55,7 +55,7 @@ spec:
         # Runs on the hermes image itself: it is already on the node and it has
         # both a shell and curl, which the distroless kubectl image does not.
         - name: seed-data
-          image: nousresearch/hermes-agent@sha256:fdf7ab656e9c80ed490958c4733778d8bb33396ed7ddf7e4d0a1b69635bcc8d1
+          image: nousresearch/hermes-agent:v0.23.2@sha256:d6746a084e9341baada483e3d6210444d3c1aeb7c130f0915150065fb2851459
           command: ["/bin/sh", "-c"]
           args:
             - |
@@ -179,7 +179,7 @@ spec:
               mountPath: /config
       containers:
         - name: hermes
-          image: nousresearch/hermes-agent@sha256:fdf7ab656e9c80ed490958c4733778d8bb33396ed7ddf7e4d0a1b69635bcc8d1
+          image: nousresearch/hermes-agent:v0.23.2@sha256:d6746a084e9341baada483e3d6210444d3c1aeb7c130f0915150065fb2851459
           args: ["gateway", "run"]
           env:
             # Main model: Strata's in-cluster gateway, which takes no key. The
