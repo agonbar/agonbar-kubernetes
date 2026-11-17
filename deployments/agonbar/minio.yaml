@@ -1,3 +1,5 @@
+# minio/minio stopped publishing images (Docker Hub 401, upstream archived
+# 2026-04). pgsty/minio is the Pigsty community build of the same server.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -29,13 +31,13 @@ spec:
         # agonbar has no dockerhub-secret, so pulling anything else here is a
         # coin flip against Docker Hub's anonymous limits.
         - name: ensure-buckets
-          image: minio/minio:RELEASE.2022-10-24T18-35-07Z
+          image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
           command: ["mkdir", "-p", "/data/reactive-resume"]
           volumeMounts:
             - name: minio
               mountPath: /data
       containers:
-        - image: minio/minio:RELEASE.2022-10-24T18-35-07Z
+        - image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
           name: minio
           command: ["minio"]
           args: ["server", "/data", "--console-address", ":9001"]
