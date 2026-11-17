@@ -12,3 +12,6 @@ data:
   # The repo-server also keeps the repo's ls-remote result in redis
   # (git-refs|<repo>) for this long, so a stale entry outlives the restart.
   timeout.reconciliation: 5m
+  # Annotation tracking, the 3.x default. Switched on 2.14 first (2026-11-17)
+  # so the 3.x upgrade itself does not also change how resources are tracked.
+  application.resourceTrackingMethod: annotation
