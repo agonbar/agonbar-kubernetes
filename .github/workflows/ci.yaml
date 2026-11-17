@@ -105,3 +105,21 @@ jobs:
         run: |
           bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
           ./actionlint -color
+
+  scripts-allowlist:
+    name: scripts/ only holds what scripts/README.md lists
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Every entry in scripts/ is listed in scripts/README.md
+        run: |
+          missing=0
+          for entry in scripts/*; do
+            name=$(basename "$entry")
+            [ "$name" = README.md ] && continue
+            if ! grep -qF "\`$name\`" scripts/README.md; then
+              echo "::error file=$entry::$name is not listed in scripts/README.md. Cluster tooling gets a row there; personal or one-off scripts go to the dotfiles repo instead."
+              missing=1
+            fi
+          done
+          exit "$missing"

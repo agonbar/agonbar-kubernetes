@@ -1,7 +1,7 @@
 # Same broker as deployments/lamg/mqtt.yaml, see the probe rationale there.
 # zigbee2mqtt does not run in the cluster here: it is a TrueNAS app on nas03,
 # where the CC2531 stick is plugged in, and reaches this broker through the
-# kube-vip-aya VIP (192.168.1.26:1883). scripts/nas03-zigbee2mqtt.sh sets it up.
+# kube-vip-aya VIP (192.168.1.26:1883).
 apiVersion: apps/v1
 kind: Deployment
 metadata:

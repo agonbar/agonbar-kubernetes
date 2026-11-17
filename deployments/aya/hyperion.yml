@@ -24,7 +24,7 @@ spec:
                       - name: TZ
                         value: "Europe/Madrid"
                       # Ignored by this image. The admin password lives in Hyperion's db,
-                      # set from this same secret by scripts/hyperion-aya-config.py.
+                      # set from this same secret through the Hyperion API.
                       - name: WEBPASSWORD
                         valueFrom:
                             secretKeyRef:

@@ -150,7 +150,7 @@ spec:
             - containerPort: 8080
               protocol: TCP
           volumeMounts:
-            # The consolidated library, built by scripts/rom-consolidate.py from
+            # The consolidated library, built by a one-off script from
             # the EmuDeck tree and the hand-picked collection under
             # _ADRIAN/Juegos, each file renamed to its No-Intro name so RomM can
             # read region and language off it. Writable, unlike the EmuDeck tree

@@ -38,5 +38,3 @@ deployments/piracy/anime_sub_upgrade/
 .playwright-mcp/
 __pycache__/
 
-# Personal scripts (payslip, trip expenses, GoE): kept out of this public repo
-scripts/personal/

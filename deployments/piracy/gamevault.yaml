@@ -10,7 +10,7 @@
 # what stays behind is what could not be made to work.
 #
 # The collection is never mounted here. Games are copied in under canonical
-# names by scripts/gamevault-import.py, verified, and only then deleted at the
+# names by a one-off import script, verified, and only then deleted at the
 # source. The two paths are separate ZFS datasets (RAID/adrian, RAID/docker),
 # so it is a real copy, not a rename.
 #
