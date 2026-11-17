@@ -8,7 +8,7 @@ spec:
   source:
     chart: democratic-csi
     repoURL: https://democratic-csi.github.io/charts/
-    targetRevision: 0.14.7
+    targetRevision: 0.15.1
     helm:
       releaseName: democratic-csi-nfs-ssd
       valuesObject:
