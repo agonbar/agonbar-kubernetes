@@ -51,15 +51,15 @@ data:
   # The static MCP_API_TOKEN (in the sealed secret) acts as this user.
   MCP_USER_EMAIL: adrian.gonzalez.barbosa@gmail.com
 
-  # Auto-categorisation and merchant detection. The model is served by the
-  # llama.cpp box behind litellm (local-llm-00.dev.senseizero.es), so the
-  # transaction descriptions never leave the estate; the `gemma-4-26b` alias
-  # there routes to Vertex instead, hence pinning the 12b. The access token
-  # lives in the sure-llm sealed secret. LLM_CONTEXT_WINDOW is left at Sure's
-  # 2048 default for custom providers: the server does not advertise n_ctx, so
+  # Auto-categorisation and merchant detection. LiteLLM's swift-1.5-27b group
+  # is Swift 1.5 on work-vm-00's 3090, then Strata on lamg when work-vm-00 is
+  # off, and nothing else: no Copilot, OpenRouter or Vertex rung, so the
+  # transaction descriptions never leave the estate. The access token lives in
+  # the sure-llm sealed secret. LLM_CONTEXT_WINDOW is left at Sure's 2048
+  # default for custom providers: the server does not advertise n_ctx, so
   # this trades more, smaller batches for not overflowing it.
   OPENAI_URI_BASE: https://litellm.senseivision.ai/v1
-  OPENAI_MODEL: gemma-4-12b
+  OPENAI_MODEL: swift-1.5-27b
 
 ---
 # Pinned to nas02-k3s, a NixOS k3s agent VM on the nas02 TrueNAS (16 GiB,
