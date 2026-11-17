@@ -33,7 +33,7 @@ spec:
     spec:
       initContainers:
         - name: seed-config
-          image: busybox:1.37
+          image: busybox:1.38
           command:
             - sh
             - -c
@@ -68,7 +68,7 @@ spec:
         # is pinned by version and SHA512 and kept on the volume, so a restart
         # does not depend on GitHub. To upgrade, bump both values.
         - name: achievement-manager
-          image: alpine:3.22
+          image: alpine:3.24
           command:
             - sh
             - -c
