@@ -116,7 +116,7 @@ spec:
           tolerationSeconds: 30
       containers:
         - name: reconcile
-          image: alpine/k8s:1.30.0
+          image: alpine/k8s:1.36.4
           command:
             - /bin/sh
             - -c
