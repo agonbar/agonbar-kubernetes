@@ -65,7 +65,7 @@ spec:
           operator: Exists
       containers:
         - name: kube-vip
-          image: ghcr.io/kube-vip/kube-vip:v1.2.2
+          image: ghcr.io/kube-vip/kube-vip:v1.3.1
           args: ["manager"]
           env:
             # ARP mode — announce VIP via gratuitous ARP on the LAN
