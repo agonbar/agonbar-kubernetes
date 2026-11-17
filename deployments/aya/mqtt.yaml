@@ -25,7 +25,7 @@ spec:
         app: mqtt
     spec:
       containers:
-        - image: emqx/emqx:6.2.2
+        - image: emqx/emqx:6.3.3
           name: mqtt
           env:
             - name: EMQX_AUTHORIZATION__NO_MATCH
