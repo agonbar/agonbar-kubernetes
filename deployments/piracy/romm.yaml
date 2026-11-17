@@ -36,7 +36,7 @@ spec:
         - name: romm
           # Pinned for GitOps reproducibility. Bumping runs alembic migrations on
           # boot, so read the release notes before moving it.
-          image: rommapp/romm:5.2.0
+          image: rommapp/romm:5.4.1
           imagePullPolicy: IfNotPresent
           env:
             # Postgres on the same nas02 PG17 the Servarr apps, Suwayomi and
@@ -177,7 +177,7 @@ spec:
               port: 8080
             periodSeconds: 10
             timeoutSeconds: 5
-            failureThreshold: 30
+            failureThreshold: 180  # 30 min: 5.4 migrations rewrite the roms table
           livenessProbe:
             httpGet:
               path: /api/heartbeat
