@@ -4,7 +4,7 @@
 # herdr-outpost) and serves the forward-auth endpoint that Traefik calls.
 # Authentik object: outpost "herdr-lamg" → proxy provider "herdr" (forward_single,
 # external_host https://herdr.adriangonzalezbarbosa.eu). Image tag tracks the
-# Authentik server version (2025.10.x).
+# Authentik server version (2026.5.x).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
