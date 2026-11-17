@@ -199,10 +199,10 @@ counterpart is gitignored.
 `system/argocd/` is the only part of this repo applied directly with `kubectl`:
 
 ```bash
-kubectl apply -k system/argocd/
+kubectl apply -k system/argocd/ --server-side --force-conflicts
 ```
 
-That installs ArgoCD (v2.14.2), the envsubst CMP sidecar patched onto
+That installs ArgoCD (v3.6.1), the envsubst CMP sidecar patched onto
 `argocd-repo-server`, the plugin ConfigMap, and the SealedSecrets used by
 both (`argocd-base-domain` for the domain, `ghcr-pull` for the sidecar's
 image). After that, a `bootstrap` Application (created once, by hand —

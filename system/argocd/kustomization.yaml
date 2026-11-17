@@ -1,12 +1,14 @@
 # install using 
 #               kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -    
-#               kubectl apply -k system/argocd
+#               kubectl apply -k system/argocd --server-side --force-conflicts
+#               (server-side since 3.3: the ApplicationSet CRD is too big for
+#               client-side apply's last-applied annotation)
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: argocd
 
 resources:
-  - https://raw.githubusercontent.com/argoproj/argo-cd/v2.14.2/manifests/install.yaml
+  - https://raw.githubusercontent.com/argoproj/argo-cd/v3.6.1/manifests/install.yaml
   - cmp-envsubst-plugin-cm.yaml
   - sealedsecrets.yaml
 
