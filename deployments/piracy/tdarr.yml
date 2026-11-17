@@ -60,7 +60,7 @@ spec:
                         mountPath: /host-proc-mounts
             containers:
                 - name: tdarr
-                  image: ghcr.io/haveagitgat/tdarr:2.81.01
+                  image: ghcr.io/haveagitgat/tdarr:2.96.01
                   imagePullPolicy: IfNotPresent
                   env:
                       - name: TZ
