@@ -44,6 +44,8 @@ data:
   POSTGRES_DB: sure
   REDIS_URL: redis://sure-redis:6379/1
   TZ: Europe/Madrid
+  # Sure 0.7.6 added anonymous PostHog product monitoring, on by default.
+  POSTHOG_FEEDBACK_ENABLED: "false"
   # The only account was created on 2026-09-13; it is the instance super admin.
   ONBOARDING_STATE: closed
   # The static MCP_API_TOKEN (in the sealed secret) acts as this user.
