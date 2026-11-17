@@ -86,6 +86,10 @@ spec:
             httpGet:
               path: /
               port: 8000
+              # newer paperless rejects the pod IP as Host (DisallowedHost -> 400)
+              httpHeaders:
+                - name: Host
+                  value: paperless.${BASE_DOMAIN}
             initialDelaySeconds: 60
             periodSeconds: 30
             timeoutSeconds: 10
