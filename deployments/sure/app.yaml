@@ -266,7 +266,7 @@ spec:
       enableServiceLinks: false
       containers:
         - name: redis
-          image: redis:7.4-alpine
+          image: redis:8.10-alpine
           args: ["--save", "", "--appendonly", "no"]
           ports:
             - containerPort: 6379
