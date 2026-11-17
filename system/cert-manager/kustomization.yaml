@@ -1,0 +1,11 @@
+# cert-manager, upstream static manifest. Not an ArgoCD app: cainjector writes
+# the webhook caBundle and selfHeal would fight it. Apply by hand:
+#
+#   kubectl --context lamg apply -k system/cert-manager --server-side --force-conflicts
+#
+# Upgrade one minor at a time (upstream advice), latest patch of each, and
+# never v1.19.0 (it re-issues every certificate).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - https://github.com/cert-manager/cert-manager/releases/download/v1.16.0/cert-manager.yaml
