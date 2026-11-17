@@ -23,7 +23,7 @@ spec:
         app: palworld
     spec:
       containers:
-        - image: thijsvanloef/palworld-server-docker:v2.8.0
+        - image: thijsvanloef/palworld-server-docker:v2.8.1
           name: palworld
           env:
             # v2.0 switched the wrapper's control backend from RCON to the REST
