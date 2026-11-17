@@ -12,6 +12,9 @@ metadata:
   namespace: agonbar
 spec:
   replicas: 1
+  # One SQLite file on a hostPath: two pods must never open it at once.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: uptime
@@ -21,7 +24,7 @@ spec:
         app: uptime
     spec:
       containers:
-        - image: louislam/uptime-kuma:1
+        - image: louislam/uptime-kuma:2
           name: uptime
           ports:
             - containerPort: 3001
@@ -34,6 +37,16 @@ spec:
             requests:
               cpu: 5m
               memory: 30Mi
+          # The v1 -> v2 start aggregates every heartbeat into stat_* tables
+          # (791k rows on 2026-11-17) and must not be killed halfway: an
+          # interrupted run leaves the DB unbootable. Up to 60 min to start.
+          startupProbe:
+            httpGet:
+              path: /
+              port: 3001
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 120
           livenessProbe:
             httpGet:
               path: /
