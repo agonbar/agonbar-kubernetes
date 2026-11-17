@@ -27,8 +27,8 @@ done
 
 grep -qF -- "$old" "$file" || { echo "'$old' not in $file" >&2; exit 1; }
 OLD=$old NEW=$new perl -pi -e 's/\Q$ENV{OLD}\E/$ENV{NEW}/g' "$file"
-git add "$file"
-git commit -q -m "$(basename "$(dirname "$file")"): bump ${old##*/} -> ${new##*/}
+# commit only <file>: other sessions share this clone and may have staged work
+git commit -q -o "$file" -m "$(basename "$(dirname "$file")"): bump ${old##*/} -> ${new##*/}
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 git push -q
@@ -65,9 +65,13 @@ snap() {
     sel=$($K -n "$ns" get "$kind/$name" -o jsonpath='{.spec.selector.matchLabels}' |
       jq -r 'to_entries|map("\(.key)=\(.value)")|join(",")')
     $K -n "$ns" get pods -l "$sel" --field-selector=status.phase!=Succeeded,status.phase!=Failed -o json |
-      jq -r '.items[] | "\(.metadata.name) \([.status.containerStatuses[]?.restartCount]|add) \([.status.containerStatuses[]?.ready]|all)"'
+      jq -r '.items[] | select(.metadata.deletionTimestamp == null) | "\(.metadata.name) \([.status.containerStatuses[]?.restartCount]|add) \([.status.containerStatuses[]?.ready]|all)"'
   done | sort
 }
+# let the old pods finish terminating first, or they show up as a change
+for _ in $(seq 30); do
+  a=$(snap); sleep 5; [ "$a" = "$(snap)" ] && break
+done
 before=$(snap); sleep 60; after=$(snap)
 echo "$after"
 [ "$before" = "$after" ] || fail "pods changed during soak"
