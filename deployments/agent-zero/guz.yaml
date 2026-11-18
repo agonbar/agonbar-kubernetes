@@ -59,6 +59,16 @@ spec:
         - name: whisper-runtime
           configMap:
             name: agent-zero-whisper-runtime
+        - name: guidance
+          configMap:
+            name: agent-zero-guidance
+        - name: skill-printable-documents
+          configMap:
+            name: agent-zero-guidance
+            defaultMode: 0755
+            items:
+              - {key: SKILL.md, path: SKILL.md}
+              - {key: html-to-pdf.sh, path: html-to-pdf.sh}
         - name: dshm
           emptyDir:
             medium: Memory
@@ -111,6 +121,11 @@ spec:
               value: 24h
             - name: A0_SET_update_check_enabled
               value: "false"
+            # The browser tool's Chromium (also used to print PDFs, see
+            # guidance.yaml) defaults to /a0/tmp, outside the volume, and is
+            # downloaded again (~380 MB) after every restart.
+            - name: A0_BROWSER_PLAYWRIGHT_CACHE_DIR
+              value: /a0/usr/playwright
           ports:
             - name: http
               containerPort: 80
@@ -142,6 +157,17 @@ spec:
             - name: whisper-runtime
               mountPath: /a0/plugins/_whisper_stt/helpers/runtime.py
               subPath: runtime.py
+            # guidance.yaml: deployment rules, Spanish greeting, and the
+            # printable-documents skill.
+            - name: guidance
+              mountPath: /a0/prompts/agent.system.main.specifics.md
+              subPath: specifics.md
+            - name: guidance
+              mountPath: /a0/prompts/fw.initial_message.md
+              subPath: initial_message.md
+            - name: skill-printable-documents
+              mountPath: /a0/skills/printable-documents
+              readOnly: true
 ---
 apiVersion: v1
 kind: Service

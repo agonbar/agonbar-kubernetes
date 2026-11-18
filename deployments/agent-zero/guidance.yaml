@@ -1,0 +1,121 @@
+# Prompt and skill additions for Agent Zero, mounted read-only from git (see
+# guz.yaml). Written after a first real session (2026-11-18) where the agent
+# lost an afternoon to documents: it hand-zipped an ODT that LibreOffice could
+# not open, printed HTML to PDF with soffice (which drops most CSS), rewrote
+# the user's spreadsheet in place, and said "fixed" without opening the file.
+#
+# - specifics.md replaces the image's empty prompts/agent.system.main.specifics.md,
+#   the slot the system prompt keeps for deployment rules. Always on.
+# - initial_message.md replaces prompts/fw.initial_message.md (the English
+#   greeting every new chat starts with). Same JSON shape, Spanish text.
+# - SKILL.md + html-to-pdf.sh are the skill printable-documents, mounted as
+#   /a0/skills/printable-documents. Loaded on demand.
+#
+# Instructions are in English on purpose; the agent still answers in Spanish.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-zero-guidance
+  namespace: agent-zero
+data:
+  specifics.md: |
+    ## Deployment specifics
+    - The user is a non-technical Spanish speaker. Always answer in Spanish, in plain words, without technical jargon or file-system paths unless asked.
+    - Files the user uploaded or wrote are originals. Never overwrite them. Save results as a new file (for example `Informe v2.odt`) unless the user explicitly asks to replace the original, and say which file you created.
+    - Before saying a file is done or fixed, open or render it yourself and look at the result. If you could not verify it, say so. Never claim a success you have not checked.
+    - Before creating a PDF, a printable report or any ODT/DOCX/ODS file, load the skill `printable-documents` and follow it.
+    - Money and accounts: compute totals with code from the source data, never by hand, and show a reconciliation (opening + income - expenses = closing) that matches to the cent before presenting figures.
+  initial_message.md: |
+    ```json
+    {
+        "thoughts": [
+            "This is a new conversation, I should greet the user warmly in Spanish and let them know I'm ready to help.",
+            "I'll use the response tool with proper JSON formatting to demonstrate the expected structure."
+        ],
+        "headline": "Saludando al usuario",
+        "tool_name": "response",
+        "tool_args": {
+            "text": "**¡Hola! 👋** Soy tu asistente. ¿En qué te ayudo hoy?"
+        }
+    }
+    ```
+  SKILL.md: |
+    ---
+    name: printable-documents
+    description: "Make reports and documents that look right on paper: HTML as the source, Chromium to print PDF, never hand-built ODT/DOCX, always verified visually."
+    version: "1.0.0"
+    author: "agonbar-kubernetes"
+    tags: ["pdf", "print", "report", "html", "odt", "docx", "ods", "imprimir", "informe"]
+    triggers:
+      - "PDF"
+      - "imprimir"
+      - "informe"
+      - "documento para presentar"
+      - "ODT"
+      - "DOCX"
+      - "print"
+    allowed_tools:
+      - code_execution_tool
+      - office_artifact
+      - vision_load
+    ---
+
+    # Printable documents
+
+    ## Source of truth: one standalone HTML file
+    - Write a single `.html` with all CSS embedded. No external fonts, CDNs or scripts. Emoji are fine (Noto Color Emoji is installed).
+    - Always include print CSS:
+      ```css
+      @page { size: A4; margin: 14mm; }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .card, tr, figure, section { break-inside: avoid; }
+      ```
+    - Keep the layout simple enough to print: flex/grid and CSS bars are fine in Chromium.
+
+    ## PDF: print the HTML with Chromium
+    ```bash
+    sh /a0/skills/printable-documents/html-to-pdf.sh "input.html" "output.pdf"
+    ```
+    It uses the Chromium already installed for the browser tool (it installs it if missing). The PDF looks exactly like the page in the browser.
+    NEVER use `soffice --convert-to pdf` on an HTML file: LibreOffice imports HTML as a Writer document and drops most CSS (cards, backgrounds, colours, bars). The result looks nothing like the HTML.
+
+    ## ODT / DOCX (editable documents)
+    - NEVER build the ODT/DOCX zip or its XML by hand. Hand-made packages open as "corrupt, cannot be repaired" in LibreOffice.
+    - ODT: use `office_artifact` (action `create`, format `odt`) with Markdown-style content (headings, lists, tables), or convert a simple HTML: `soffice --headless --convert-to odt:writer8 --outdir <dir> file.html`.
+    - DOCX: python-docx with `/opt/venv-a0/bin/python` (not system python3), real heading styles and tables.
+    - If the user wants it to look nice on paper, the PDF from HTML is the deliverable; the ODT is only for editing.
+
+    ## Editing the user's existing ODS/ODT/DOCX
+    - First copy the original: `cp "Gastos.ods" "Gastos (copia antes de editar).ods"`.
+    - `office_artifact` edit rewrites the whole file and can drop styles, column widths and formulas. After any edit, compare the file size with the copy; if it shrank a lot, tell the user and offer the copy.
+
+    ## Verify before saying it is done
+    - PDF: `pdftoppm -r 60 -png -f 1 -l 2 output.pdf /tmp/check` and look at the PNGs with `vision_load`. Compare with what the HTML looks like.
+    - ODT/DOCX/ODS: `soffice --headless --convert-to pdf --outdir /tmp/check "file.odt"` must succeed and produce a PDF; render it and look at it. If the conversion fails, the file is broken: say so and do not call it fixed.
+  html-to-pdf.sh: |
+    #!/bin/sh
+    # Print an HTML file to PDF with headless Chromium, the same engine the
+    # browser tool uses, so the PDF matches what the page looks like on screen.
+    # Usage: html-to-pdf.sh input.html output.pdf
+    set -eu
+    [ $# -eq 2 ] || { echo "usage: $0 input.html output.pdf" >&2; exit 2; }
+    in=$(realpath "$1")
+    out=$(realpath -m "$2")
+    [ -f "$in" ] || { echo "no such file: $1" >&2; exit 2; }
+
+    chrome=$(cd /a0 && /opt/venv-a0/bin/python -c '
+    import sys
+    sys.path.insert(0, "/a0")
+    from plugins._browser.helpers.playwright import configure_playwright_env, ensure_playwright_binary
+    configure_playwright_env()
+    print(ensure_playwright_binary())
+    ' | tail -1)
+    [ -x "$chrome" ] || { echo "Chromium not found: $chrome" >&2; exit 1; }
+
+    rm -f "$out"
+    "$chrome" --headless --no-sandbox --disable-gpu --hide-scrollbars \
+      --no-pdf-header-footer --virtual-time-budget=5000 \
+      --print-to-pdf="$out" "file://$in" 2>/dev/null || true
+    [ -s "$out" ] || { echo "Chromium did not write $out" >&2; exit 1; }
+    pdfinfo "$out" | grep -E "^(Pages|Page size):"
+    echo "$out"
