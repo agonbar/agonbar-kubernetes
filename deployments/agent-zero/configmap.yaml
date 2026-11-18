@@ -65,12 +65,12 @@ data:
         rl_requests: 0
         rl_input: 0
         kwargs: {}
-  # The father's instance (papa.yaml). Default is the same Strata model as
+  # The father's instance (guz.yaml). Default is the same Strata model as
   # above; "Rápido (Swift 27B)" swaps only the chat model (named presets are
   # laid over Default) for the 27B on work-vm-00, a bit faster per token
   # (32.6 vs 25.7 tok/s measured 2026-11-18) and out of Strata's one-at-a-time
   # queue, but a smaller model. Falls back to Strata when work-vm-00 is off.
-  presets-papa.yaml: |
+  presets-guz.yaml: |
     - name: Default
       chat:
         provider: other

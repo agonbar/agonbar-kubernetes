@@ -1,11 +1,11 @@
 # Nightly tar of /a0/usr of both instances (the sister's in deployment.yaml,
-# the father's in papa.yaml: chats, memory, knowledge, documents) to nas02
+# the father's in guz.yaml: chats, memory, knowledge, documents) to nas02
 # over NFS. The source is a local-path RWO volume on ovh02, so the job is pinned
 # to the same node; RWO allows a second pod there. 14 days kept.
 #
 # Restore: scale the deployment to 0, mount both PVCs in a throwaway pod on
 # ovh02, `tar -xzf <file> -C /a0/usr`, scale back to 1. Files are
-# a0-usr-* (sister) and a0-papa-usr-* (father).
+# a0-usr-* (sister) and a0-guz-usr-* (father).
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -47,7 +47,7 @@ spec:
                 - |
                   set -eu
                   ts=$(date +%Y%m%d-%H%M%S)
-                  for v in a0-usr a0-papa-usr; do
+                  for v in a0-usr a0-guz-usr; do
                     out="/backups/$v-$ts.tar.gz"
                     tar -czf "$out.part" -C "/src/$v" .
                     tar -tzf "$out.part" > /dev/null
@@ -59,8 +59,8 @@ spec:
                 - name: usr
                   mountPath: /src/a0-usr
                   readOnly: true
-                - name: usr-papa
-                  mountPath: /src/a0-papa-usr
+                - name: usr-guz
+                  mountPath: /src/a0-guz-usr
                   readOnly: true
                 - name: backups
                   mountPath: /backups
@@ -68,9 +68,9 @@ spec:
             - name: usr
               persistentVolumeClaim:
                 claimName: agent-zero-usr
-            - name: usr-papa
+            - name: usr-guz
               persistentVolumeClaim:
-                claimName: agent-zero-papa-usr
+                claimName: agent-zero-guz-usr
             - name: backups
               persistentVolumeClaim:
                 claimName: agent-zero-backups

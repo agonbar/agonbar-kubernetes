@@ -516,9 +516,9 @@ data:
     # piracy/bookorbit-data is a cover cache: BookOrbit regenerates covers/ from
     # the books, its database lives in the Postgres on nas02, and the only other
     # file is one user avatar. Nothing in it is worth a nightly copy.
-    # agent-zero/agent-zero-usr and agent-zero-papa-usr have their own nightly tar to nas02
+    # agent-zero/agent-zero-usr and agent-zero-guz-usr have their own nightly tar to nas02
     # (deployments/agent-zero/backup.yaml).
-    COVERAGE_SKIP="immich/immich-db-data-local dawarich/dawarich-db-data-pg18 piracy/bookorbit-data agent-zero/agent-zero-usr agent-zero/agent-zero-papa-usr"
+    COVERAGE_SKIP="immich/immich-db-data-local dawarich/dawarich-db-data-pg18 piracy/bookorbit-data agent-zero/agent-zero-usr agent-zero/agent-zero-guz-usr"
 
     check_coverage() {
       echo "========================================="

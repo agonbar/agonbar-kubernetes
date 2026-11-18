@@ -3,16 +3,16 @@
 # needs a second instance, not a second account.
 #
 # Same image, hardening and models as deployment.yaml, with its own volume,
-# login (secret agent-zero-papa-auth) and hostname. It shares the no-tunnel and
+# login (secret agent-zero-guz-auth) and hostname. It shares the no-tunnel and
 # whisper-runtime ConfigMaps, the NetworkPolicy and the nightly backup.
 #
-# Models: two presets seeded from presets-papa.yaml in configmap.yaml. Default
+# Models: two presets seeded from presets-guz.yaml in configmap.yaml. Default
 # is Strata's big model; "Rápido (Swift 27B)" is the 27B on work-vm-00 through
 # LiteLLM. He picks one per chat with the model switcher.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: agent-zero-papa-usr
+  name: agent-zero-guz-usr
   namespace: agent-zero
 spec:
   accessModes:
@@ -25,21 +25,21 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: agent-zero-papa
+  name: agent-zero-guz
   namespace: agent-zero
   labels:
-    app: agent-zero-papa
+    app: agent-zero-guz
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app: agent-zero-papa
+      app: agent-zero-guz
   template:
     metadata:
       labels:
-        app: agent-zero-papa
+        app: agent-zero-guz
     spec:
       automountServiceAccountToken: false
       enableServiceLinks: false
@@ -48,7 +48,7 @@ spec:
       volumes:
         - name: usr
           persistentVolumeClaim:
-            claimName: agent-zero-papa-usr
+            claimName: agent-zero-guz-usr
         - name: seed
           configMap:
             name: agent-zero-seed
@@ -72,7 +72,7 @@ spec:
               set -eu
               d=/a0/usr/plugins/_model_config
               mkdir -p "$d"
-              [ -f "$d/presets.yaml" ] || cp /seed/presets-papa.yaml "$d/presets.yaml"
+              [ -f "$d/presets.yaml" ] || cp /seed/presets-guz.yaml "$d/presets.yaml"
               w=/a0/usr/plugins/_whisper_stt
               mkdir -p "$w"
               [ -f "$w/config.json" ] || cp /seed/whisper-config.json "$w/config.json"
@@ -88,12 +88,12 @@ spec:
             - name: AUTH_LOGIN
               valueFrom:
                 secretKeyRef:
-                  name: agent-zero-papa-auth
+                  name: agent-zero-guz-auth
                   key: AUTH_LOGIN
             - name: AUTH_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: agent-zero-papa-auth
+                  name: agent-zero-guz-auth
                   key: AUTH_PASSWORD
             - name: API_KEY_OTHER
               value: none
@@ -101,7 +101,7 @@ spec:
             - name: API_KEY_OPENAI
               valueFrom:
                 secretKeyRef:
-                  name: agent-zero-papa-auth
+                  name: agent-zero-guz-auth
                   key: API_KEY_OPENAI
             - name: WYOMING_STT_ADDR
               value: 100.72.0.8:7891
@@ -146,11 +146,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: agent-zero-papa
+  name: agent-zero-guz
   namespace: agent-zero
 spec:
   selector:
-    app: agent-zero-papa
+    app: agent-zero-guz
   ports:
     - name: http
       port: 80
@@ -160,24 +160,24 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: agente-papa-https
+  name: agente-guz-https
   namespace: agent-zero
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: traefik
   rules:
-    - host: agente-papa.${BASE_DOMAIN}
+    - host: agente-guz.${BASE_DOMAIN}
       http:
         paths:
           - pathType: Prefix
             path: /
             backend:
               service:
-                name: agent-zero-papa
+                name: agent-zero-guz
                 port:
                   number: 80
   tls:
-    - secretName: agente-papa.${BASE_DOMAIN}
+    - secretName: agente-guz.${BASE_DOMAIN}
       hosts:
-        - agente-papa.${BASE_DOMAIN}
+        - agente-guz.${BASE_DOMAIN}

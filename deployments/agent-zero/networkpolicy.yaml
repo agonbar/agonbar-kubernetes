@@ -12,7 +12,7 @@ metadata:
 spec:
   podSelector:
     matchExpressions:
-      - {key: app, operator: In, values: [agent-zero, agent-zero-papa]}
+      - {key: app, operator: In, values: [agent-zero, agent-zero-guz]}
   policyTypes: [Ingress, Egress]
   ingress:
     - ports:
