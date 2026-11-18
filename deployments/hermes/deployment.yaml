@@ -122,6 +122,12 @@ spec:
               hermes config set fallback_model \
                 '[{"provider":"openai","model":"swift-1.5-27b","base_url":"https://litellm.senseivision.ai/v1","key_env":"LITELLM_API_KEY"}]'
 
+              # Thinking high, like pi and Agent Zero: Heretic loops on repeated
+              # tool calls without it. hermes_constants.resolve_reasoning_config
+              # reads agent.reasoning_effort (default medium); `config set` calls
+              # the key unrecognized, which is wrong.
+              hermes config set agent.reasoning_effort high
+
               # agent-status: Hermes reports on the user's coding agents through
               # one read-only script. Its two secrets go to files because the
               # terminal tool strips the env before it runs anything. The Paseo
