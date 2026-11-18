@@ -10,6 +10,10 @@
 #   greeting every new chat starts with). Same JSON shape, Spanish text.
 # - SKILL.md + html-to-pdf.sh are the skill printable-documents, mounted as
 #   /a0/skills/printable-documents. Loaded on demand.
+# - office_markdown.py is an agent_init extension: office_artifact `create`
+#   writes each line as a plain paragraph, so Markdown landed in ODT/DOCX as
+#   literal ## and **. It renders Markdown content through LibreOffice
+#   instead. Re-check _office/helpers/document_store.py when bumping the image.
 #
 # Instructions are in English on purpose; the agent still answers in Spanish.
 apiVersion: v1
@@ -81,8 +85,8 @@ data:
 
     ## ODT / DOCX (editable documents)
     - NEVER build the ODT/DOCX zip or its XML by hand. Hand-made packages open as "corrupt, cannot be repaired" in LibreOffice.
-    - Do NOT use `office_artifact` `create` for formatted documents: it writes the content as plain text, so Markdown (`#`, `**`, `|` tables) shows up literally in the file.
-    - Build it with python-docx (`/opt/venv-a0/bin/python`, not system python3): `doc.add_heading(text, 0|1|2)` for titles, `doc.add_table(...)` with `table.style = "Light Grid Accent 1"`, `add_run(...).bold = True`, `style="List Bullet"` for lists. Save as `.docx`.
+    - `office_artifact` `create` (format `odt` or `docx`) renders Markdown content: `#` headings, `**bold**`, lists and `|` tables become real Writer styles. Good for most documents.
+    - For richer layout, build it with python-docx (`/opt/venv-a0/bin/python`, not system python3): `doc.add_heading(text, 0|1|2)` for titles, `doc.add_table(...)` with `table.style = "Light Grid Accent 1"`, `add_run(...).bold = True`, `style="List Bullet"` for lists. Save as `.docx`.
     - If the user wants ODT, convert the DOCX: `soffice --headless --convert-to odt --outdir <dir> file.docx`. Styles and tables survive.
     - If the user wants it to look nice on paper, the PDF from HTML is the deliverable; the ODT/DOCX is only for editing.
 
@@ -122,3 +126,105 @@ data:
     [ -s "$out" ] || { echo "Chromium did not write $out" >&2; exit 1; }
     pdfinfo "$out" | grep -E "^(Pages|Page size):"
     echo "$out"
+  office_markdown.py: |
+    """Make office_artifact `create` render Markdown into real ODT/DOCX.
+
+    The image's _office plugin writes every line of `content` as a plain
+    paragraph, so the model's Markdown (#, **, | tables) lands in the document
+    as literal text. This wraps document_store.odt_bytes and _docx: when the
+    content looks like Markdown it becomes HTML (python-markdown, tables) and
+    LibreOffice converts that to ODT/DOCX with real headings, bold and tables.
+    Anything else, or any failure, falls back to the original builder.
+
+    Mounted from agonbar-kubernetes deployments/agent-zero/guidance.yaml.
+    """
+    import html
+    import pathlib
+    import re
+    import subprocess
+    import tempfile
+
+    from helpers.extension import Extension
+
+    MD = re.compile(r"(?m)^(#{1,6} |\s*[-*] |\s*\d+\. |\|.*\|)|\*\*[^*]+\*\*")
+
+
+    def _looks_markdown(content) -> bool:
+        return bool(MD.search(str(content or "")))
+
+
+    def _blank_lines(text: str) -> str:
+        # python-markdown needs a blank line before a heading, list or table and
+        # after a table; models often omit it, and the next line then leaks into
+        # the table as literal text.
+        out, prev = [], ""
+        for line in text.splitlines():
+            is_table, was_table = line.lstrip().startswith("|"), prev.lstrip().startswith("|")
+            starts_block = bool(re.match(r"\s*(#{1,6} |[-*] |\d+\. )", line)) or (is_table and not was_table)
+            if prev.strip() and ((starts_block and not re.match(r"\s*([-*] |\d+\. )", prev)) or (was_table and not is_table)):
+                out.append("")
+            out.append(line)
+            prev = line
+        return "\n".join(out)
+
+
+    def _convert(title: str, content: str, ext: str) -> bytes:
+        import markdown
+
+        body = markdown.markdown(_blank_lines(str(content or "")), extensions=["tables", "sane_lists"])
+        body = body.replace("<table>", '<table border="1" cellpadding="4" cellspacing="0">')
+        title = str(title or "").strip()
+        heading = "" if (not title or body.lstrip().startswith("<h1")) else f"<h1>{html.escape(title)}</h1>"
+        page = (
+            "<!doctype html><html><head><meta charset='utf-8'>"
+            f"<title>{html.escape(title)}</title>"
+            "<style>table{border-collapse:collapse} th,td{border:1px solid #8a94a6;padding:3px 6px}"
+            " th{background:#dde6f3;color:#000}</style>"
+            f"</head><body>{heading}{body}</body></html>"
+        )
+        target = {"odt": "odt:writer8", "docx": "docx:MS Word 2007 XML"}[ext]
+        with tempfile.TemporaryDirectory() as tmp:
+            src = pathlib.Path(tmp, "doc.html")
+            src.write_text(page, encoding="utf-8")
+            subprocess.run(
+                ["soffice", f"-env:UserInstallation=file://{tmp}/profile", "--headless",
+                 "--infilter=HTML (StarWriter)", "--convert-to", target, "--outdir", tmp, str(src)],
+                check=True, timeout=120, capture_output=True,
+            )
+            out = pathlib.Path(tmp, f"doc.{ext}")
+            data = out.read_bytes()
+        if not data:
+            raise RuntimeError("empty conversion")
+        return data
+
+
+    def install() -> None:
+        from plugins._office.helpers import document_store as ds
+
+        if getattr(ds, "_a0_markdown_patch", False):
+            return
+        orig_odt, orig_docx = ds.odt_bytes, ds._docx
+
+        def odt_bytes(title, content):
+            if _looks_markdown(content):
+                try:
+                    return _convert(title, content, "odt")
+                except Exception:
+                    pass
+            return orig_odt(title, content)
+
+        def docx_bytes(title, content):
+            if _looks_markdown(content):
+                try:
+                    return _convert(title, content, "docx")
+                except Exception:
+                    pass
+            return orig_docx(title, content)
+
+        ds.odt_bytes, ds._docx = odt_bytes, docx_bytes
+        ds._a0_markdown_patch = True
+
+
+    class OfficeMarkdown(Extension):
+        def execute(self, **kwargs):
+            install()

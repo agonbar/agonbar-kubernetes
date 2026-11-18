@@ -168,6 +168,9 @@ spec:
             - name: skill-printable-documents
               mountPath: /a0/skills/printable-documents
               readOnly: true
+            - name: guidance
+              mountPath: /a0/extensions/python/agent_init/_60_office_markdown.py
+              subPath: office_markdown.py
 ---
 apiVersion: v1
 kind: Service
