@@ -62,6 +62,12 @@ spec:
             items:
               - {key: SKILL.md, path: SKILL.md}
               - {key: html-to-pdf.sh, path: html-to-pdf.sh}
+        - name: firefox-desktop-fix
+          configMap:
+            name: agent-zero-guidance
+            items:
+              - {key: firefox-plugin.yaml, path: plugin.yaml}
+              - {key: firefox-fix.html, path: extensions/webui/page-head/firefox-fix.html}
         - name: dshm
           emptyDir:
             medium: Memory
@@ -176,3 +182,6 @@ spec:
             - name: guidance
               mountPath: /a0/extensions/python/agent_init/_60_office_markdown.py
               subPath: office_markdown.py
+            - name: firefox-desktop-fix
+              mountPath: /a0/usr/plugins/firefox_desktop_fix
+              readOnly: true

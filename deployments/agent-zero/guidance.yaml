@@ -228,3 +228,49 @@ data:
     class OfficeMarkdown(Extension):
         def execute(self, **kwargs):
             install()
+  # User plugin firefox_desktop_fix (mounted at /a0/usr/plugins/firefox_desktop_fix).
+  # Xpra's HTML5 client polls the browser clipboard on every click
+  # (clipboard-direction=both). In Firefox that is navigator.clipboard.readText(),
+  # which pops Firefox's own "Paste" button: it swallows the right-button release,
+  # so X keeps button 3 held and the next clicks misbehave. Reproduced and fixed
+  # in Playwright Firefox 2026-11-18. Agent Zero has its own Ctrl+V paste bridge,
+  # so turning the poll off loses nothing.
+  firefox-plugin.yaml: |
+    name: firefox_desktop_fix
+    title: Firefox desktop fix
+    description: Stop Xpra's per-click clipboard poll in Firefox, which breaks right-click in the Desktop.
+    version: 1.0.0
+    settings_sections: []
+    per_project_config: false
+    per_agent_config: false
+  firefox-fix.html: |
+    <script>
+      (() => {
+        if (!/firefox/i.test(navigator.userAgent)) return;
+        const patch = (frame) => {
+          const win = frame.contentWindow;
+          const client = win && win.client;
+          if (!client) return false;
+          if (!client.__a0NoClipboardPoll) {
+            Object.defineProperty(client, "clipboard_poll", { get: () => false, set: () => {}, configurable: true });
+            client.__a0NoClipboardPoll = true;
+          }
+          return true;
+        };
+        const watch = (frame) => {
+          if (frame.__a0FirefoxFix) return;
+          frame.__a0FirefoxFix = true;
+          const tryPatch = () => {
+            let tries = 0;
+            const timer = setInterval(() => {
+              try { if (patch(frame) || ++tries > 120) clearInterval(timer); } catch (e) { clearInterval(timer); }
+            }, 500);
+          };
+          frame.addEventListener("load", tryPatch);
+          tryPatch();
+        };
+        const scan = () => document.querySelectorAll("iframe[data-office-desktop-frame]").forEach(watch);
+        new MutationObserver(scan).observe(document.documentElement, { childList: true, subtree: true });
+        scan();
+      })();
+    </script>
