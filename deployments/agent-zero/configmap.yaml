@@ -135,6 +135,31 @@ data:
             presence_penalty: 1.5
             chat_template_kwargs:
               enable_thinking: false
+    # Same Strata model as Default with thinking on: slower, for accounts
+    # and anything that has to add up.
+    - name: Pensando (Strata)
+      chat:
+        provider: other
+        name: swift-1.5-heretic-v2-iq3_s-85g
+        api_base: http://strata.strata.svc.cluster.local:8080/v1
+        ctx_length: 131072
+        ctx_history: 0.7
+        vision: true
+        max_embeds: 10
+        rl_requests: 0
+        rl_input: 0
+        rl_output: 0
+        kwargs:
+          temperature: 0.7
+          top_p: 0.8
+          extra_headers:
+            X-Strata-Priority: hot
+          extra_body:
+            top_k: 20
+            min_p: 0
+            presence_penalty: 1.5
+            chat_template_kwargs:
+              enable_thinking: true
 ---
 # Replaces the image's /exe/run_tunnel_api.sh. That service lets the UI (or the
 # agent, talked into it by a web page) open a public tunnel to the web UI,

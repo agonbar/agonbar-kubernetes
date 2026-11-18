@@ -81,9 +81,10 @@ data:
 
     ## ODT / DOCX (editable documents)
     - NEVER build the ODT/DOCX zip or its XML by hand. Hand-made packages open as "corrupt, cannot be repaired" in LibreOffice.
-    - ODT: use `office_artifact` (action `create`, format `odt`) with Markdown-style content (headings, lists, tables), or convert a simple HTML: `soffice --headless --convert-to odt:writer8 --outdir <dir> file.html`.
-    - DOCX: python-docx with `/opt/venv-a0/bin/python` (not system python3), real heading styles and tables.
-    - If the user wants it to look nice on paper, the PDF from HTML is the deliverable; the ODT is only for editing.
+    - Do NOT use `office_artifact` `create` for formatted documents: it writes the content as plain text, so Markdown (`#`, `**`, `|` tables) shows up literally in the file.
+    - Build it with python-docx (`/opt/venv-a0/bin/python`, not system python3): `doc.add_heading(text, 0|1|2)` for titles, `doc.add_table(...)` with `table.style = "Light Grid Accent 1"`, `add_run(...).bold = True`, `style="List Bullet"` for lists. Save as `.docx`.
+    - If the user wants ODT, convert the DOCX: `soffice --headless --convert-to odt --outdir <dir> file.docx`. Styles and tables survive.
+    - If the user wants it to look nice on paper, the PDF from HTML is the deliverable; the ODT/DOCX is only for editing.
 
     ## Editing the user's existing ODS/ODT/DOCX
     - First copy the original: `cp "Gastos.ods" "Gastos (copia antes de editar).ods"`.
@@ -92,6 +93,8 @@ data:
     ## Verify before saying it is done
     - PDF: `pdftoppm -r 60 -png -f 1 -l 2 output.pdf /tmp/check` and look at the PNGs with `vision_load`. Compare with what the HTML looks like.
     - ODT/DOCX/ODS: `soffice --headless --convert-to pdf --outdir /tmp/check "file.odt"` must succeed and produce a PDF; render it and look at it. If the conversion fails, the file is broken: say so and do not call it fixed.
+    - ODT/DOCX text check, do not skip it (looking at the image has missed this before): `soffice --headless --convert-to txt:Text --outdir /tmp/check "file.odt" && grep -nE '^#|\*\*|\|---' /tmp/check/*.txt`. Any match means Markdown leaked into the document as literal text: rebuild it with python-docx.
+    - Only describe what you actually see. Do not claim "real tables" or "heading styles" unless the render shows them.
   html-to-pdf.sh: |
     #!/bin/sh
     # Print an HTML file to PDF with headless Chromium, the same engine the
