@@ -1,5 +1,5 @@
-# Prompt and skill additions for Agent Zero, mounted read-only from git (see
-# guz.yaml). Written after a first real session (2026-11-18) where the agent
+# Prompt and skill additions for Agent Zero, mounted read-only from git in
+# both instances (deployment.yaml and guz.yaml). Written after a first real session (2026-11-18) where the agent
 # lost an afternoon to documents: it hand-zipped an ODT that LibreOffice could
 # not open, printed HTML to PDF with soffice (which drops most CSS), rewrote
 # the user's spreadsheet in place, and said "fixed" without opening the file.

@@ -52,6 +52,16 @@ spec:
         - name: whisper-runtime
           configMap:
             name: agent-zero-whisper-runtime
+        - name: guidance
+          configMap:
+            name: agent-zero-guidance
+        - name: skill-printable-documents
+          configMap:
+            name: agent-zero-guidance
+            defaultMode: 0755
+            items:
+              - {key: SKILL.md, path: SKILL.md}
+              - {key: html-to-pdf.sh, path: html-to-pdf.sh}
         - name: dshm
           emptyDir:
             medium: Memory
@@ -117,6 +127,10 @@ spec:
             # Image upgrades go through this manifest, not the in-app updater.
             - name: A0_SET_update_check_enabled
               value: "false"
+            # Keep the browser tool's Chromium (also used to print PDFs) on
+            # the volume instead of /a0/tmp, where it is lost on restart.
+            - name: A0_BROWSER_PLAYWRIGHT_CACHE_DIR
+              value: /a0/usr/playwright
           ports:
             - name: http
               containerPort: 80
@@ -148,3 +162,17 @@ spec:
             - name: whisper-runtime
               mountPath: /a0/plugins/_whisper_stt/helpers/runtime.py
               subPath: runtime.py
+            # guidance.yaml: deployment rules, Spanish greeting, the
+            # printable-documents skill and the Markdown-to-ODT/DOCX fix.
+            - name: guidance
+              mountPath: /a0/prompts/agent.system.main.specifics.md
+              subPath: specifics.md
+            - name: guidance
+              mountPath: /a0/prompts/fw.initial_message.md
+              subPath: initial_message.md
+            - name: skill-printable-documents
+              mountPath: /a0/skills/printable-documents
+              readOnly: true
+            - name: guidance
+              mountPath: /a0/extensions/python/agent_init/_60_office_markdown.py
+              subPath: office_markdown.py
