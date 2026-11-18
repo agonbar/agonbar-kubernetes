@@ -1,9 +1,11 @@
-# Nightly tar of /a0/usr (chats, memory, knowledge, her documents) to nas02
+# Nightly tar of /a0/usr of both instances (the sister's in deployment.yaml,
+# the father's in papa.yaml: chats, memory, knowledge, documents) to nas02
 # over NFS. The source is a local-path RWO volume on ovh02, so the job is pinned
 # to the same node; RWO allows a second pod there. 14 days kept.
 #
 # Restore: scale the deployment to 0, mount both PVCs in a throwaway pod on
-# ovh02, `tar -xzf <file> -C /a0/usr`, scale back to 1.
+# ovh02, `tar -xzf <file> -C /a0/usr`, scale back to 1. Files are
+# a0-usr-* (sister) and a0-papa-usr-* (father).
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -44,15 +46,21 @@ spec:
               args:
                 - |
                   set -eu
-                  out="/backups/a0-usr-$(date +%Y%m%d-%H%M%S).tar.gz"
-                  tar -czf "$out.part" -C /a0/usr .
-                  tar -tzf "$out.part" > /dev/null
-                  mv "$out.part" "$out"
-                  find /backups -name 'a0-usr-*.tar.gz' -mtime +14 -delete
+                  ts=$(date +%Y%m%d-%H%M%S)
+                  for v in a0-usr a0-papa-usr; do
+                    out="/backups/$v-$ts.tar.gz"
+                    tar -czf "$out.part" -C "/src/$v" .
+                    tar -tzf "$out.part" > /dev/null
+                    mv "$out.part" "$out"
+                    find /backups -name "$v-*.tar.gz" -mtime +14 -delete
+                  done
                   ls -la /backups | tail -5
               volumeMounts:
                 - name: usr
-                  mountPath: /a0/usr
+                  mountPath: /src/a0-usr
+                  readOnly: true
+                - name: usr-papa
+                  mountPath: /src/a0-papa-usr
                   readOnly: true
                 - name: backups
                   mountPath: /backups
@@ -60,6 +68,9 @@ spec:
             - name: usr
               persistentVolumeClaim:
                 claimName: agent-zero-usr
+            - name: usr-papa
+              persistentVolumeClaim:
+                claimName: agent-zero-papa-usr
             - name: backups
               persistentVolumeClaim:
                 claimName: agent-zero-backups

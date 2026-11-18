@@ -1,0 +1,183 @@
+# A second, separate Agent Zero for the user's father. Agent Zero has a single
+# login and one shared /a0/usr (chats, memory, projects), so a second person
+# needs a second instance, not a second account.
+#
+# Same image, hardening and models as deployment.yaml, with its own volume,
+# login (secret agent-zero-papa-auth) and hostname. It shares the no-tunnel and
+# whisper-runtime ConfigMaps, the NetworkPolicy and the nightly backup.
+#
+# Models: two presets seeded from presets-papa.yaml in configmap.yaml. Default
+# is Strata's big model; "Rápido (Swift 27B)" is the 27B on work-vm-00 through
+# LiteLLM. He picks one per chat with the model switcher.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: agent-zero-papa-usr
+  namespace: agent-zero
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-zero-papa
+  namespace: agent-zero
+  labels:
+    app: agent-zero-papa
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: agent-zero-papa
+  template:
+    metadata:
+      labels:
+        app: agent-zero-papa
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      nodeSelector:
+        workload: agents
+      volumes:
+        - name: usr
+          persistentVolumeClaim:
+            claimName: agent-zero-papa-usr
+        - name: seed
+          configMap:
+            name: agent-zero-seed
+        - name: no-tunnel
+          configMap:
+            name: agent-zero-no-tunnel
+            defaultMode: 0755
+        - name: whisper-runtime
+          configMap:
+            name: agent-zero-whisper-runtime
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi
+      initContainers:
+        - name: seed-presets
+          image: busybox:1.38.0
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              d=/a0/usr/plugins/_model_config
+              mkdir -p "$d"
+              [ -f "$d/presets.yaml" ] || cp /seed/presets-papa.yaml "$d/presets.yaml"
+              w=/a0/usr/plugins/_whisper_stt
+              mkdir -p "$w"
+              [ -f "$w/config.json" ] || cp /seed/whisper-config.json "$w/config.json"
+          volumeMounts:
+            - name: usr
+              mountPath: /a0/usr
+            - name: seed
+              mountPath: /seed
+      containers:
+        - name: agent-zero
+          image: agent0ai/agent-zero:v2.15@sha256:05d6ab347bd7db4b6bd5a7d902c9965281ff852ff23f29fffcc1c8919e628bd8
+          env:
+            - name: AUTH_LOGIN
+              valueFrom:
+                secretKeyRef:
+                  name: agent-zero-papa-auth
+                  key: AUTH_LOGIN
+            - name: AUTH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: agent-zero-papa-auth
+                  key: AUTH_PASSWORD
+            - name: API_KEY_OTHER
+              value: none
+            # Same LiteLLM virtual key `agent-zero` as the sister's instance.
+            - name: API_KEY_OPENAI
+              valueFrom:
+                secretKeyRef:
+                  name: agent-zero-papa-auth
+                  key: API_KEY_OPENAI
+            - name: WYOMING_STT_ADDR
+              value: 100.72.0.8:7891
+            - name: A0_SET_timezone
+              value: Europe/Madrid
+            - name: A0_SET_time_format
+              value: 24h
+            - name: A0_SET_update_check_enabled
+              value: "false"
+          ports:
+            - name: http
+              containerPort: 80
+          startupProbe:
+            tcpSocket:
+              port: 80
+            periodSeconds: 10
+            failureThreshold: 60
+          livenessProbe:
+            tcpSocket:
+              port: 80
+            periodSeconds: 30
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 500m
+              memory: 2Gi
+            limits:
+              cpu: "4"
+              memory: 6Gi
+          volumeMounts:
+            - name: usr
+              mountPath: /a0/usr
+            - name: dshm
+              mountPath: /dev/shm
+            - name: no-tunnel
+              mountPath: /exe/run_tunnel_api.sh
+              subPath: run_tunnel_api.sh
+            - name: whisper-runtime
+              mountPath: /a0/plugins/_whisper_stt/helpers/runtime.py
+              subPath: runtime.py
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-zero-papa
+  namespace: agent-zero
+spec:
+  selector:
+    app: agent-zero-papa
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+---
+# Same rules as ingress.yaml: only Agent Zero's own login, never RFC_PASSWORD.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: agente-papa-https
+  namespace: agent-zero
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: agente-papa.${BASE_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: agent-zero-papa
+                port:
+                  number: 80
+  tls:
+    - secretName: agente-papa.${BASE_DOMAIN}
+      hosts:
+        - agente-papa.${BASE_DOMAIN}

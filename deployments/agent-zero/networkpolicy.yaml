@@ -11,8 +11,8 @@ metadata:
   namespace: agent-zero
 spec:
   podSelector:
-    matchLabels:
-      app: agent-zero
+    matchExpressions:
+      - {key: app, operator: In, values: [agent-zero, agent-zero-papa]}
   policyTypes: [Ingress, Egress]
   ingress:
     - ports:

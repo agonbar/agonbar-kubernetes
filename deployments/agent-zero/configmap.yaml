@@ -65,6 +65,76 @@ data:
         rl_requests: 0
         rl_input: 0
         kwargs: {}
+  # The father's instance (papa.yaml). Default is the same Strata model as
+  # above; "Rápido (Swift 27B)" swaps only the chat model (named presets are
+  # laid over Default) for the 27B on work-vm-00, a bit faster per token
+  # (32.6 vs 25.7 tok/s measured 2026-11-18) and out of Strata's one-at-a-time
+  # queue, but a smaller model. Falls back to Strata when work-vm-00 is off.
+  presets-papa.yaml: |
+    - name: Default
+      chat:
+        provider: other
+        name: swift-1.5-heretic-v2-iq3_s-85g
+        api_base: http://strata.strata.svc.cluster.local:8080/v1
+        ctx_length: 131072
+        ctx_history: 0.7
+        vision: true
+        max_embeds: 10
+        rl_requests: 0
+        rl_input: 0
+        rl_output: 0
+        kwargs:
+          temperature: 0.7
+          top_p: 0.8
+          extra_headers:
+            X-Strata-Priority: hot
+          extra_body:
+            top_k: 20
+            min_p: 0
+            presence_penalty: 1.5
+            chat_template_kwargs:
+              enable_thinking: false
+      utility:
+        provider: openai
+        name: swift-1.5-27b
+        api_base: https://litellm.senseivision.ai/v1
+        ctx_length: 32768
+        ctx_input: 0.7
+        rl_requests: 0
+        rl_input: 0
+        rl_output: 0
+        kwargs:
+          extra_body:
+            chat_template_kwargs:
+              enable_thinking: false
+      embedding:
+        provider: huggingface
+        name: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+        api_base: ""
+        rl_requests: 0
+        rl_input: 0
+        kwargs: {}
+    - name: Rápido (Swift 27B)
+      chat:
+        provider: openai
+        name: swift-1.5-27b
+        api_base: https://litellm.senseivision.ai/v1
+        ctx_length: 131072
+        ctx_history: 0.7
+        vision: true
+        max_embeds: 10
+        rl_requests: 0
+        rl_input: 0
+        rl_output: 0
+        kwargs:
+          temperature: 0.7
+          top_p: 0.8
+          extra_body:
+            top_k: 20
+            min_p: 0
+            presence_penalty: 1.5
+            chat_template_kwargs:
+              enable_thinking: false
 ---
 # Replaces the image's /exe/run_tunnel_api.sh. That service lets the UI (or the
 # agent, talked into it by a web page) open a public tunnel to the web UI,
