@@ -511,16 +511,14 @@ data:
     # rsync of a running cluster's PGDATA is a torn copy, not a backup. It is
     # covered by the immich-postgres-backup CronJob, which dumps it and restores
     # the dump into a scratch database before calling it good.
-    # dawarich/dawarich-db-data-local is the same case since 2026-09-24, covered by
-    # dawarich-postgres-backup.
+    # dawarich/dawarich-db-data-pg18 is the same case (PostGIS 18 since
+    # 2026-11-17), covered by dawarich-postgres-backup.
     # piracy/bookorbit-data is a cover cache: BookOrbit regenerates covers/ from
     # the books, its database lives in the Postgres on nas02, and the only other
     # file is one user avatar. Nothing in it is worth a nightly copy.
-    # dawarich/dawarich-db-data-pg18 replaced -data-local on 2026-11-17 (PostGIS
-    # 18); same dump-and-restore coverage.
     # agent-zero/agent-zero-usr has its own nightly tar to nas02
     # (deployments/agent-zero/backup.yaml).
-    COVERAGE_SKIP="immich/immich-db-data-local dawarich/dawarich-db-data-local dawarich/dawarich-db-data-pg18 piracy/bookorbit-data agent-zero/agent-zero-usr"
+    COVERAGE_SKIP="immich/immich-db-data-local dawarich/dawarich-db-data-pg18 piracy/bookorbit-data agent-zero/agent-zero-usr"
 
     check_coverage() {
       echo "========================================="
