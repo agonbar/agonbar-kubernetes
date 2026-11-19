@@ -182,11 +182,21 @@ spec:
               value: https://netbird.senseivision.ai
             - name: NB_HOSTNAME
               value: exit-ovh
+            # Direct (P2P) path for guests behind CGNAT such as Starlink: a fixed
+            # WireGuard port published on ovh02's public IP and announced as this
+            # peer's address, so the guest dials it instead of going through the
+            # WebSocket relay (~13 Mbps). 51820 is taken by subspace on ovh02.
+            - name: NB_WIREGUARD_PORT
+              value: "51830"
+            - name: NB_EXTERNAL_IP_MAP
+              value: 80.241.214.254/eth0
             - name: NB_SETUP_KEY
               valueFrom:
                 secretKeyRef:
                   name: netbird-exit-keys
                   key: NB_SETUP_KEY_OVH
+          ports:
+            - { name: wireguard, containerPort: 51830, hostPort: 51830, protocol: UDP }
           securityContext:
             capabilities:
               add: [NET_ADMIN]
@@ -234,3 +244,19 @@ spec:
               - 100.64.0.0/10
               - 169.254.0.0/16
               - 80.241.214.254/32
+---
+# The one way in: guests' WireGuard packets to the OVH exit's published port.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: netbird-exit-ovh-wireguard-in
+  namespace: netbird-exit
+spec:
+  podSelector:
+    matchLabels:
+      app: netbird-exit
+      exit: ovh
+  policyTypes: [Ingress]
+  ingress:
+    - ports:
+        - { port: 51830, protocol: UDP }
