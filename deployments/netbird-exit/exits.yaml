@@ -56,11 +56,21 @@ spec:
               value: https://netbird.senseivision.ai
             - name: NB_HOSTNAME
               value: exit-aya
+            # Direct (P2P) path, same idea as exit-ovh: the aya Movistar router
+            # forwards UDP 51831 to the kube-vip VIP 192.168.1.26, where the
+            # LoadBalancer below (svclb, lbpool aya) hands it to this pod, and
+            # the pod announces the aya public IP as its address.
+            - name: NB_WIREGUARD_PORT
+              value: "51831"
+            - name: NB_EXTERNAL_IP_MAP
+              value: 83.34.86.1/eth0
             - name: NB_SETUP_KEY
               valueFrom:
                 secretKeyRef:
                   name: netbird-exit-keys
                   key: NB_SETUP_KEY_AYA
+          ports:
+            - { name: wireguard, containerPort: 51831, protocol: UDP }
           securityContext:
             capabilities:
               add: [NET_ADMIN]    # WireGuard + nftables masquerade + ip_forward
@@ -260,3 +270,37 @@ spec:
   ingress:
     - ports:
         - { port: 51830, protocol: UDP }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: netbird-exit-aya-wireguard-in
+  namespace: netbird-exit
+spec:
+  podSelector:
+    matchLabels:
+      app: netbird-exit
+      exit: aya
+  policyTypes: [Ingress]
+  ingress:
+    - ports:
+        - { port: 51831, protocol: UDP }
+---
+# Published on the aya kube-vip VIP (192.168.1.26) through svclb; the router
+# port forward targets that VIP so it follows whichever aya node holds it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: exit-aya-wireguard
+  namespace: netbird-exit
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: aya
+  annotations:
+    svccontroller.k3s.cattle.io/tolerations: '[{"key":"dedicated","operator":"Equal","value":"media","effect":"NoSchedule"}]'
+spec:
+  type: LoadBalancer
+  selector:
+    app: netbird-exit
+    exit: aya
+  ports:
+    - { name: wireguard, port: 51831, targetPort: 51831, protocol: UDP }
