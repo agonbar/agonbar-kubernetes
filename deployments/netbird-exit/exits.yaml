@@ -1,10 +1,11 @@
-# Two NetBird internet exits for guest peers: one leaves through a lamg house
-# node ("Salida casa"), the other through ovh02 ("Salida OVH"). A guest selects
-# one in the NetBird client and all their traffic leaves from here, encrypted
-# up to this point, instead of in clear through their own ISP.
+# Three NetBird internet exits for guest peers, one per site: aya and lamg
+# (house lines) and ovh02. A guest selects one in the NetBird client (routes
+# exit-home = aya, the default; exit-home-backup = lamg; exit-ovh) and all
+# their traffic leaves from here, encrypted up to this point, instead of in
+# clear through their own ISP.
 #
-# The NetBird side (groups exit-users/exit-home/exit-ovh, the two 0.0.0.0/0
-# routes, the policies and the setup keys) lives in the mgmt DB and is created
+# The NetBird side (groups exit-users/exit-aya/exit-lamg/exit-ovh, the
+# 0.0.0.0/0 routes, the policies and the setup keys) lives in the mgmt DB and is created
 # by scripts/netbird-exit-setup.sh, which also writes the Secret
 # netbird-exit-keys here. Nothing secret is in git.
 #
@@ -15,16 +16,17 @@
 # restarted pod enrolls as a fresh peer and the old one is dropped after 10 min.
 #
 # Node choice is by the semantic label egress-site, set by hand:
+#   kubectl label node rpi-01 egress-site=aya
 #   kubectl label node nas02-k3s egress-site=lamg
 #   kubectl label node ovh02 egress-site=ovh
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: exit-home
+  name: exit-aya
   namespace: netbird-exit
   labels:
     app: netbird-exit
-    exit: home
+    exit: aya
 spec:
   replicas: 1
   strategy:
@@ -32,12 +34,76 @@ spec:
   selector:
     matchLabels:
       app: netbird-exit
-      exit: home
+      exit: aya
   template:
     metadata:
       labels:
         app: netbird-exit
-        exit: home
+        exit: aya
+    spec:
+      nodeSelector:
+        egress-site: aya
+      # Public resolvers only: cluster DNS sits on a private address the
+      # NetworkPolicy blocks, and must not be reachable through the exit anyway.
+      dnsPolicy: None
+      dnsConfig:
+        nameservers: [1.1.1.1, 9.9.9.9]
+      containers:
+        - name: netbird
+          image: netbirdio/netbird:0.76.0   # pinned to the management version
+          env:
+            - name: NB_MANAGEMENT_URL
+              value: https://netbird.senseivision.ai
+            - name: NB_HOSTNAME
+              value: exit-aya
+            - name: NB_SETUP_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: netbird-exit-keys
+                  key: NB_SETUP_KEY_AYA
+          securityContext:
+            capabilities:
+              add: [NET_ADMIN]    # WireGuard + nftables masquerade + ip_forward
+          volumeMounts:
+            - name: nb-config
+              mountPath: /etc/netbird
+            - name: tun
+              mountPath: /dev/net/tun
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+      volumes:
+        - name: nb-config
+          emptyDir: {}
+        - name: tun
+          hostPath:
+            path: /dev/net/tun
+            type: CharDevice
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: exit-lamg
+  namespace: netbird-exit
+  labels:
+    app: netbird-exit
+    exit: lamg
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: netbird-exit
+      exit: lamg
+  template:
+    metadata:
+      labels:
+        app: netbird-exit
+        exit: lamg
     spec:
       nodeSelector:
         egress-site: lamg
@@ -53,12 +119,12 @@ spec:
             - name: NB_MANAGEMENT_URL
               value: https://netbird.senseivision.ai
             - name: NB_HOSTNAME
-              value: exit-home
+              value: exit-lamg
             - name: NB_SETUP_KEY
               valueFrom:
                 secretKeyRef:
                   name: netbird-exit-keys
-                  key: NB_SETUP_KEY_HOME
+                  key: NB_SETUP_KEY_LAMG
           securityContext:
             capabilities:
               add: [NET_ADMIN]    # WireGuard + nftables masquerade + ip_forward

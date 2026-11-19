@@ -3,14 +3,16 @@
 # Idempotent: creates whatever is missing, never edits or deletes.
 #
 #   exit-users   SSO users allowed to use the exits (set as their user auto_group)
-#   exit-home    the exit pod on a lamg house node
+#   exit-aya     the exit pod on an aya house node
+#   exit-lamg    the exit pod on a lamg house node
 #   exit-ovh     the exit pod on ovh02
-#   route        "Salida casa" / "Salida OVH": 0.0.0.0/0 via each pod, masquerade,
-#                distributed to exit-users only
-#   policy       exit-users -> exit-home / exit-ovh, nothing else
+#   route        what the guest picks in the client, named by role:
+#                exit-home (aya, the default), exit-home-backup (lamg), exit-ovh;
+#                0.0.0.0/0 via each pod, masquerade, distributed to exit-users only
+#   policy       exit-users -> each exit group, nothing else
 #
 # The setup keys go straight into the Secret netbird-exit/netbird-exit-keys
-# (keys NB_SETUP_KEY_HOME / NB_SETUP_KEY_OVH), never to stdout or git.
+# (keys NB_SETUP_KEY_AYA / NB_SETUP_KEY_LAMG / NB_SETUP_KEY_OVH), never to stdout or git.
 # The exits are fenced off from anything private by the NetworkPolicy in the
 # manifest, not by NetBird: an exit route covers 10/8 and 192.168/16 too.
 #
@@ -118,12 +120,16 @@ if [ "${1:-}" = guest ]; then
 fi
 
 users=$(ensure_group exit-users)
-home=$(ensure_group exit-home)
+aya=$(ensure_group exit-aya)
+lamg=$(ensure_group exit-lamg)
 ovh=$(ensure_group exit-ovh)
-ensure_setup_key netbird-exit-home "$home" NB_SETUP_KEY_HOME
+ensure_setup_key netbird-exit-aya "$aya" NB_SETUP_KEY_AYA
+ensure_setup_key netbird-exit-lamg "$lamg" NB_SETUP_KEY_LAMG
 ensure_setup_key netbird-exit-ovh "$ovh" NB_SETUP_KEY_OVH
-# Home is the default exit; OVH is opt-in from the client menu.
-ensure_route exit-home "Salida casa" "$home" "$users" false
+# Home (aya) is the default exit; the other two are opt-in from the client menu.
+ensure_route exit-home "Salida casa (aya)" "$aya" "$users" false
+ensure_route exit-home-backup "Salida casa respaldo (lamg)" "$lamg" "$users" true
 ensure_route exit-ovh "Salida OVH" "$ovh" "$users" true
-ensure_policy exit-users-to-home "$users" "$home"
+ensure_policy exit-users-to-aya "$users" "$aya"
+ensure_policy exit-users-to-lamg "$users" "$lamg"
 ensure_policy exit-users-to-ovh "$users" "$ovh"
