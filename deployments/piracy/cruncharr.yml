@@ -8,7 +8,8 @@ metadata:
 spec:
   strategy:
     type: Recreate
-  replicas: 1
+  # Paused 2026-11-20 at the user's request for a couple of days; set back to 1 when they say so.
+  replicas: 0
   selector:
     matchLabels:
       app: cruncharr
