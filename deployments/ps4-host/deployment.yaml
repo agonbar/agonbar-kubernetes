@@ -23,6 +23,9 @@ spec:
             - containerPort: 80
               name: http
               protocol: TCP
+      # ghcr.io/agonbar is private: pull needs credentials on every node.
+      imagePullSecrets:
+        - name: ghcr-pull
       # Static site served by nginx; pinned to the always-on NAS node.
       nodeSelector:
         egress-site: lamg
