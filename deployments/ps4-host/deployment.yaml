@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: ps4-host
+  name: ps4-host
+  namespace: ps4
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ps4-host
+  template:
+    metadata:
+      labels:
+        app: ps4-host
+    spec:
+      containers:
+        - image: ghcr.io/agonbar/ps4-host:latest
+          name: web
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+              name: http
+              protocol: TCP
+      # Static site served by nginx; pinned to the always-on NAS node.
+      nodeSelector:
+        egress-site: lamg

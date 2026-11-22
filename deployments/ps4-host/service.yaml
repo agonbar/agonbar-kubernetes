@@ -1,0 +1,16 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: ps4-host-lb
+  namespace: ps4
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: lamg
+spec:
+  type: LoadBalancer
+  selector:
+    app: ps4-host
+  ports:
+    - protocol: TCP
+      port: 8135
+      targetPort: 80
+      name: http
