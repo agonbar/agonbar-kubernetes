@@ -21,7 +21,7 @@ spec:
                 - name: bookorbit
                   # Pinned: one maintainer, weekly releases, two majors between May and
                   # September 2026. Read the changelog before bumping.
-                  image: ghcr.io/bookorbit/bookorbit:3.8.0
+                  image: ghcr.io/bookorbit/bookorbit:3.9.0
                   imagePullPolicy: IfNotPresent
                   env:
                       - name: APP_URL
