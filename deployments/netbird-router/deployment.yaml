@@ -51,7 +51,7 @@ spec:
         kubernetes.io/hostname: ovh02   # pinned: public VPS node, reaches the ClusterIP, always up
       containers:
         - name: netbird
-          image: netbirdio/netbird:0.76.0   # pinned to the management version
+          image: netbirdio/netbird:0.83.2   # pinned to the management version
           env:
             - name: NB_MANAGEMENT_URL
               value: https://netbird.senseivision.ai
