@@ -96,7 +96,7 @@ spec:
         - name: web
           # Pinned: the entrypoint runs `rails db:prepare` on every server
           # start, so an image bump is a schema migration. Bump deliberately.
-          image: ghcr.io/we-promise/sure:0.7.6-hotfix.1
+          image: ghcr.io/we-promise/sure:0.7.6-hotfix.2
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -213,7 +213,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: worker
-          image: ghcr.io/we-promise/sure:0.7.6-hotfix.1
+          image: ghcr.io/we-promise/sure:0.7.6-hotfix.2
           command: ["/rails/bin/docker-entrypoint", "bundle", "exec", "sidekiq"]
           securityContext:
             allowPrivilegeEscalation: false
