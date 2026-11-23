@@ -73,6 +73,31 @@ spec:
 
 
 ---
+# www.<domain> goes straight to https://<domain>, in one hop even from plain http.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: web-adrian-no-www
+  namespace: agonbar
+spec:
+  redirectRegex:
+    regex: ^https?://www\.(.+)
+    replacement: https://${1}
+    permanent: true
+
+---
+# Plain http goes to https. Does nothing on requests that already came in over https.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: web-adrian-https
+  namespace: agonbar
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+
+---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -80,6 +105,7 @@ metadata:
   namespace: agonbar
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.middlewares: agonbar-web-adrian-no-www@kubernetescrd,agonbar-web-adrian-https@kubernetescrd
 spec:
   ingressClassName: traefik
   rules:
@@ -93,7 +119,18 @@ spec:
                 name: web-adrian
                 port:
                   number: 80
+    - host: www.${BASE_DOMAIN}
+      http:
+        paths:
+          - pathType: Prefix
+            path: /
+            backend:
+              service:
+                name: web-adrian
+                port:
+                  number: 80
   tls:
     - secretName: ${BASE_DOMAIN}
       hosts:
         - ${BASE_DOMAIN}
+        - www.${BASE_DOMAIN}
