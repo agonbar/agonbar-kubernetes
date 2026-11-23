@@ -50,7 +50,7 @@ spec:
         nameservers: [1.1.1.1, 9.9.9.9]
       containers:
         - name: netbird
-          image: netbirdio/netbird:0.76.0   # pinned to the management version
+          image: netbirdio/netbird:0.83.2   # pinned to the management version
           env:
             - name: NB_MANAGEMENT_URL
               value: https://netbird.senseivision.ai
@@ -124,7 +124,7 @@ spec:
         nameservers: [1.1.1.1, 9.9.9.9]
       containers:
         - name: netbird
-          image: netbirdio/netbird:0.76.0   # pinned to the management version
+          image: netbirdio/netbird:0.83.2   # pinned to the management version
           env:
             - name: NB_MANAGEMENT_URL
               value: https://netbird.senseivision.ai
@@ -186,7 +186,7 @@ spec:
         nameservers: [1.1.1.1, 9.9.9.9]
       containers:
         - name: netbird
-          image: netbirdio/netbird:0.76.0
+          image: netbirdio/netbird:0.83.2
           env:
             - name: NB_MANAGEMENT_URL
               value: https://netbird.senseivision.ai
