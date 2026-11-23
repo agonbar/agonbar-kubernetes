@@ -568,6 +568,12 @@ data:
     # is covered by the dawarich-postgres-backup CronJob, which dumps it and
     # restores the dump into a scratch database before calling it good.
 
+    # desguace-staging namespace (desguaces-sandias, applied by hand from that
+    # project's staging-k8s.yaml on 2026-11-18). local-path on ovh02. db-data is
+    # a live MariaDB copied file by file: crash-consistent at best, fine for staging.
+    backup_local_path_pvc desguace-staging db-data
+    backup_local_path_pvc desguace-staging ps-data
+
     # games namespace
     backup_pvc games enshrouded-data-nfs
     backup_pvc games factorio-data-nfs
