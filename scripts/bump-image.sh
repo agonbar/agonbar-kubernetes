@@ -50,10 +50,10 @@ for w in "${workloads[@]}"; do
   IFS=/ read -r ns kind name <<<"$w"
   if [ "${SKIP_SPEC:-0}" != 1 ]; then
     for _ in $(seq 60); do
-      $K -n "$ns" get "$kind/$name" -o json | grep -qF -- "$new" && break
+      $K -n "$ns" get "$kind/$name" -o json | grep -F -- "$new" >/dev/null && break
       sleep 10
     done
-    $K -n "$ns" get "$kind/$name" -o json | grep -qF -- "$new" || fail "$w never got $new"
+    $K -n "$ns" get "$kind/$name" -o json | grep -F -- "$new" >/dev/null || fail "$w never got $new"
   fi
   $K -n "$ns" rollout status "$kind/$name" --timeout=600s || fail "$w rollout"
 done
