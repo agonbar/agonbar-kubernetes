@@ -70,7 +70,7 @@ spec:
                   name: netbird-exit-keys
                   key: NB_SETUP_KEY_AYA
           ports:
-            - { name: wireguard, containerPort: 51831, protocol: UDP }
+            - {name: wireguard, containerPort: 51831, protocol: UDP}
           securityContext:
             capabilities:
               add: [NET_ADMIN]    # WireGuard + nftables masquerade + ip_forward
@@ -206,7 +206,7 @@ spec:
                   name: netbird-exit-keys
                   key: NB_SETUP_KEY_OVH
           ports:
-            - { name: wireguard, containerPort: 51830, hostPort: 51830, protocol: UDP }
+            - {name: wireguard, containerPort: 51830, hostPort: 51830, protocol: UDP}
           securityContext:
             capabilities:
               add: [NET_ADMIN]
@@ -269,7 +269,7 @@ spec:
   policyTypes: [Ingress]
   ingress:
     - ports:
-        - { port: 51830, protocol: UDP }
+        - {port: 51830, protocol: UDP}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -284,7 +284,7 @@ spec:
   policyTypes: [Ingress]
   ingress:
     - ports:
-        - { port: 51831, protocol: UDP }
+        - {port: 51831, protocol: UDP}
 ---
 # Published on the aya kube-vip VIP (192.168.1.26) through svclb; the router
 # port forward targets that VIP so it follows whichever aya node holds it.
@@ -303,4 +303,4 @@ spec:
     app: netbird-exit
     exit: aya
   ports:
-    - { name: wireguard, port: 51831, targetPort: 51831, protocol: UDP }
+    - {name: wireguard, port: 51831, targetPort: 51831, protocol: UDP}

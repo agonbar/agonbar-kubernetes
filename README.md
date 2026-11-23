@@ -1,250 +1,162 @@
 # agonbar-kubernetes
 
+[![CI](https://github.com/agonbar/agonbar-kubernetes/actions/workflows/ci.yaml/badge.svg)](https://github.com/agonbar/agonbar-kubernetes/actions/workflows/ci.yaml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-GitOps configuration for my personal [K3s](https://k3s.io/) cluster — a
-three-site setup where the control plane runs on a cloud VPS and worker nodes
-live in two houses connected over a [Tailscale](https://tailscale.com/) /
-[Headscale](https://github.com/juanfont/headscale) mesh. [ArgoCD](https://argo-cd.readthedocs.io/)
-reconciles everything in this repo onto the cluster.
+GitOps configuration for my personal [K3s](https://k3s.io/) cluster: 12 nodes
+across three sites, joined by a WireGuard mesh, with the control plane on a
+cloud VPS. [ArgoCD](https://argo-cd.readthedocs.io/) reconciles everything in
+this repo onto the cluster. Nothing is applied by hand except the ArgoCD
+bootstrap.
+
+```mermaid
+flowchart LR
+  subgraph vps["Cloud VPS"]
+    cp["k3s server<br/>Traefik ingress<br/>ArgoCD"]
+  end
+  subgraph lamg["House 'lamg'"]
+    lw["4 workers (amd64 + arm64)"]
+    nas[("TrueNAS<br/>iSCSI + NFS")]
+  end
+  subgraph aya["House 'aya'"]
+    aw["4 workers (Raspberry Pi + GPU VM)"]
+  end
+  subgraph rack["Proxmox VMs"]
+    mw["3 workers<br/>media transcoding, GPU"]
+  end
+  internet((Internet)) --> cp
+  mesh{{"Tailscale / Headscale mesh<br/>flannel over tailscale0"}}
+  cp <--> mesh
+  mesh <--> lw & aw & mw
+  lw --- nas
+```
 
 ## Stack
 
 | Component | Technology |
 |-----------|------------|
-| **Distribution** | K3s (cloud VPS server + SBC workers across two houses) |
-| **Mesh networking** | Tailscale clients on every node, Headscale as the control server. `flannel-iface: tailscale0` so all cluster traffic rides the overlay. |
-| **Ingress** | [Traefik](https://traefik.io/) with automatic TLS via [Let's Encrypt](https://letsencrypt.org/) |
-| **LoadBalancer IPs** | [kube-vip](https://kube-vip.io/) with per-house pools — a Service annotated `svccontroller.k3s.cattle.io/lbpool=aya` picks IPs only from aya-house nodes, never from the VPS |
-| **GitOps** | ArgoCD with envsubst CMP sidecar so workload manifests reference `${BASE_DOMAIN}` instead of the real hostname |
-| **Secret management** | [Bitnami Sealed Secrets](https://github.com/bitnami-labs/sealed-secrets), cluster-wide scope |
-| **Storage** | [democratic-csi](https://github.com/democratic-csi/democratic-csi) → TrueNAS (iSCSI RWO + NFS shared) |
-| **Image updates** | [Keel](https://keel.sh/) in poll mode (no webhook) |
-| **Cluster upgrades** | [System Upgrade Controller](https://github.com/rancher/system-upgrade-controller) |
+| Distribution | K3s: one cloud server, workers on SBCs, mini PCs and Proxmox VMs |
+| Mesh networking | Tailscale on every node with Headscale as control server; `flannel-iface: tailscale0`, so all pod traffic rides the overlay. NetBird for guest access |
+| Ingress | [Traefik](https://traefik.io/) + [cert-manager](https://cert-manager.io/) (Let's Encrypt, HTTP-01 and DNS-01 through the OVH API) |
+| LoadBalancer IPs | [kube-vip](https://kube-vip.io/) with per-house pools: a Service annotated `svccontroller.k3s.cattle.io/lbpool=aya` only gets IPs from aya nodes, never from the VPS |
+| GitOps | ArgoCD app-of-apps (35 Applications, prune + self-heal) with an envsubst CMP sidecar that renders `${BASE_DOMAIN}` |
+| Secrets | [Sealed Secrets](https://github.com/bitnami/sealed-secrets), cluster-wide scope; plaintext never enters git (enforced by gitleaks, see [CI](#ci)) |
+| Storage | [democratic-csi](https://github.com/democratic-csi/democratic-csi) → TrueNAS (iSCSI for RWO, NFS for shared), local-path for latency-sensitive databases, nightly volume snapshots |
+| Image updates | [Keel](https://keel.sh/) in poll mode, plus [`scripts/bump-image.sh`](scripts/README.md) for pinned tags |
+| Cluster upgrades | [System Upgrade Controller](https://github.com/rancher/system-upgrade-controller) plans in [`system/upgrades/`](system/upgrades/) |
 
-## Two-house cluster with a cloud control plane
+## Three sites, one cluster
 
-Workers live in two physical locations (the `lamg` and `aya` houses); the
-control plane runs on a cloud VPS. Nodes carry the
-`svccontroller.k3s.cattle.io/lbpool` label to tag house membership, and
-workloads that need LAN-local NFS or hardware devices pin to their owning
-house via `nodeSelector`. This is why some services (Home Assistant, Hyperion,
-Pi-hole) are "duplicated" across `lamg/` and `aya/` — one instance per house,
-not a mistake.
+Workers live in two houses (`lamg` and `aya`) and in a small Proxmox rack. The
+control plane runs on a cloud VPS. Each house's nodes carry the
+`svccontroller.k3s.cattle.io/lbpool` label, so LAN-facing Services get an IP
+in the right house, and workloads that need LAN-local NFS or a USB device
+(Zigbee dongle, GPU) are placed in their house. That is why Home Assistant and
+Pi-hole appear in both `lamg/` and `aya/`: one instance per house.
 
-The VPS never runs LAN-bound workloads; it's deliberately excluded from both
-LB pools and carries no house label.
+The VPS never runs LAN-bound workloads. It carries no house label and is left
+out of both pools. The Proxmox workers have no house label either; they take
+the general and transcoding load.
 
-## Domain stays out of Git
+## Hostnames come from one variable
 
 An envsubst
 [ConfigManagementPlugin](https://argo-cd.readthedocs.io/en/stable/operator-manual/config-management-plugins/)
-sidecar on `argocd-repo-server` substitutes `${BASE_DOMAIN}` at manifest-render
-time. Every workload Application runs in plugin mode
-(`spec.source.plugin.name: envsubst-plugin-v1`), so committed manifests
-reference e.g. `jellyfin.${BASE_DOMAIN}` while the real value lives only in an
-in-cluster SealedSecret. Same pattern handles ArgoCD's own ingress via a
-dedicated `argocd` Application. See
-[`system/argocd/cmp-envsubst-plugin-cm.yaml`](system/argocd/cmp-envsubst-plugin-cm.yaml)
-and
-[`system/argocd/argocd-repo-server-cmp-sidecar-patch.yaml`](system/argocd/argocd-repo-server-cmp-sidecar-patch.yaml)
-for the implementation.
+sidecar on `argocd-repo-server` substitutes `${BASE_DOMAIN}` when it renders a
+manifest. Workload Applications run in plugin mode, so ingresses say
+`jellyfin.${BASE_DOMAIN}` and the value lives in an in-cluster SealedSecret.
+Moving the cluster to another domain is one secret change. The exceptions are
+the DNS-01 issuer and a few operator scripts, which have to name the DNS zone.
 
-Envsubst uses a single-variable allowlist (`envsubst '$BASE_DOMAIN'`) so the
-many `${...}` shell references inside initContainer scripts aren't mangled.
+The plugin uses an allowlist (`envsubst '$BASE_DOMAIN $AMANDA_DOMAIN
+$LETSENCRYPT_EMAIL'`), so shell `${...}` references inside initContainer
+scripts and Traefik regex replacements reach the cluster untouched. See
+[`system/argocd/cmp-envsubst-plugin-cm.yaml`](system/argocd/cmp-envsubst-plugin-cm.yaml).
 
 ## Repository layout
 
 ```
 .
-├── deployments/                 # Application manifests by namespace
-│   ├── agonbar/                 # personal services
-│   ├── argocd/                  # ArgoCD's own ingress (plugin-rendered)
-│   ├── aya/                     # smart home — aya house
-│   ├── dawarich/                # location tracking
-│   ├── games/                   # dedicated game servers
-│   ├── immich/                  # photo management
-│   ├── lamg/                    # smart home + media — lamg house
-│   ├── matrix/                  # communication
-│   ├── piracy/                  # media acquisition/management
-│   ├── scrutiny/                # disk S.M.A.R.T. monitoring
-│   └── yavoo/                   # decentralized storage node
-│
-├── system/                      # platform components
-│   ├── argocd/                  # install + CMP sidecar + sealed secret
-│   ├── global-argocd-apps/      # Application CRs (app-of-apps)
-│   ├── traefik/                 # ingress controller config
-│   ├── democratic-csi/          # storage driver config
-│   ├── kube-vip/                # LoadBalancer IP pools
-│   ├── snapshots/ upgrades/ ...
-│
-├── scripts/                     # cluster tooling, see scripts/README.md
-├── seal-secrets.sh              # encrypt secrets.yaml → sealedsecrets.yaml
-└── unseal-secrets.sh            # recover from the cluster
+├── deployments/          # one directory per namespace, synced by its own Application
+├── system/
+│   ├── argocd/           # ArgoCD install + CMP sidecar (applied once by hand)
+│   ├── global-argocd-apps/  # Application CRs: the app-of-apps
+│   ├── cert-manager/  democratic-csi/  kube-vip/
+│   ├── snapshots/        # nightly volume snapshots + restore runbook
+│   ├── upgrades/         # System Upgrade Controller plans
+│   ├── node-autotaint/  nodes/  tenants/
+├── scripts/              # cluster tooling, one row each in scripts/README.md
+├── docs/                 # longer write-ups (storage migration, agent notes)
+├── seal-secrets.sh       # secrets.yaml → sealedsecrets.yaml
+└── unseal-secrets.sh     # recover plaintext from the cluster
 ```
 
-Each namespace directory contains a `namespace.yaml`, per-app manifests, and a
-`sealedsecrets.yaml` for encrypted credentials. The plaintext `secrets.yaml`
-counterpart is gitignored.
+Each namespace directory holds a `namespace.yaml`, the app manifests and a
+`sealedsecrets.yaml`. The plaintext `secrets.yaml` next to it is gitignored.
 
-## Namespaces & Applications
+## Namespaces
 
-### agonbar — Personal Services
-
-| Application | Description |
-|-------------|-------------|
-| Vaultwarden | Password manager (Bitwarden-compatible) |
-| Gitea | Self-hosted Git service |
-| Paperless-ngx | Document management with OCR |
-| MinIO | S3-compatible object storage |
-| Glance | Personal dashboard |
-| Uptime Kuma | Service uptime monitoring |
-| Web Adrian / Web Amanda | Personal websites |
-| Espuma Chat | Chat application |
-| Factorio | Dedicated game server |
-| OpenClaw, Banderillo, Slash | Custom applications |
-
-### aya — Smart Home & Network
-
-| Application | Description |
-|-------------|-------------|
-| Home Assistant | Home automation platform |
-| Pi-hole | DNS-level ad blocking |
-| DHCPD | DHCP server |
-| Hyperion | Ambient lighting control |
-
-### dawarich — Location Tracking
-
-| Application | Description |
-|-------------|-------------|
-| Dawarich | Location history tracking |
-| PostgreSQL | Primary database |
-| Redis | Cache and session store |
-| Sidekiq | Background job processor |
-
-### games — Game Servers
-
-| Application | Description |
-|-------------|-------------|
-| Palworld | Dedicated Palworld server |
-| Enshrouded | Dedicated Enshrouded server |
-
-### immich — Photo Management
-
-| Application | Description |
-|-------------|-------------|
-| Immich Server | Self-hosted photo and video management |
-| Machine Learning | Image classification and face recognition |
-| PostgreSQL | Metadata database |
-| Redis | Cache layer |
-
-### lamg — Smart home & media (lamg house)
-
-| Application | Description |
-|-------------|-------------|
-| Home Assistant | Home automation hub |
-| Plex | Media streaming server |
-| Syncthing | Distributed file synchronization |
-| Mosquitto (MQTT) | Message broker for IoT devices |
-| Zigbee2MQTT + zigbee2mqtt-assistant | Zigbee bridge |
-| NetBoot.xyz | Network boot server |
-| VS Code Server | Browser-based code editor |
-| Generic Device Plugin | Host-device exposure for containers |
-
-### matrix — Communication
-
-| Application | Description |
-|-------------|-------------|
-| Synapse | Matrix protocol homeserver |
-| Element (Riot) | Matrix web client |
-| Slack Bridge | Matrix-Slack integration |
-| WhatsApp Bridge | Matrix-WhatsApp integration |
-
-### piracy — Media management
-
-| Application | Description |
-|-------------|-------------|
-| Prowlarr | Indexer manager |
-| Sonarr | TV show management |
-| Radarr | Movie management |
-| Bazarr | Subtitle management |
-| Lidarr | Music management |
-| qBittorrent / Transmission | Torrent clients |
-| Jellyfin | Open-source media server |
-| Seerr | Request management frontend |
-| Tdarr | Transcoding pipeline |
-| Tachidesk | Manga reader server |
-| FlareSolverr | Cloudflare bypass proxy |
-| slskd / soularr | Soulseek + Lidarr bridge |
-| anisub, cruncharr, emulerr, houndarr, qui | Custom/niche media tooling |
-
-### scrutiny — Disk Health Monitoring
-
-| Application | Description |
-|-------------|-------------|
-| Scrutiny Web | Disk health dashboard |
-| Scrutiny Collector | S.M.A.R.T. data collector |
-| InfluxDB | Time-series metrics database |
-
-### yavoo — Decentralized Storage
-
-| Application | Description |
-|-------------|-------------|
-| Storj Node | Decentralized storage node |
-| Multinode Dashboard | Multi-node management UI |
-| Profit Bot | Earnings calculation bot |
+| Namespace | What runs there |
+|-----------|-----------------|
+| `agonbar` | Personal services: Vaultwarden, Forgejo, Paperless-ngx, MinIO, Uptime Kuma, Glance, Reactive Resume, Slash, TeamSpeak 6, static websites, and two apps of mine (Banderillo, Espuma Chat) |
+| `aya` | Smart home for the aya house: Home Assistant, Pi-hole, DHCP, EMQX (MQTT), Hyperion ambient lighting |
+| `lamg` | Smart home and media for the lamg house: Home Assistant, Zigbee2MQTT, EMQX, Plex, Syncthing, netboot.xyz, code-server, NVIDIA and generic device plugins |
+| `piracy` | Media library automation: Prowlarr, Sonarr, Radarr, Lidarr, Bazarr, qBittorrent, Jellyfin, Seerr, Tdarr with a VMAF quality sidecar, Suwayomi, RomM, GameVault, BookOrbit, a manga OCR pipeline, plus small tools of mine (anisub, cruncharr) |
+| `immich` | Immich photo library: server, machine learning, Postgres with VectorChord, Valkey |
+| `dawarich` | Dawarich location history with PostGIS and Redis |
+| `games` | Game servers (Satisfactory, Palworld, Enshrouded, Factorio, VMaNGOS) and a status page of mine that starts them on demand and stops them after 2 h idle |
+| `matrix` | Synapse homeserver with Slack and WhatsApp bridges |
+| `trek` | Trip planner |
+| `sure` | Personal finance app |
+| `tessera` | WebRTC app of mine: web frontend, relay and a TURN server |
+| `strata` | Local LLM inference on a GPU worker, with a priority gateway in front |
+| `hermes`, `agent-zero` | AI agents that run on the local models |
+| `knowledge` | MCP server over my markdown notes, reachable only on the tailnet |
+| `netbird-exit`, `netbird-router` | NetBird routing peers: internet-only exits for guests, fenced by a NetworkPolicy |
+| `subspace` | Fallback WireGuard VPN |
+| `ps4-host` | Self-hosted payload page for a PS4 |
+| `cert-issuer` | cert-manager ClusterIssuers (HTTP-01 and DNS-01) |
+| `argocd` | ArgoCD's own ingress, rendered by the plugin |
 
 ## How the bootstrap works
 
-`system/argocd/` is the only part of this repo applied directly with `kubectl`:
+`system/argocd/` is the only part of this repo applied with `kubectl`:
 
 ```bash
 kubectl apply -k system/argocd/ --server-side --force-conflicts
 ```
 
-That installs ArgoCD (v3.6.1), the envsubst CMP sidecar patched onto
-`argocd-repo-server`, the plugin ConfigMap, and the SealedSecrets used by
-both (`argocd-base-domain` for the domain, `ghcr-pull` for the sidecar's
-image). After that, a `bootstrap` Application (created once, by hand —
-it has to exist before ArgoCD can reconcile its own source) points at
-[`system/global-argocd-apps/`](system/global-argocd-apps/) and creates every
-other Application from there. Bootstrap syncs manually; everything downstream
+That installs ArgoCD (v3.6.2), the envsubst sidecar on `argocd-repo-server`,
+the plugin ConfigMap and the SealedSecrets both need. A `bootstrap` Application,
+created once by hand because it has to exist before ArgoCD can reconcile its own
+source, points at [`system/global-argocd-apps/`](system/global-argocd-apps/) and
+creates every other Application. Bootstrap syncs manually; everything below it
 is `automated: {prune: true, selfHeal: true}`.
 
-Node bring-up (flashing SD cards, joining Tailscale, registering the k3s
-agent) lives in a separate private repo at `agonbar/k3s-provisioning` — kept
-out of this tree because it necessarily carries per-node join tokens.
+Node bring-up (flashing, joining the mesh, registering the k3s agent) lives in
+a separate private repo, because it carries per-node join tokens.
 
-## Scripts
+## CI
 
-| Script | Description |
-|--------|-------------|
-| `seal-secrets.sh` | Encrypts plaintext `secrets.yaml` files into `sealedsecrets.yaml` using `kubeseal` |
-| `unseal-secrets.sh` | Recovers and decrypts sealed secrets for local inspection |
-| `deploy.sh` | Bulk `kubectl apply` across all deployment manifests (pre-ArgoCD fallback; rarely used now) |
+Every push and pull request runs [`.github/workflows/ci.yaml`](.github/workflows/ci.yaml):
 
-Operational tooling for the cluster and its storage (iSCSI repair, PVC moves,
-Postgres and backup jobs, *arr triage) lives in [`scripts/`](scripts/README.md),
-one row per script.
+| Job | Checks |
+|-----|--------|
+| gitleaks | No secret anywhere in the git history. SealedSecret ciphertext is allowlisted in [`.gitleaks.toml`](.gitleaks.toml); the same check runs as a pre-commit hook (`git config core.hooksPath .githooks`) |
+| yamllint | Style and syntax of every manifest |
+| kubeconform | Raw manifests against Kubernetes and CRD schemas |
+| envsubst CMP render | Each plugin-mode Application renders exactly as ArgoCD would, and the output validates |
+| actionlint | The workflows themselves |
+| scripts index | Every file in `scripts/` has a row in [`scripts/README.md`](scripts/README.md) |
 
-## Secret Management
+## Secrets
 
-This repository uses [Bitnami Sealed Secrets](https://github.com/bitnami-labs/sealed-secrets) to safely store encrypted credentials in Git.
+1. Write the plaintext in the namespace's `secrets.yaml` (gitignored).
+2. Encrypt it: `./seal-secrets.sh`
+3. Commit the resulting `sealedsecrets.yaml`. The controller decrypts it in the cluster.
 
-**Workflow:**
-
-1. Define secrets in a plaintext `secrets.yaml` file (these are `.gitignored` and never committed).
-2. Encrypt the secrets using `kubeseal`:
-   ```bash
-   ./seal-secrets.sh
-   ```
-3. The resulting `sealedsecrets.yaml` files are safe to commit. The Sealed Secrets controller in the cluster decrypts them at runtime.
-
-To recover plaintext secrets from the cluster:
-```bash
-./unseal-secrets.sh
-```
+`./unseal-secrets.sh` recovers the plaintext from the cluster when needed.
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+MIT, see [LICENSE](LICENSE).
