@@ -18,7 +18,8 @@ spec:
       containers:
         - image: ghcr.io/agonbar/ps4-host:latest
           name: web
-          imagePullPolicy: IfNotPresent
+          # Mutable :latest tag: always resolve against the registry on pod start.
+          imagePullPolicy: Always
           ports:
             - containerPort: 80
               name: http
