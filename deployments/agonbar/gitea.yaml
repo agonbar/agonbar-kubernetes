@@ -30,6 +30,10 @@ spec:
               value: '1000'
             - name: FORGEJO__service__DISABLE_REGISTRATION
               value: 'true'
+            # Every repo is private, no exceptions: a public one leaked live
+            # Sonarr/Bazarr keys from its history (2026-11-23).
+            - name: FORGEJO__repository__FORCE_PRIVATE
+              value: 'true'
           ports:
             - containerPort: 3000
               name: gitea
