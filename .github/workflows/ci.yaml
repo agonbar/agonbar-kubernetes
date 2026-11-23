@@ -12,6 +12,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  gitleaks:
+    name: gitleaks (no secrets anywhere in history)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks
+        env:
+          VERSION: 8.30.1
+        run: |
+          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" | tar -xz gitleaks
+          sudo install gitleaks /usr/local/bin/
+      - name: Scan
+        run: gitleaks git --config .gitleaks.toml --redact --no-banner --verbose .
+
   yamllint:
     name: yamllint
     runs-on: ubuntu-24.04
