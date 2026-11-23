@@ -49,6 +49,13 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: kube-vip-lamg
+  # A pool node that is down (nas00 since 2026-11-22) holds the only slot of
+  # maxUnavailable 1 forever and freezes every rollout. The VIP is one leader
+  # with standbys, so replacing two pods at once is safe.
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 2
   template:
     metadata:
       labels:
@@ -65,7 +72,7 @@ spec:
           operator: Exists
       containers:
         - name: kube-vip
-          image: ghcr.io/kube-vip/kube-vip:v1.3.1
+          image: ghcr.io/kube-vip/kube-vip:v1.3.2
           args: ["manager"]
           env:
             # ARP mode — announce VIP via gratuitous ARP on the LAN
@@ -113,8 +120,10 @@ spec:
                 - NET_ADMIN
                 - NET_RAW
           resources:
+            # Idle use is 11-18Mi, but when the API is slow (nas02-k3s, lease
+            # timeouts) retries pile up and 32Mi got OOMKilled 6 times.
             requests:
               cpu: 5m
-              memory: 16Mi
+              memory: 24Mi
             limits:
-              memory: 32Mi
+              memory: 96Mi
