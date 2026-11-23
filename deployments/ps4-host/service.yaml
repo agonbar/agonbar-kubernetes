@@ -14,3 +14,23 @@ spec:
       port: 8135
       targetPort: 80
       name: http
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: ps4-host-aya
+  namespace: ps4
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: aya
+  annotations:
+    # svclb pods must also run on work-vm-00 so the kube-vip-aya VIP works there.
+    svccontroller.k3s.cattle.io/tolerations: '[{"key":"dedicated","operator":"Equal","value":"media","effect":"NoSchedule"}]'
+spec:
+  type: LoadBalancer
+  selector:
+    app: ps4-host
+  ports:
+    - protocol: TCP
+      port: 8135
+      targetPort: 80
+      name: http
