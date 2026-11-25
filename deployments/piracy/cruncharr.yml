@@ -8,8 +8,7 @@ metadata:
 spec:
   strategy:
     type: Recreate
-  # Paused 2026-11-20 at the user's request for a couple of days; set back to 1 when they say so.
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app: cruncharr
@@ -78,6 +77,11 @@ spec:
               mountPath: /data/config
             - name: downloads
               mountPath: /downloads
+            # The Widevine CDM (device.wvd) the Go backend reads from /app/widevine.
+            # Sealed in sealedsecrets.yaml so it never sits in this public repo in clear.
+            - name: widevine
+              mountPath: /app/widevine
+              readOnly: true
           livenessProbe:
             httpGet:
               path: /api/app/status
@@ -117,6 +121,9 @@ spec:
           nfs:
             server: nas02
             path: /mnt/SSD/torrents/
+        - name: widevine
+          secret:
+            secretName: cruncharr-widevine
       nodeSelector:
         workload: media
       tolerations:
