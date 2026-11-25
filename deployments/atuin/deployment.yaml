@@ -1,0 +1,70 @@
+# Atuin sync server for shell history and agent threads.
+#
+# Reached only over NetBird: ClusterIP Service, no Ingress, no LoadBalancer.
+# The lamg routing peer (deployments/netbird-router) routes the Service's /32
+# to group `lamg-atuin`, and policy `adrian-to-lamg-atuin` opens tcp/8888 to
+# adrian's peers. Clients use sync_address =
+# http://atuin.atuin.svc.cluster.local:8888. Plain HTTP is fine: the hop is
+# WireGuard and atuin encrypts every record client-side before upload.
+#
+# State lives in the nas02 Postgres (role and database `atuin`), so the pod is
+# pinned to nas02-k3s, which reaches 192.168.0.29 on the LAN. ovh02 cannot.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: atuin
+  namespace: atuin
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: atuin
+  template:
+    metadata:
+      labels:
+        app: atuin
+    spec:
+      nodeSelector:
+        egress-site: lamg
+      containers:
+        - name: atuin
+          image: ghcr.io/atuinsh/atuin:18.25.1
+          args: ["start"]
+          env:
+            - name: ATUIN_HOST
+              value: "0.0.0.0"
+            - name: ATUIN_PORT
+              value: "8888"
+            - name: ATUIN_OPEN_REGISTRATION
+              value: "true"
+          envFrom:
+            - secretRef:
+                name: atuin-db
+          ports:
+            - name: http
+              containerPort: 8888
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 30
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000   # the image's USER is the name `atuin`, which kubelet can't check
+            capabilities:
+              drop: ["ALL"]
