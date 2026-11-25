@@ -38,7 +38,7 @@ spec:
             - name: ATUIN_PORT
               value: "8888"
             - name: ATUIN_OPEN_REGISTRATION
-              value: "true"
+              value: "false"   # account agonbar exists (2026-11-25)
           envFrom:
             - secretRef:
                 name: atuin-db
