@@ -41,12 +41,21 @@ spec:
                   set -eu
                   dir=/backup/desguace-staging/db-dump
                   mkdir -p "$dir"
+                  rm -f "$dir"/*.tmp
                   out="$dir/desguace-$(date +%Y%m%d-%H%M%S).sql.gz"
-                  mariadb-dump -h db -uroot -p"$MARIADB_ROOT_PASSWORD" \
-                    --single-transaction --routines --events --all-databases \
-                    | gzip > "$out.tmp"
-                  # A dump cut short has no completion trailer: refuse to keep it.
-                  zcat "$out.tmp" | tail -1 | grep -q 'Dump completed' || {
+                  # ps_layered_filter_block is the faceted-search module's cache
+                  # (70 GB of the 72 GB database on 2026-11-26) and the module
+                  # rebuilds it: keep its structure, skip its rows.
+                  cache=prestashop.ps_layered_filter_block
+                  { mariadb-dump -h db -uroot -p"$MARIADB_ROOT_PASSWORD" \
+                      --single-transaction --routines --events --all-databases \
+                      --ignore-table="$cache" --skip-dump-date
+                    mariadb-dump -h db -uroot -p"$MARIADB_ROOT_PASSWORD" --no-data \
+                      prestashop ps_layered_filter_block
+                  } | gzip > "$out.tmp"
+                  # Each dump ends with a completion trailer; one cut short does not.
+                  # Two dumps went in, so two trailers or the file is refused.
+                  [ "$(zcat "$out.tmp" | grep -c '^-- Dump completed')" = 2 ] || {
                     echo "FATAL: $out.tmp is incomplete"; rm -f "$out.tmp"; exit 1; }
                   mv "$out.tmp" "$out"
                   echo "ok -> $out ($(stat -c %s "$out") bytes)"
