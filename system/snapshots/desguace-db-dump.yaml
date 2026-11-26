@@ -1,0 +1,67 @@
+# Nightly mariadb-dump of desguace-staging (the desguaces-sandias staging shop,
+# applied by hand from that project's staging-k8s.yaml). Replaces the file-level
+# copy of its db-data PVC in backup.yaml: a live MariaDB datadir copied with rsync
+# over NFS-over-tailnet from ovh02 never finished inside the job's 1 h deadline,
+# and InnoDB rewrites its .ibd files so the copy never converged either.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: desguace-db-dump
+  namespace: desguace-staging
+spec:
+  # 03:20, between dawarich (03:05) / immich (03:15) and the PVC run at 04:00.
+  schedule: "20 3 * * *"
+  timeZone: Europe/Madrid
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 1800
+      template:
+        spec:
+          restartPolicy: Never
+          # LAN pool, which reaches the NAS on 192.168.0.29 directly.
+          nodeSelector:
+            svccontroller.k3s.cattle.io/lbpool: lamg
+          containers:
+            - name: dump
+              # Same image as the server, so mariadb-dump matches its version.
+              image: mariadb:11.4
+              env:
+                - name: MARIADB_ROOT_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: db
+                      key: MARIADB_ROOT_PASSWORD
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  dir=/backup/desguace-staging/db-dump
+                  mkdir -p "$dir"
+                  out="$dir/desguace-$(date +%Y%m%d-%H%M%S).sql.gz"
+                  mariadb-dump -h db -uroot -p"$MARIADB_ROOT_PASSWORD" \
+                    --single-transaction --routines --events --all-databases \
+                    | gzip > "$out.tmp"
+                  # A dump cut short has no completion trailer: refuse to keep it.
+                  zcat "$out.tmp" | tail -1 | grep -q 'Dump completed' || {
+                    echo "FATAL: $out.tmp is incomplete"; rm -f "$out.tmp"; exit 1; }
+                  mv "$out.tmp" "$out"
+                  echo "ok -> $out ($(stat -c %s "$out") bytes)"
+                  find "$dir" -name 'desguace-*.sql.gz' -mtime +14 -print -delete
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  memory: 512Mi
+          volumes:
+            - name: backup
+              nfs:
+                server: 192.168.0.29
+                path: /mnt/RAID/docker/backups-iscsi

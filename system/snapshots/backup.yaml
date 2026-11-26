@@ -518,7 +518,7 @@ data:
     # file is one user avatar. Nothing in it is worth a nightly copy.
     # agent-zero/agent-zero-usr and agent-zero-guz-usr have their own nightly tar to nas02
     # (deployments/agent-zero/backup.yaml).
-    COVERAGE_SKIP="immich/immich-db-data-local dawarich/dawarich-db-data-pg18 piracy/bookorbit-data agent-zero/agent-zero-usr agent-zero/agent-zero-guz-usr"
+    COVERAGE_SKIP="desguace-staging/db-data immich/immich-db-data-local dawarich/dawarich-db-data-pg18 piracy/bookorbit-data agent-zero/agent-zero-usr agent-zero/agent-zero-guz-usr"
 
     check_coverage() {
       echo "========================================="
@@ -569,9 +569,9 @@ data:
     # restores the dump into a scratch database before calling it good.
 
     # desguace-staging namespace (desguaces-sandias, applied by hand from that
-    # project's staging-k8s.yaml on 2026-11-18). local-path on ovh02. db-data is
-    # a live MariaDB copied file by file: crash-consistent at best, fine for staging.
-    backup_local_path_pvc desguace-staging db-data
+    # project's staging-k8s.yaml on 2026-11-18). local-path on ovh02.
+    # The database is not copied here: desguace-db-dump.yaml dumps it at 03:20
+    # (the live datadir never finished copying over the tailnet within 1 h).
     backup_local_path_pvc desguace-staging ps-data
 
     # games namespace
