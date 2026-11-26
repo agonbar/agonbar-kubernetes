@@ -39,6 +39,16 @@ MIRRORS=(
   "adrian root /mnt/RAID/adrian RAID/mirror/nas02-adrian"
   "nas00-rescate root /mnt/RAID/nas00-rescate RAID/mirror/nas02-nas00-rescate"
   "tv truenas_admin /mnt/RAID/docker/media/tv RAID/mirror/nas02-tv"
+  # Root for the same reason as adrian: app data under docker/ and amanda's 700 tree.
+  "docker root /mnt/RAID/docker RAID/mirror/nas02-docker"
+  "amanda root /mnt/RAID/amanda RAID/mirror/nas02-amanda"
+)
+# rsync --exclude-from patterns per mirror, relative to its nas02-dir. docker/ keeps
+# immich, syncthing, the app data and the curated libraries (music, comics, books,
+# romm, gamevault...) and skips what is already mirrored (tv), what downloads again
+# (SERIES, PELICULAS, movies) and scratch (downloads, tdarr, _convtest).
+declare -A EXCLUDES=(
+  [docker]="/media/tv/ /media/SERIES/ /media/PELICULAS/ /media/movies/ /media/downloads/ /media/tdarr-cache/ /media/tdarr-flowtest/ /media/tdarr-validator/ /_convtest/"
 )
 N02=(ssh -o BatchMode=yes -i "$HOME/.ssh/nas" truenas_admin@"$NAS02_IP")
 N03=(ssh -o BatchMode=yes nas03)
@@ -68,7 +78,8 @@ fail=0
 for m in "\${MIRRORS[@]}"; do
   read -r name user ds <<<"\$m"
   echo "== \$(date -Is) \$name start"
-  rsync -aHAX --numeric-ids --delete --partial-dir=.rsync-partial --info=stats2 \\
+  ex=(); [ -f "\$D/exclude-\$name" ] && ex=(--exclude-from="\$D/exclude-\$name")
+  rsync -aHAX --numeric-ids --delete --partial-dir=.rsync-partial --info=stats2 "\${ex[@]}" \\
     -e "ssh -i \$D/id_\$name -o BatchMode=yes -o UserKnownHostsFile=\$D/known_hosts -o ServerAliveInterval=30" \\
     "\$user@$NAS02_IP:/" "/mnt/\$ds/"
   rc=\$?
@@ -127,9 +138,17 @@ EOF
   printf 'https://uptime.%s/api/push/%s\n' "$domain" "$token" | "${N03[@]}" "umask 077; cat > /tmp/nas03-kuma-url"
   s03 "install -m 600 /tmp/nas03-kuma-url $D/.kuma-url && rm /tmp/nas03-kuma-url"
   log "nas03: Kuma push URL stored in $D/.kuma-url"
+  for name in "${!EXCLUDES[@]}"; do
+    tr ' ' '\n' <<<"${EXCLUDES[$name]}" > "/tmp/exclude-$name"
+    put03 "/tmp/exclude-$name" "/tmp/exclude-$name"
+    s03 "install -m 644 /tmp/exclude-$name $D/exclude-$name"
+    log "nas03: $D/exclude-$name ($(wc -l < "/tmp/exclude-$name") patterns)"
+  done
   sync_script > /tmp/nas02-sync.sh
   put03 /tmp/nas02-sync.sh /tmp/nas02-sync.sh
-  s03 "install -m 700 /tmp/nas02-sync.sh $D/nas02-sync.sh"
+  # New file then rename: a run in progress keeps reading the old inode. Overwriting
+  # in place would change the script under a bash that reads it as it goes.
+  s03 "install -m 700 /tmp/nas02-sync.sh $D/nas02-sync.sh.new && mv $D/nas02-sync.sh.new $D/nas02-sync.sh"
   local id; id=$(s03 "midclt call cronjob.query" | python3 -c 'import json,sys; print(next((j["id"] for j in json.load(sys.stdin) if "/mnt/RAID/mirror/" in j["command"]), ""))')
   local job='{"command": "bash '$D'/nas02-sync.sh --poweroff", "user": "root", "schedule": {"minute": "50", "hour": "3", "dom": "*", "month": "*", "dow": "0"}, "enabled": true, "description": "nas02 -> nas03 weekly mirror, then power off"}'
   if [ -n "$id" ]; then s03 "midclt call cronjob.update $id '\''$job'\'' >/dev/null"
