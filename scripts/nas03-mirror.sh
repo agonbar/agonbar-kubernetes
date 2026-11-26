@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
-# nas03 pulls a read-only mirror of nas02's datasets every night, over the tailnet,
+# nas03 pulls a read-only mirror of nas02's datasets once a week, over the tailnet,
 # into RAID/mirror/nas02-<name>, with one ZFS snapshot per run (last 30 kept).
+#
+# To save power nas03 is off the rest of the week. The RTC alarm wakes it on Sunday
+# at 03:40 (proven with `wake-test` 2026-11-26; `wol` wakes it by hand from its LAN),
+# cron runs the sync at 03:50 with --poweroff (after nas02 dumps Postgres at 03:30),
+# and after the mirror and the Postgres dump pull it arms next Sunday's alarm and
+# shuts down. `touch /mnt/RAID/mirror/stay-on` on nas03 keeps it on; `run` below
+# never powers off.
 #
 #   NAS02_SUDO=... NAS03_SUDO=... ./nas03-mirror.sh setup   # keys, datasets, script, cron
 #   NAS02_SUDO=... NAS03_SUDO=... ./nas03-mirror.sh seed    # block-clone nas03's RAID/Public into the new datasets
@@ -22,11 +29,16 @@ set -euo pipefail
 
 NAS02_IP=100.72.0.41
 D=/mnt/RAID/mirror
+# Each run pings it (created by scripts/uptime-backup-monitors.sh), so a week with no
+# mirror pages instead of going unnoticed like 2026-10-31..11-23.
+MONITOR="backup: nas02 mirror on nas03"
+CTX=lamg
 # name  nas02-user  nas02-dir  nas03-dataset
 MIRRORS=(
   "public truenas_admin /mnt/RAID/Public RAID/mirror/nas02-Public"
   "adrian root /mnt/RAID/adrian RAID/mirror/nas02-adrian"
   "nas00-rescate root /mnt/RAID/nas00-rescate RAID/mirror/nas02-nas00-rescate"
+  "tv truenas_admin /mnt/RAID/docker/media/tv RAID/mirror/nas02-tv"
 )
 N02=(ssh -o BatchMode=yes -i "$HOME/.ssh/nas" truenas_admin@"$NAS02_IP")
 N03=(ssh -o BatchMode=yes nas03)
@@ -67,7 +79,18 @@ for m in "\${MIRRORS[@]}"; do
   /sbin/zfs list -H -t snapshot -o name -s creation "\$ds" | grep '@mirror-' | head -n -30 | xargs -r -n1 /sbin/zfs destroy
   date -Is > "\$D/last-ok-\$name"
 done
-exit \$fail
+if [ \$fail = 0 ]; then st=up; else st=down; fi
+curl -fsS -m 20 -o /dev/null "\$(cat \$D/.kuma-url)?status=\$st&msg=mirror+exit+\$fail" && echo "== kuma \$st: ok" || echo "== kuma ping failed"
+[ "\${1:-}" = --poweroff ] || exit \$fail
+# The pgdumps cron (04:30) never fires while the box is off, so the weekly run pulls them here.
+runuser -u truenas_admin -- bash \$D/nas02-pgdumps/pull.sh || fail=1
+if [ -e \$D/stay-on ]; then echo "== \$D/stay-on present, staying on"; exit \$fail; fi
+/usr/sbin/ethtool -s "\$(ip -br link | awk '/^enp/{print \$1; exit}')" wol g
+echo 0 > /sys/class/rtc/rtc0/wakealarm
+date -d 'next sunday 03:40' +%s > /sys/class/rtc/rtc0/wakealarm
+echo "== \$(date -Is) wake armed for \$(date -d @\$(cat /sys/class/rtc/rtc0/wakealarm) -Is), powering off (exit \$fail)"
+sync
+midclt call system.shutdown 'weekly nas02 mirror done' || /sbin/poweroff
 EOF
 }
 
@@ -95,15 +118,24 @@ EOF
       s03 "midclt call pool.dataset.create '\''{\"name\": \"$ds\"}'\'' >/dev/null"
     fi
   done
+  # The push URL goes over stdin into a 600 file, never onto a command line.
+  local token domain
+  token=$(printf "select push_token from monitor where name='%s';\n" "$MONITOR" |
+    kubectl --context "$CTX" -n agonbar exec -i deploy/uptime -- sqlite3 -readonly /app/data/kuma.db)
+  [ -n "$token" ] || { echo "no Kuma monitor '$MONITOR'; run scripts/uptime-backup-monitors.sh first" >&2; exit 1; }
+  domain=$(kubectl --context "$CTX" -n argocd get secret argocd-cmp-values -o jsonpath='{.data.BASE_DOMAIN}' | base64 -d)
+  printf 'https://uptime.%s/api/push/%s\n' "$domain" "$token" | "${N03[@]}" "umask 077; cat > /tmp/nas03-kuma-url"
+  s03 "install -m 600 /tmp/nas03-kuma-url $D/.kuma-url && rm /tmp/nas03-kuma-url"
+  log "nas03: Kuma push URL stored in $D/.kuma-url"
   sync_script > /tmp/nas02-sync.sh
   put03 /tmp/nas02-sync.sh /tmp/nas02-sync.sh
   s03 "install -m 700 /tmp/nas02-sync.sh $D/nas02-sync.sh"
   local id; id=$(s03 "midclt call cronjob.query" | python3 -c 'import json,sys; print(next((j["id"] for j in json.load(sys.stdin) if "/mnt/RAID/mirror/" in j["command"]), ""))')
-  local job='{"command": "bash '$D'/nas02-sync.sh", "user": "root", "schedule": {"minute": "0", "hour": "2", "dom": "*", "month": "*", "dow": "*"}, "enabled": true, "description": "nas02 -> nas03 mirror"}'
+  local job='{"command": "bash '$D'/nas02-sync.sh --poweroff", "user": "root", "schedule": {"minute": "50", "hour": "3", "dom": "*", "month": "*", "dow": "0"}, "enabled": true, "description": "nas02 -> nas03 weekly mirror, then power off"}'
   if [ -n "$id" ]; then s03 "midclt call cronjob.update $id '\''$job'\'' >/dev/null"
   else s03 "midclt call cronjob.create '\''$job'\'' >/dev/null"; fi
   s03 "rm -f $D/nas02-public-sync.sh"
-  log "nas03: cron at 02:00 -> $D/nas02-sync.sh"
+  log "nas03: cron Sunday 03:50 -> $D/nas02-sync.sh --poweroff"
 }
 
 seed() {
@@ -171,4 +203,41 @@ status() {
   s03 "systemctl is-active nas02-mirror-manual 2>/dev/null; tail -n 15 $D/nas02-sync.log 2>/dev/null; grep . $D/last-ok-* 2>/dev/null; zfs list -o name,used,refer -r RAID/mirror"
 }
 
-"${1:?usage: $0 setup|seed|run|status}"
+# Magic packet from this machine; it has to sit on nas03's LAN (work-vm-00 does).
+NAS03_MAC=e0:d5:5e:73:b1:01
+wol() {
+  python3 - "$NAS03_MAC" <<'EOF'
+import socket, sys
+mac = bytes.fromhex(sys.argv[1].replace(":", ""))
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+s.sendto(b"\xff" * 6 + mac * 16, ("192.168.1.255", 9))
+EOF
+  log "magic packet sent to $NAS03_MAC"
+}
+
+up(){ ping -c1 -W2 192.168.1.34 >/dev/null 2>&1; }
+wait_up() {  # $1 = seconds
+  local t=0; while [ $t -lt "$1" ]; do up && return 0; sleep 10; t=$((t + 10)); done; return 1
+}
+
+# Proves the RTC alarm powers the board on from soft-off: arm it 4 minutes out, shut
+# down, wait. If the alarm fails, try Wake-on-LAN, so the box is not left off.
+wake_test() {
+  s03 "/usr/sbin/ethtool -s \$(ip -br link | awk \"/^enp/{print \\\$1; exit}\") wol g && echo 0 > /sys/class/rtc/rtc0/wakealarm && date -d \"+4 min\" +%s > /sys/class/rtc/rtc0/wakealarm && cat /proc/driver/rtc | grep alrm"
+  log "shutting nas03 down, alarm in 4 min"
+  s03 "midclt call system.shutdown \"rtc wake test\"" >/dev/null || true
+  local t=0; while up && [ $t -lt 300 ]; do sleep 10; t=$((t + 10)); done
+  up && { log "nas03 never went down"; return 1; }
+  log "nas03 is down, waiting up to 8 min for the RTC alarm"
+  if wait_up 480; then log "RTC WAKE WORKS"; return 0; fi
+  log "RTC alarm did not wake it, trying Wake-on-LAN"; wol
+  if wait_up 300; then log "WOL WORKS (RTC does not, check BIOS Resume by Alarm)"; return 2; fi
+  log "neither woke it, press the power button"; return 3
+}
+
+case "${1:-}" in
+  setup|seed|run|status|wol) "$1" ;;
+  wake-test) wake_test ;;
+  *) echo "usage: $0 setup|seed|run|status|wol|wake-test" >&2; exit 1 ;;
+esac

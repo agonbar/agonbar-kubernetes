@@ -3,7 +3,7 @@
 # never runs at all, reaches the phone through Kuma's default notification
 # (Telegram) instead of being spotted days later.
 #
-#   ./scripts/uptime-backup-monitors.sh          # create missing monitors, seal their tokens
+#   ./scripts/uptime-backup-monitors.sh          # create missing monitors, fix intervals, seal tokens
 #   ./scripts/uptime-backup-monitors.sh status   # last heartbeat of each
 #
 # Each job pings its monitor with status=up when it finishes clean and status=down
@@ -20,8 +20,8 @@
 #
 # Tokens are secrets (anyone holding one can keep a dead backup green), so they
 # go to the cluster as a SealedSecret `uptime-push`, key `token`, appended to
-# <dir>/sealedsecrets.yaml. The nas03 monitor has no k8s side: nas03-pgdumps.sh
-# reads its token from kuma.db when it installs the pull.
+# <dir>/sealedsecrets.yaml. The nas03 monitors have no k8s side: nas03-pgdumps.sh
+# and nas03-mirror.sh read their tokens from kuma.db when they install.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -35,7 +35,9 @@ MONITORS=(
   "backup: dawarich-postgres-backup|26|dawarich|deployments/dawarich"
   # pvc-backup runs 1-3h depending on what changed, so a little more slack.
   "backup: pvc-backup|28|backup|system/snapshots"
-  "backup: piracy pg dumps on nas03|26|-|-"
+  # nas03 is on only on Sunday night (scripts/nas03-mirror.sh), so a week plus slack.
+  "backup: piracy pg dumps on nas03|174|-|-"
+  "backup: nas02 mirror on nas03|174|-|-"
   # Not a backup: the daily check of the litellm fork against HA core
   # (deployments/lamg/ha-litellm-drift.yaml), same push mechanics.
   "ha: litellm fork vs core|26|lamg|deployments/lamg"
@@ -73,13 +75,21 @@ apply() {
   created=0
   for m in "${MONITORS[@]}"; do
     IFS='|' read -r name hours _ _ <<<"$m"
-    if [ -n "$(q "select id from monitor where name='$(esc "$name")'")" ]; then
+    secs=$((hours * 3600))
+    cur=$(q "select interval from monitor where name='$(esc "$name")'")
+    if [ -n "$cur" ] && [ "$cur" = "$secs" ]; then
       log "kuma: '$name' exists"
       continue
     fi
     [ "$created" = 1 ] || { q ".backup /app/data/kuma.db.bak-$(date +%Y%m%d%H%M%S)"; log "kuma: db backed up"; }
+    if [ -n "$cur" ]; then
+      printf "UPDATE monitor SET interval = %s, retry_interval = %s, description = 'Down after %sh without a ping. Managed by agonbar-kubernetes scripts/uptime-backup-monitors.sh' WHERE name = '%s';\n" \
+        "$secs" "$secs" "$hours" "$(esc "$name")" | sql
+      log "kuma: '$name' interval $((cur / 3600))h -> ${hours}h"
+      created=1
+      continue
+    fi
     token=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32 || true)
-    secs=$((hours * 3600))
     sql <<EOF
 BEGIN;
 INSERT INTO monitor (name, type, active, user_id, interval, retry_interval, maxretries, push_token, description)
@@ -96,7 +106,7 @@ EOF
     created=1
   done
   if [ "$created" = 1 ]; then
-    log "kuma: restarting the container in place to load the new monitors"
+    log "kuma: restarting the container in place to load the new or changed monitors"
     "${KUMA[@]}" sh -c 'kill 1' || true
     sleep 10
     up='require("http").get("http://127.0.0.1:3001/", () => process.exit(0)).on("error", () => process.exit(1))'

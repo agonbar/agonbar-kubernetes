@@ -29,7 +29,7 @@ not listed in this README, so adding one is a deliberate decision.
 | `pg-enable-checksums.sh` | Turns on data page checksums for a database initialised without them. |
 | `nas02-pg-snapshots.sh` | Hourly ZFS snapshots of the shared Postgres data directory, kept 48 h. |
 | `nas03-pgdumps.sh` | nas03 pulls the nightly Postgres dumps off nas02. |
-| `nas03-mirror.sh` | nas03 pulls a read-only mirror of nas02's datasets every night. |
+| `nas03-mirror.sh` | nas03 wakes once a week, pulls a read-only mirror of nas02's datasets, and powers off. |
 | `uptime-backup-monitors.sh` | Uptime Kuma push monitors, so a backup that fails or never runs pages. |
 
 ## Cluster
