@@ -1,0 +1,80 @@
+# Byparr speaks the FlareSolverr API (POST /v1) with a Camoufox browser.
+# Added 2026-11-27 next to FlareSolverr, not instead of it: FlareSolverr timed
+# out (60 s x 3) on lucida.to's Cloudflare challenge for Tubifarry in Lidarr.
+# Prowlarr stays on FlareSolverr.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: byparr-deployment
+    namespace: piracy
+    labels:
+        app: byparr
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            app: byparr
+    template:
+        metadata:
+            labels:
+                app: byparr
+        spec:
+            containers:
+                - name: byparr
+                  image: ghcr.io/thephaseless/byparr:latest
+                  imagePullPolicy: Always
+                  env:
+                      - name: TZ
+                        value: Europe/Madrid
+                      # Set both so a failed GeoIP/public-IP lookup at start-up
+                      # cannot leave the browser on UTC + en-US.
+                      - name: BROWSER_TIMEZONE
+                        value: Europe/Madrid
+                      - name: BROWSER_LOCALE
+                        value: es-ES
+                  ports:
+                      - containerPort: 8191
+                        protocol: TCP
+                  # The port only opens once start-up (GeoIP download) is done,
+                  # so a TCP probe is the readiness signal the README recommends.
+                  # Same generous liveness window as FlareSolverr: a busy solver
+                  # is not a dead one.
+                  readinessProbe:
+                      tcpSocket:
+                          port: 8191
+                      initialDelaySeconds: 10
+                      periodSeconds: 15
+                      timeoutSeconds: 5
+                      failureThreshold: 3
+                  livenessProbe:
+                      tcpSocket:
+                          port: 8191
+                      initialDelaySeconds: 300
+                      periodSeconds: 30
+                      timeoutSeconds: 30
+                      failureThreshold: 6
+                  resources:
+                      requests:
+                          memory: 256Mi
+                          cpu: 100m
+                      limits:
+                          memory: 2Gi
+                          cpu: 1500m
+            # Same reason as FlareSolverr: keep it next to its caller, off ovh02.
+            nodeSelector:
+              svccontroller.k3s.cattle.io/lbpool: lamg
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: byparr
+  namespace: piracy
+spec:
+  type: ClusterIP
+  ports:
+    - name: web
+      protocol: TCP
+      port: 8191
+      targetPort: 8191
+  selector:
+    app: byparr
