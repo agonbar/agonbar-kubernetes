@@ -1,0 +1,91 @@
+# wolbridge (github.com/agonbar/wolbridge) wakes aya machines with Wake-on-LAN
+# and shows each one in Home Assistant as an MQTT-discovered device: a Wake
+# button and a Running sensor (TCP connect to check_port).
+#
+# hostNetwork because a magic packet is a LAN broadcast and the pod network
+# cannot send one (tried from the HA pod, 2026-11-27). Only this pod needs it;
+# it opens nothing but its web page on 8091, free on every aya node. It must
+# run on an aya node, hence the aya pool selector, same as homeassistant.yaml.
+#
+# nas03 is woken every Sunday by its own RTC alarm (scripts/nas03-mirror.sh);
+# the Home Assistant automation on Sunday 03:42 presses Wake as a backup, for
+# when the box was shut down some other way and no alarm got armed.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wolbridge
+  namespace: aya
+data:
+  config.json: |
+    {
+      "mqtt": "tcp://mqtt.aya.svc.cluster.local:1883",
+      "listen": ":8091",
+      "check_seconds": 30,
+      "hosts": [
+        {"name": "nas03", "label": "nas03", "mac": "e0:d5:5e:73:b1:01", "ip": "192.168.1.34",
+         "broadcast": "192.168.1.255", "check_port": 22}
+      ]
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wolbridge
+  namespace: aya
+  labels:
+    app: wolbridge
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+spec:
+  replicas: 1
+  # Two copies on one node would fight over port 8091.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: wolbridge
+  template:
+    metadata:
+      labels:
+        app: wolbridge
+      annotations:
+        # Bump to roll the pod when the ConfigMap changes.
+        wolbridge/config-rev: "1"
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: wolbridge
+          image: ghcr.io/agonbar/wolbridge:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8091
+              name: http
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+          readinessProbe:
+            httpGet: {path: /healthz, port: 8091}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: 8091}
+            periodSeconds: 30
+          resources:
+            requests: {cpu: 5m, memory: 16Mi}
+            limits: {memory: 64Mi}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+      volumes:
+        - name: config
+          configMap:
+            name: wolbridge
+      nodeSelector:
+        svccontroller.k3s.cattle.io/lbpool: aya
+      tolerations:
+        - {key: dedicated, operator: Equal, value: media, effect: NoSchedule}
