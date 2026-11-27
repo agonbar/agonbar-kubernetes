@@ -1,4 +1,4 @@
-# wolbridge (github.com/agonbar/wolbridge) wakes aya machines with Wake-on-LAN
+# wolbridge (gitea agonbar/wolbridge, image agonbar/wolbridge) wakes aya machines with Wake-on-LAN
 # and shows each one in Home Assistant as an MQTT-discovered device: a Wake
 # button and a Running sensor (TCP connect to check_port).
 #
@@ -57,7 +57,7 @@ spec:
       dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: wolbridge
-          image: ghcr.io/agonbar/wolbridge:latest
+          image: agonbar/wolbridge:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8091
