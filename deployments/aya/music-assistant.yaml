@@ -45,10 +45,6 @@ spec:
       labels:
         app: music-assistant
     spec:
-      # TEMPORARY: Spotify Soloist pairing advertises over mDNS on the aya LAN.
-      # Revert once the Spotify provider is paired.
-      hostNetwork: true
-      dnsPolicy: ClusterFirstWithHostNet
       containers:
         - image: ghcr.io/music-assistant/server:latest
           name: music-assistant
@@ -56,8 +52,9 @@ spec:
             - containerPort: 8095
               name: http
               protocol: TCP
-            # 8097 (stream) not declared while on hostNetwork: svclb-jellyfin
-            # holds hostPort 8097 on every node and the pod would not schedule.
+            - containerPort: 8097
+              name: stream
+              protocol: TCP
           volumeMounts:
             - name: data
               mountPath: /data
