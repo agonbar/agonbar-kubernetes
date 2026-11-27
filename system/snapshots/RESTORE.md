@@ -57,7 +57,6 @@ Snapshots use the `truenas-iscsi-ssd` VolumeSnapshotClass for both storage class
 | piracy | seerr-config-nfs | 5Gi | deployments/piracy/seerr.yml | yes |
 | piracy | slskd-config | 5Gi | deployments/piracy/slskd.yml | yes |
 | piracy | sonarr-config | 5Gi | deployments/piracy/sonarr.yml | yes |
-| piracy | soularr-config-nfs | 1Gi | deployments/piracy/soularr.yml | yes |
 | piracy | tachidesk-data-nfs | 5Gi | deployments/piracy/tachidesk.yml | yes |
 | piracy | tdarr-config | 2Gi | deployments/piracy/tdarr.yml | yes |
 | piracy | tdarr-server | 5Gi | deployments/piracy/tdarr.yml | yes |
@@ -206,7 +205,6 @@ kubectl --context lamg scale deployment/radarr -n piracy --replicas=0
 kubectl --context lamg scale deployment/seerr -n piracy --replicas=0
 kubectl --context lamg scale deployment/slskd -n piracy --replicas=0
 kubectl --context lamg scale deployment/sonarr -n piracy --replicas=0
-kubectl --context lamg scale deployment/soularr -n piracy --replicas=0
 kubectl --context lamg scale deployment/tachidesk -n piracy --replicas=0
 ```
 
@@ -222,7 +220,7 @@ kubectl --context lamg delete pvc enshrouded-data factorio-data palworld-data -n
 kubectl --context lamg delete pvc immich-db-data -n immich --ignore-not-found
 kubectl --context lamg delete pvc vault-data vault-state -n knowledge --ignore-not-found
 kubectl --context lamg delete pvc homeassistant-config plex-config vscode-config-nfs zigbee2mqtt-config -n lamg --ignore-not-found
-kubectl --context lamg delete pvc anisub-data bazarr-config cruncharr-config emulerr-config-nfs houndarr-data jellyfin-config lidarr-config prowlarr-config qbittorrent-config radarr-config seerr-config-nfs slskd-config sonarr-config soularr-config-nfs tachidesk-data-nfs tdarr-config tdarr-server -n piracy --ignore-not-found
+kubectl --context lamg delete pvc anisub-data bazarr-config cruncharr-config emulerr-config-nfs houndarr-data jellyfin-config lidarr-config prowlarr-config qbittorrent-config radarr-config seerr-config-nfs slskd-config sonarr-config tachidesk-data-nfs tdarr-config tdarr-server -n piracy --ignore-not-found
 kubectl --context lamg delete pvc trek-data trek-uploads -n trek --ignore-not-found
 ```
 
@@ -319,7 +317,6 @@ kubectl --context lamg scale deployment/radarr -n piracy --replicas=1
 kubectl --context lamg scale deployment/seerr -n piracy --replicas=1
 kubectl --context lamg scale deployment/slskd -n piracy --replicas=1
 kubectl --context lamg scale deployment/sonarr -n piracy --replicas=1
-kubectl --context lamg scale deployment/soularr -n piracy --replicas=1
 kubectl --context lamg scale deployment/tachidesk -n piracy --replicas=1
 ```
 
