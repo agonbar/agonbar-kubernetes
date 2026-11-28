@@ -245,7 +245,7 @@ metadata:
   name: jellyfin-config-lan
 spec:
   capacity:
-    storage: 10Gi
+    storage: 20Gi
   accessModes:
     - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain
