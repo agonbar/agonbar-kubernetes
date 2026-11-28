@@ -1,11 +1,13 @@
 # Music Assistant server for HA aya. HA's "Music Assistant" integration talks
 # to it in-cluster at http://music-assistant.aya.svc.cluster.local:8095.
 #
-# Deliberately not on hostNetwork and not exposed: no player discovery, players
-# get added by hand. Players outside the cluster that pull audio from the stream
-# server (8097) will need a kube-vip LoadBalancer like homeassistant's; until
-# then the web UI is reached with
-#   kubectl --context lamg -n aya port-forward svc/music-assistant 8095
+# Not on hostNetwork: no player discovery, players get added by hand (the Android
+# TVs come in through HA's cast integration). Players on the aya LAN pull audio
+# from the stream server, so MA is also on the kube-vip-aya VIP 192.168.1.26
+# (music-assistant-aya below): UI http://192.168.1.26:8095, stream 8098.
+# The stream port is 8098, not MA's default 8097, because svclb-jellyfin
+# (ns media) holds hostPort 8097 on every node. MA's own settings must match:
+# streams bind_port 8098, publish_ip 192.168.1.26.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -52,7 +54,7 @@ spec:
             - containerPort: 8095
               name: http
               protocol: TCP
-            - containerPort: 8097
+            - containerPort: 8098
               name: stream
               protocol: TCP
             # Sendspin server (/sendspin): the work-vm-00 voice satellite plays MA
@@ -105,10 +107,37 @@ spec:
       targetPort: 8095
       name: http
     - protocol: TCP
-      port: 8097
-      targetPort: 8097
+      port: 8098
+      targetPort: 8098
       name: stream
     - protocol: TCP
       port: 8927
       targetPort: 8927
       name: sendspin
+
+---
+# LAN-facing copy on the kube-vip-aya VIP (192.168.1.26), same pattern as
+# homeassistant: the Android TVs (cast) fetch the stream from here.
+kind: Service
+apiVersion: v1
+metadata:
+  name: music-assistant-aya
+  namespace: aya
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: aya
+  annotations:
+    # svclb pods must also run on work-vm-00 so the kube-vip-aya VIP works there.
+    svccontroller.k3s.cattle.io/tolerations: '[{"key":"dedicated","operator":"Equal","value":"media","effect":"NoSchedule"}]'
+spec:
+  type: LoadBalancer
+  selector:
+    app: music-assistant
+  ports:
+    - protocol: TCP
+      port: 8095
+      targetPort: 8095
+      name: http
+    - protocol: TCP
+      port: 8098
+      targetPort: 8098
+      name: stream
