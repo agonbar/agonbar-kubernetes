@@ -55,6 +55,11 @@ spec:
             - containerPort: 8097
               name: stream
               protocol: TCP
+            # Sendspin server (/sendspin): the work-vm-00 voice satellite plays MA
+            # music through it, connecting to the ClusterIP from the k3s node.
+            - containerPort: 8927
+              name: sendspin
+              protocol: TCP
           volumeMounts:
             - name: data
               mountPath: /data
@@ -103,3 +108,7 @@ spec:
       port: 8097
       targetPort: 8097
       name: stream
+    - protocol: TCP
+      port: 8927
+      targetPort: 8927
+      name: sendspin
