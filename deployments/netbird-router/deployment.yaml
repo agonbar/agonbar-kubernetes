@@ -25,6 +25,11 @@
 #     `atuin.svc.cluster.local` in `lamg-knowledge-dns` [2026-11-25].
 #     Created by ~/dotfiles/scripts/homelab/netbird-lamg-expose.sh (private
 #     dotfiles), which does this whole recipe for any lamg ClusterIP Service.
+#   - Resource `music-assistant` = host 10.43.46.89/32 (Music Assistant's ClusterIP
+#     in aya), group `lamg-music-assistant`, policy `adrian-to-lamg-music-assistant`
+#     tcp/8095 (API and web UI only, not the 8097 stream), and
+#     `aya.svc.cluster.local` in `lamg-knowledge-dns` [2026-11-28]. For the Music
+#     panel of the herdr app on t480. Same script.
 #
 # Coexists with the Headscale path (the vault-mcp tailscale sidecar +
 # autogroup:self) — this is additive, nothing on the Headscale side changes.
