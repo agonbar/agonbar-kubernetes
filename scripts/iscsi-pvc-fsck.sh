@@ -15,14 +15,20 @@
 #
 #   ./iscsi-pvc-fsck.sh --context lamg --namespace piracy \
 #       --deployment qbittorrent-deployment --pv qbittorrent-config-lan \
-#       --node orange-pi5 [--argocd-app piracy] [--check-only]
+#       --node orange-pi5 [--argocd-app piracy] [--check-only] [--resize]
+#
+# --resize: after the repair, if the verification pass is clean, grow the
+# filesystem to the LUN size with resize2fs. Needed when a PVC expansion is
+# stuck in FileSystemResizePending because the kernel refuses an ONLINE resize
+# of an ext4 with recorded errors ("There are errors in the filesystem, so
+# online resizing is not allowed").
 #
 # --node is any cluster node reachable over SSH with sudo and iscsid running.
 # It does not have to be the node that held the volume: once the CSI has
 # detached it, any node can log in to the target.
 set -euo pipefail
 
-CONTEXT="" NS="" DEPLOY="" PV="" NODE="" ARGOCD_APP="" CHECK_ONLY=0 PORTAL=""
+CONTEXT="" NS="" DEPLOY="" PV="" NODE="" ARGOCD_APP="" CHECK_ONLY=0 RESIZE=0 PORTAL=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --context)    CONTEXT="$2"; shift 2 ;;
@@ -32,6 +38,7 @@ while [[ $# -gt 0 ]]; do
     --node)       NODE="$2"; shift 2 ;;
     --argocd-app) ARGOCD_APP="$2"; shift 2 ;;
     --check-only) CHECK_ONLY=1; shift ;;
+    --resize)     RESIZE=1; shift ;;
     *) echo "argumento desconocido: $1" >&2; exit 2 ;;
   esac
 done
@@ -117,8 +124,17 @@ if [[ $CHECK_ONLY -eq 1 ]]; then
 else
   sudo e2fsck -fy \"\$DEV\" || true
   echo '--- verificación ---'
-  sudo e2fsck -fn \"\$DEV\" || true
+  if sudo e2fsck -fn \"\$DEV\"; then CLEAN=1; else CLEAN=0; fi
   sudo tune2fs -l \"\$DEV\" | grep -iE 'filesystem state|FS Error count' || true
+  if [[ $RESIZE -eq 1 ]]; then
+    if [[ \$CLEAN -eq 1 ]]; then
+      echo '--- resize2fs ---'
+      sudo resize2fs \"\$DEV\"
+      sudo e2fsck -fn \"\$DEV\" >/dev/null && echo 'post-resize fsck clean'
+    else
+      echo 'verificación no limpia: NO se amplía'
+    fi
+  fi
 fi
 "
 say "hecho"
