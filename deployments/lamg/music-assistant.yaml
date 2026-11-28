@@ -1,0 +1,139 @@
+# Music Assistant server for HA lamg, its own instance (separate from aya's:
+# each house has its own players and its own Spotify pairing, and a Premium
+# account only streams to one place at a time). HA's "Music Assistant"
+# integration talks to it in-cluster at
+# http://music-assistant.lamg.svc.cluster.local:8095.
+#
+# Not on hostNetwork: no player discovery, players get added by hand. LAN
+# players pull audio from the stream server, so MA is also on the lamg LB pool
+# (music-assistant-lamg below): UI :8095, stream :8098. The stream port is 8098,
+# not MA's default 8097, because svclb-jellyfin (ns media) holds hostPort 8097
+# on every node. MA's own settings must match: streams bind_port 8098, and
+# publish_ip set to a lamg-LAN address of a pool node once LAN players exist.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: music-assistant-data
+  namespace: lamg
+spec:
+  accessModes:
+    - ReadWriteOnce
+  # MA keeps its SQLite library DB in /data; local disk, not NFS.
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: music-assistant
+    keel.sh/policy: force
+    keel.sh/match-tag: "true"
+    keel.sh/trigger: poll
+  annotations:
+    keel.sh/pollSchedule: "@every 72h"
+  name: music-assistant
+  namespace: lamg
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: music-assistant
+  template:
+    metadata:
+      labels:
+        app: music-assistant
+    spec:
+      containers:
+        - image: ghcr.io/music-assistant/server:latest
+          name: music-assistant
+          ports:
+            - containerPort: 8095
+              name: http
+              protocol: TCP
+            - containerPort: 8098
+              name: stream
+              protocol: TCP
+            # Sendspin server (/sendspin), for Sendspin players such as a
+            # linux-voice-assistant satellite on a k3s node.
+            - containerPort: 8927
+              name: sendspin
+              protocol: TCP
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          startupProbe:
+            tcpSocket:
+              port: 8095
+            periodSeconds: 10
+            failureThreshold: 60
+          livenessProbe:
+            tcpSocket:
+              port: 8095
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 300Mi
+            limits:
+              memory: 1Gi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: music-assistant-data
+      # local-path pins the volume to one node; next to homeassistant (nas00 flaps).
+      nodeSelector:
+        kubernetes.io/hostname: nas01
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: music-assistant
+  namespace: lamg
+spec:
+  type: ClusterIP
+  selector:
+    app: music-assistant
+  ports:
+    - protocol: TCP
+      port: 8095
+      targetPort: 8095
+      name: http
+    - protocol: TCP
+      port: 8098
+      targetPort: 8098
+      name: stream
+    - protocol: TCP
+      port: 8927
+      targetPort: 8927
+      name: sendspin
+
+---
+# LAN-facing copy on the lamg LB pool, same pattern as homeassistant.
+kind: Service
+apiVersion: v1
+metadata:
+  name: music-assistant-lamg
+  namespace: lamg
+  labels:
+    svccontroller.k3s.cattle.io/lbpool: lamg
+spec:
+  type: LoadBalancer
+  selector:
+    app: music-assistant
+  ports:
+    - protocol: TCP
+      port: 8095
+      targetPort: 8095
+      name: http
+    - protocol: TCP
+      port: 8098
+      targetPort: 8098
+      name: stream
