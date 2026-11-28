@@ -278,4 +278,4 @@ spec:
   volumeName: jellyfin-config-lan
   resources:
     requests:
-      storage: 10Gi
+      storage: 20Gi
